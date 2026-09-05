@@ -14,9 +14,12 @@ which submissions are waiting on a verdict.
 path. Everything about releases lives in a working copy — `release.sh`, `.gitmodules`, each submodule's
 git, the committed `releases/*.md` — so a page could not answer any of it.
 
-**It is not a second Studio.** It depends on `botmaker-shared` and on nothing else of ours: no plugin
-contract, no plugin-host, no SDK, and above all not `botmaker-studio`, which is an application and cannot
-be depended on. It loads no plugin and opens no bot project.
+**It is not a second Studio.** It depends on `botmaker-shared` and — since 2026-09-05 — on `botmaker-cli`'s
+**main** artifact, and on nothing else of ours: no plugin contract, no plugin-host, no SDK, and above all not
+`botmaker-studio`, which is an application and cannot be depended on. It loads no plugin and opens no bot
+project. The contract and plugin-host are `<exclusions>` on the CLI dependency rather than absences that
+happen to hold: the CLI is a plugin host and pins both, this window hosts nothing, and excluding them turns
+"`com.botmaker.cli.release` needs the contract" into a compile error here rather than a silent new edge.
 
 ## The rule the whole module hangs on
 
@@ -32,6 +35,14 @@ computation appears here that the script could have answered, that is the bug �
 `com.botmaker.cli.release`, a library the terminal, `release.yml` and this app all call; this app then swaps
 parsed stdout for typed objects. Until that exists, **this window visualises and does not execute** — no
 tag is pushed from a GUI.
+
+**The first piece of that library arrived early, and it is the shape every later one takes.** The Release
+tab's level picker shows what a level resolves to — `1.1.6 → 1.2.0` — and that arrow is `latest_version` and
+`resolve_version` themselves, called through `umbrella/VersionTargets`. It reads as an exception to the rule
+and is the strict form of it: the alternative to calling the owner is either a bump computed here (a second
+implementation, discovered as a bad tag) or an operator choosing `minor` with no way to see what `minor`
+means for that module today. **The test to apply to the next one is the same**: would this window otherwise
+have to *decide* something? Then it calls the library. Is it merely presentation? Then it stays here.
 
 **The re-poll button is the worked example.** Asking JitPack for a `.pom` with a HEAD request would be four
 lines here and would answer a *different question* than the release asked: `resolve_clean_room` runs a real
@@ -108,6 +119,7 @@ com.botmaker.dashboard
 │   ├── ModuleScan      git per module, then release.sh once, into rows
 │   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
 │   ├── ReleaseSpec     the flags a preview runs with — and the only place --dry-run is appended
+│   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
 │   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
@@ -128,7 +140,8 @@ the **command line** — the exact thing to paste into a terminal, with that lin
 `botmaker-plugin-toolkit` without the `botmaker-` prefix, for all ten, so `ReleaseSpec.flagFor` derives it.
 The one thing that looks like re-deciding and is not is `wellFormed` — `x.y.z` or `patch|minor|major` is the
 *grammar of an argument*, which the script states in its own refusal; what a level **resolves to** is a bump
-off that module's latest tag and stays the script's.
+off that module's latest tag, and it stays the owner's — asked of `com.botmaker.cli.release` through
+`VersionTargets`, never worked out here.
 
 **`umbrella/` holds no JavaFX and the split is load-bearing**, not tidiness: it is what lets every rule in
 this module be a pure function over text a test can hand it, so CI needs no display (see *Commands*). A rule

@@ -42,6 +42,7 @@
              standalone build here resolves the 0.0.0-SNAPSHOT a local `mvn -pl botmaker-shared install`
              leaves in ~/.m2. There is no released-tag injection because there is no published build. -->
         <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
+        <botmaker.cli.version>0.0.0-SNAPSHOT</botmaker.cli.version>
     </properties>
 
     <repositories>
@@ -53,10 +54,9 @@
 
     <dependencies>
         <!--
-          The only BotMaker dependency, and the list it is NOT on is the interesting half: not
-          botmaker-studio (an application cannot be depended on), not the SDK, not the plugin contract, not
-          plugin-host. This module loads no plugin and opens no bot project — it reads git, GitHub and the
-          umbrella's own files.
+          The list this module is NOT on is the interesting half: not botmaker-studio (an application cannot
+          be depended on) and not the SDK. This module loads no plugin and opens no bot project — it reads
+          git, GitHub and the umbrella's own files.
 
           What it wants from shared is com.botmaker.shared.github: the REST client, the OAuth device flow
           and GitHubConfig's repository names. That package moved out of Studio on 2026-09-05 for this
@@ -66,6 +66,40 @@
             <groupId>com.github.LiQiyeDev</groupId>
             <artifactId>botmaker-shared</artifactId>
             <version>${botmaker.shared.version}</version>
+        </dependency>
+
+        <!--
+          botmaker-cli's MAIN artifact, for one package: com.botmaker.cli.release — the port of release.sh's
+          own decisions. It is here for the same reason the plugin registry's CI resolves the same artifact
+          for com.botmaker.cli.validate: THE ANSWER SHOWN MUST BE THE ANSWER THE RELEASE WILL GIVE. This tab
+          says "1.1.6 -> 1.2.0" beside a level, and computing that here from the module's latest tag would
+          be a second implementation of resolve_version — the one thing CLAUDE.md forbids, discovered as a
+          bad tag, which cannot be edited.
+
+          The main artifact, never the `all` classifier: that one is the shaded executable and carries
+          picocli. This module runs no command line. picocli does not arrive either way — the CLI declares
+          it `optional`, which is exactly what makes "the library knows no command line" a fact about the
+          dependency graph.
+
+          The two exclusions keep the paragraph above honest. The CLI is a plugin HOST, so it pins the
+          contract at compile scope and depends on plugin-host; this module hosts nothing and calls neither.
+          Excluding them means the contract cannot arrive here by accident — and if com.botmaker.cli.release
+          ever needs one of them, that is a compile error here rather than a silent new dependency edge.
+        -->
+        <dependency>
+            <groupId>com.github.LiQiyeDev</groupId>
+            <artifactId>botmaker-cli</artifactId>
+            <version>${botmaker.cli.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.github.LiQiyeDev</groupId>
+                    <artifactId>botmaker-studio-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.github.LiQiyeDev</groupId>
+                    <artifactId>botmaker-plugin-host</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Declared rather than inherited from shared: this module parses GitHub's JSON itself, and a

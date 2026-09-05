@@ -215,6 +215,52 @@
     -fx-text-fill: -bm-warn;
 }
 
+/* ── the level picker in the Release tab ─────────────────────────────────────
+   Three buttons that read as one control, plus the box for a typed version. The
+   segments are a ToggleGroup rather than a ComboBox because the whole point is
+   that the three levels are visible without opening anything: the arrow beside
+   them changes as they are clicked, which is how "what does minor mean here"
+   gets answered. */
+
+.segmented .segment {
+    -fx-background-color: -bm-bg-raised;
+    -fx-text-fill: -bm-text-dim;
+    -fx-background-radius: 0;
+    -fx-border-color: -bm-line;
+    -fx-border-width: 1 1 1 0;
+    -fx-padding: 3 9 3 9;
+}
+
+.segmented .segment:hover {
+    -fx-text-fill: -bm-text;
+}
+
+.segmented .segment:selected {
+    -fx-background-color: -bm-accent;
+    -fx-text-fill: white;
+}
+
+/* Only the outer edges are rounded, so the four read as one strip. */
+.segmented .segment:first-child {
+    -fx-background-radius: 4 0 0 4;
+    -fx-border-radius: 4 0 0 4;
+    -fx-border-width: 1;
+}
+
+.segmented .segment:last-child {
+    -fx-background-radius: 0 4 4 0;
+    -fx-border-radius: 0 4 4 0;
+}
+
+.exact-version {
+    -fx-pref-height: 24px;
+    -fx-padding: 1 6 1 6;
+}
+
+.exact-version:disabled {
+    -fx-opacity: 0.4;
+}
+
 /* ── lists, and the error text under a release ───────────────────────────── */
 
 .list-view {

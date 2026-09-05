@@ -1,15 +1,22 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.cli.release.Level;
+import com.botmaker.cli.release.Version;
 import com.botmaker.dashboard.umbrella.ReleasePlan;
 import com.botmaker.dashboard.umbrella.ReleaseSpec;
+import com.botmaker.dashboard.umbrella.VersionTargets;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -20,17 +27,18 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.cell.CheckBoxTableCell;
-import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.util.converter.DefaultStringConverter;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -50,6 +58,13 @@ import java.util.concurrent.CompletableFuture;
  * verdicts, none of which is re-rendered here. A parsed table would show strictly less than the script
  * already prints, and the two would have to be kept in step.
  *
+ * <p><b>The one number this tab computes is the one it must not guess.</b> "Would cut" is
+ * {@code com.botmaker.cli.release} — {@code release.sh}'s own {@code latest_version} and
+ * {@code resolve_version}, ported into {@code botmaker-cli}'s library artifact — applied to that module's
+ * newest tag. That is not a weakening of the rule above but the strict form of it: a level is meaningless
+ * until it is resolved, and the alternative to calling the owner is either a second implementation or an
+ * operator picking {@code minor} without being told what {@code minor} means for that module today.
+ *
  * <p><b>The module rows come from the script's own decide pass</b> ({@link ReleasePlan#verdicts()}), which is
  * why they are empty until the first preview runs. This module keeps no list of which modules are releasable
  * — {@code botmaker-gallery}, {@code botmaker-plugin-registry} and this repository are not, and the way to
@@ -57,11 +72,27 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class ReleaseTab extends BorderPane {
 
-    /** One module's line in the form: whether it is asked for, and at what version or level. */
+    /**
+     * One module's line: whether it is asked for, at what level or exact version, and what that resolves to.
+     *
+     * <p><b>A level and a typed version are two states, not one box.</b> They were one free-text field until
+     * 2026-09-05, which made the commonest choice — <i>patch</i> — a word to spell correctly, and made the
+     * rarest one, an exact version, look identical to it. The level is now always set (the script's own
+     * default, since a bare module flag means {@code patch}) and {@link #exact} only matters while
+     * {@link #exactChosen} is on, so switching back and forth never loses what was typed.
+     *
+     * <p>{@link #latest} is {@code null} until this module's tags have been read, which is a git call and so
+     * happens off the FX thread. Three states — unread, no tag, a tag — and they are three different things
+     * to show.
+     */
     public static final class Row {
         private final String module;
         private final BooleanProperty selected = new SimpleBooleanProperty(false);
-        private final StringProperty spec = new SimpleStringProperty("");
+        private final ObjectProperty<Level> level = new SimpleObjectProperty<>(Level.DEFAULT);
+        private final BooleanProperty exactChosen = new SimpleBooleanProperty(false);
+        private final StringProperty exact = new SimpleStringProperty("");
+        private final StringProperty target = new SimpleStringProperty(VersionTargets.READING);
+        private Optional<Version> latest;
         private String verdict = "";
 
         Row(String module) {
@@ -76,16 +107,38 @@ public final class ReleaseTab extends BorderPane {
             return selected;
         }
 
-        public StringProperty specProperty() {
-            return spec;
+        public StringProperty targetProperty() {
+            return target;
         }
 
         public String getVerdict() {
             return verdict;
         }
 
+        /** What goes on the command line — a level word, or the exact version as typed. */
+        String spec() {
+            return exactChosen.get() ? exact.get().strip() : level.get().spelling();
+        }
+
+        /** A level is always well formed; only what somebody types can fail to be a version. */
         boolean specWellFormed() {
-            return ReleaseSpec.wellFormed(spec.get());
+            return !exactChosen.get() || ReleaseSpec.wellFormed(exact.get());
+        }
+
+        /**
+         * Recomputes the arrow. Pure once the tags are read, so every keystroke and every level click can
+         * call it — {@link VersionTargets#latest} is the only part that touches git, and it is cached here.
+         */
+        void retarget() {
+            if (latest == null) {
+                target.set(VersionTargets.releasable(module)
+                        ? VersionTargets.READING
+                        : VersionTargets.UNKNOWN_MODULE);
+            } else if (exactChosen.get()) {
+                target.set(VersionTargets.forExact(module, exact.get(), latest));
+            } else {
+                target.set(VersionTargets.forLevel(module, level.get(), latest));
+            }
         }
     }
 
@@ -159,8 +212,9 @@ public final class ReleaseTab extends BorderPane {
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         VBox.setVgrow(table, Priority.ALWAYS);
 
-        Label hint = new Label("A module's box is blank for a patch bump, or a level, or an exact x.y.z. "
-                + "An explicit module beats --all — release.sh's rule, and it decides.");
+        Label hint = new Label("Pick a level, or x.y.z to type one. \"Would cut\" is what that resolves to "
+                + "off the module's own latest tag — computed by com.botmaker.cli.release, the same code the "
+                + "release runs. An explicit module beats --all: release.sh's rule, and it decides.");
         hint.getStyleClass().add("placeholder-body");
         hint.setWrapText(true);
 
@@ -198,38 +252,125 @@ public final class ReleaseTab extends BorderPane {
         module.setPrefWidth(190);
         module.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getModule()));
 
-        TableColumn<Row, String> spec = new TableColumn<>("Version / level");
-        spec.setPrefWidth(120);
-        spec.setCellValueFactory(c -> c.getValue().specProperty());
-        spec.setCellFactory(c -> specCell());
-        spec.setEditable(true);
+        TableColumn<Row, Row> spec = new TableColumn<>("Version / level");
+        spec.setPrefWidth(250);
+        spec.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(c.getValue()));
+        spec.setCellFactory(c -> new SpecCell());
+
+        TableColumn<Row, String> target = new TableColumn<>("Would cut");
+        target.setPrefWidth(150);
+        target.setCellValueFactory(c -> c.getValue().targetProperty());
 
         TableColumn<Row, String> verdict = new TableColumn<>("Last preview said");
         verdict.setPrefWidth(220);
         verdict.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getVerdict()));
 
-        table.getColumns().setAll(pick, module, spec, verdict);
+        table.getColumns().setAll(pick, module, spec, target, verdict);
     }
 
     /**
-     * The version box, marked when what is typed is not something {@code resolve_version} accepts.
+     * The level picker: three segments and a fourth for a typed version.
      *
-     * <p>Marking rather than refusing the keystroke: a half-typed {@code 1.2} is an ordinary state on the way
-     * to {@code 1.2.0}, and a box that fought the operator mid-word would be worse than one that waits.
-     * Preview is disabled while any row is marked, so the script is never asked a question it will only
-     * answer with {@code bad version/level}.
+     * <p><b>The typed box is marked rather than refusing the keystroke</b>, which is the same rule the free
+     * text field had: a half-typed {@code 1.2} is an ordinary state on the way to {@code 1.2.0}, and a box
+     * that fought the operator mid-word would be worse than one that waits. Preview stays disabled while any
+     * row is marked, so the script is never asked a question it will only answer with
+     * {@code bad version/level}.
+     *
+     * <p>A toggle group can be cleared by clicking the selected button, and here that would mean a module
+     * asked for at no level at all — so a null selection is put back. The script has no such state:
+     * {@code --cli} with nothing after it is {@code --cli patch}.
      */
-    private TableCell<Row, String> specCell() {
-        return new TextFieldTableCell<>(new DefaultStringConverter()) {
-            @Override
-            public void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                getStyleClass().remove("cell--broken");
-                if (!empty && item != null && !ReleaseSpec.wellFormed(item)) {
-                    getStyleClass().add("cell--broken");
+    private final class SpecCell extends TableCell<Row, Row> {
+
+        private final ToggleGroup group = new ToggleGroup();
+        private final ToggleButton patch = segment("patch");
+        private final ToggleButton minor = segment("minor");
+        private final ToggleButton major = segment("major");
+        private final ToggleButton exactly = segment("x.y.z");
+        private final TextField typed = new TextField();
+        private final HBox box;
+
+        private Row row;
+        /** Set while the cell is being filled from a row, so writing the controls does not write back. */
+        private boolean filling;
+
+        SpecCell() {
+            typed.setPrefColumnCount(6);
+            typed.setPromptText("1.2.0");
+            typed.getStyleClass().add("exact-version");
+
+            HBox segments = new HBox(patch, minor, major, exactly);
+            segments.getStyleClass().add("segmented");
+            box = new HBox(8, segments, typed);
+            box.setAlignment(Pos.CENTER_LEFT);
+
+            group.selectedToggleProperty().addListener((o, was, is) -> {
+                if (is == null) {
+                    group.selectToggle(was);
+                    return;
                 }
+                apply();
+            });
+            typed.textProperty().addListener((o, was, is) -> apply());
+        }
+
+        private ToggleButton segment(String text) {
+            ToggleButton button = new ToggleButton(text);
+            button.setToggleGroup(group);
+            button.getStyleClass().add("segment");
+            return button;
+        }
+
+        private void apply() {
+            if (filling || row == null) {
+                return;
             }
-        };
+            boolean exact = group.getSelectedToggle() == exactly;
+            row.exactChosen.set(exact);
+            if (exact) {
+                row.exact.set(typed.getText());
+            } else if (group.getSelectedToggle() == minor) {
+                row.level.set(Level.MINOR);
+            } else if (group.getSelectedToggle() == major) {
+                row.level.set(Level.MAJOR);
+            } else {
+                row.level.set(Level.PATCH);
+            }
+            typed.setDisable(!exact);
+            mark();
+            row.retarget();
+            refreshCommandLine();
+        }
+
+        private void mark() {
+            typed.getStyleClass().remove("cell--broken");
+            if (row != null && !row.specWellFormed()) {
+                typed.getStyleClass().add("cell--broken");
+            }
+        }
+
+        @Override
+        protected void updateItem(Row item, boolean empty) {
+            super.updateItem(item, empty);
+            row = empty ? null : item;
+            if (row == null) {
+                setGraphic(null);
+                return;
+            }
+            filling = true;
+            group.selectToggle(switch (row.exactChosen.get() ? null : row.level.get()) {
+                case MINOR -> minor;
+                case MAJOR -> major;
+                case PATCH -> patch;
+                case null -> exactly;
+            });
+            typed.setText(row.exact.get());
+            typed.setDisable(!row.exactChosen.get());
+            filling = false;
+            mark();
+            setGraphic(box);
+        }
     }
 
     /** What the flags currently spell, shown whether or not anything has been previewed yet. */
@@ -247,7 +388,7 @@ public final class ReleaseTab extends BorderPane {
         Map<String, String> picked = new LinkedHashMap<>();
         for (Row row : rows) {
             if (row.selectedProperty().get()) {
-                picked.put(row.getModule(), row.specProperty().get());
+                picked.put(row.getModule(), row.spec());
             }
         }
         Optional<String> all = allBox.isSelected()
@@ -323,15 +464,45 @@ public final class ReleaseTab extends BorderPane {
             Row row = existing.get(module);
             if (row == null) {
                 row = new Row(module);
-                // The command line is what this tab hands back, so it has to follow every tick and every
-                // keystroke rather than being rebuilt only when a preview runs.
+                // The command line is what this tab hands back, so it has to follow every tick rather than
+                // being rebuilt only when a preview runs. The level and the typed version are followed by
+                // SpecCell, which is where they are changed.
                 row.selectedProperty().addListener((o, was, is) -> refreshCommandLine());
-                row.specProperty().addListener((o, was, is) -> refreshCommandLine());
+                row.retarget();
             }
             row.verdict = verdict.text();
             rebuilt.add(row);
         });
         rows.setAll(rebuilt);
+        loadLatest();
+    }
+
+    /**
+     * Reads each module's newest tag in the background and fills in the arrows as they arrive.
+     *
+     * <p>One row at a time through {@link Platform#runLater}, rather than one batch at the end: each is a
+     * {@code git fetch --tags} against a remote, so the last module can be seconds behind the first and a
+     * table that stayed at {@code …} until all ten had answered would read as stuck.
+     *
+     * <p>Re-read on every preview, deliberately. A tag cut elsewhere between two previews changes every
+     * arrow under it, and a cached answer here would be this window quietly showing a version that is
+     * already taken.
+     */
+    private void loadLatest() {
+        Path root = umbrella;
+        if (root == null) {
+            return;
+        }
+        List<Row> reading = List.copyOf(rows);
+        CompletableFuture.runAsync(() -> {
+            for (Row row : reading) {
+                Optional<Version> latest = VersionTargets.latest(root, row.getModule());
+                Platform.runLater(() -> {
+                    row.latest = latest;
+                    row.retarget();
+                });
+            }
+        });
     }
 
     private void say(String text) {

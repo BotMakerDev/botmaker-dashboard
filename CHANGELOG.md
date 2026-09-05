@@ -30,6 +30,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   so "ok" keeps meaning what `resolve_clean_room` decided it means; the log is rewritten in place, as a
   reviewable diff the operator commits. Right-click a row to open its GitHub Release, its JitPack build or
   the workflow runs for its tag.
+- **A level picker instead of a text box, and it says what the level would cut.** Each module row carries
+  `patch | minor | major | x.y.z` as one segmented control, with the exact-version field enabled only by the
+  fourth. Beside it, **Would cut** reads `1.1.6 → 1.2.0` — resolved by `com.botmaker.cli.release`, the port
+  of `release.sh`'s own `latest_version` and `resolve_version`, so the number shown is the number the release
+  will compute rather than a plausible-looking guess. That is why this module now depends on `botmaker-cli`'s
+  main artifact, with the contract and plugin-host excluded: it calls a library, it does not become a host.
+  A module the release never cuts (`botmaker-gallery`, this repository) says *not released* rather than
+  inventing an arrow.
 - **The Release tab — a preview, and no way to execute.** Module checkboxes with a version or bump level
   each, `--all <level>`, `--force` and `--no-wait-jitpack`, rendering `./release.sh --dry-run`'s whole output:
   the decided version per module, why each was skipped or forced, the tag order and the gate verdicts, none

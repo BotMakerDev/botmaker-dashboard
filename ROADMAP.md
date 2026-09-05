@@ -8,6 +8,44 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-05 — the version/level picker, and the first call into the release library
+
+**Done**
+
+- `umbrella/VersionTargets`: `latest` (a module's newest tag) and the two arrows, `forLevel` and `forExact`.
+  Every one of them delegates to `com.botmaker.cli.release` — `Tags.latest`, `VersionSpec.parse` and
+  `against`, which are `release.sh`'s `latest_version` and `resolve_version` ported in Part C slice 1.
+- `ReleaseTab.Row` now holds a `Level` (always set, since a bare module flag means `patch`) plus a separate
+  typed version behind an `exactChosen` flag, so switching between them loses neither. `SpecCell` is the
+  segmented control; a cleared toggle group is put back, because "asked for at no level" is a state the
+  script does not have.
+- A **Would cut** column, live: the tags are read once per preview off the FX thread, one `Platform.runLater`
+  per module so the table fills in as each answers rather than all at the end, and every level click after
+  that is pure.
+- `pom.xml` takes `botmaker-cli`'s **main** artifact with `botmaker-studio-api` and `botmaker-plugin-host`
+  excluded. Verified by `dependency:tree`: the CLI arrives as a leaf, and picocli never arrives at all
+  (it is `optional` there, which is the point of that declaration).
+- `VersionTargetsTest` (5): the three levels off a real tag, a module with no tag reading `no tag → 0.0.1`
+  rather than `0.0.0 → 0.0.1`, an exact version passing through even when it goes backwards (that refusal is
+  the release's judgement, not this window's), a half-typed `1.2` saying *not a version*, and the data
+  repositories having no arrow at all.
+
+**Deferred / next**
+
+- **The Catalog tab** — the published gallery and plugin-registry indexes, read-only, with *Delist* opening
+  a pull request that deletes the one entry file (never a direct commit to `main`), gated on the same
+  `permissions.push` the queue uses.
+- **A Doctor tab** — git identity, the release token's scope across all eleven repositories, `mvn`, JitPack
+  reachability: the environment `--ci` refuses on, answered before a release rather than during one.
+- **Drift alerts on the Modules tab** — one *what is owed* line rolling up stale pins, missing
+  `[Unreleased]` sections and tags whose JitPack or Actions verdict was never green.
+- **A per-module diff viewer** — the commits and files since a module's last tag, with the
+  release-irrelevant ones greyed out, so *why is this releasing* is answerable without a terminal.
+- `--all <level>` is still a `ComboBox` with no arrow beside it. It would need ten arrows, one per module,
+  and the honest place for them is the rows themselves once *explicit beats `--all`* is shown there too.
+
+---
+
 ## 2026-09-05 — the Queue tab: the submissions, and somebody else's verdict on each
 
 **Done**
