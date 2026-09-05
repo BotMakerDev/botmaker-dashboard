@@ -3,6 +3,7 @@ package com.botmaker.dashboard;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
 import com.botmaker.dashboard.ui.ModulesTab;
+import com.botmaker.dashboard.ui.ReleaseTab;
 import com.botmaker.dashboard.ui.ReleasesTab;
 import com.botmaker.dashboard.ui.UmbrellaBar;
 import com.botmaker.shared.github.GitHubAuth;
@@ -59,6 +60,7 @@ public final class DashboardApp extends Application {
     /** The tabs with content so far. Held because the umbrella picker has to tell them the path moved. */
     private ModulesTab modules;
     private ReleasesTab releases;
+    private ReleaseTab release;
 
     @Override
     public void start(Stage stage) {
@@ -76,12 +78,12 @@ public final class DashboardApp extends Application {
 
         modules = new ModulesTab(remembered);
         releases = new ReleasesTab(remembered);
+        release = new ReleaseTab(remembered);
 
         TabPane tabs = new TabPane(
                 new Tab("Modules", modules),
                 new Tab("Releases", releases),
-                placeholder("Release", "What ./release.sh --dry-run decides for a given set of flags: the "
-                        + "version per module, why each is skipped or forced, the tag order and the gates."),
+                new Tab("Release", release),
                 placeholder("Queue", "Open pull requests on the plugin registry and the gallery, the one "
                         + "entry file each adds, and the gate's own verdict."));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -130,6 +132,7 @@ public final class DashboardApp extends Application {
         DashboardConfig.save(new DashboardConfig(root));
         modules.setUmbrella(root);
         releases.setUmbrella(root);
+        release.setUmbrella(root);
     }
 
     /**

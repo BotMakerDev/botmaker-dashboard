@@ -3,6 +3,7 @@ package com.botmaker.dashboard.umbrella;
 import java.time.Duration;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -74,7 +75,18 @@ public record ReleasePlan(Map<String, Verdict> verdicts, int exit, String raw) {
      * thread: the pass shells to git in ten repositories and runs the SDK's pointer test through Maven.
      */
     public static ReleasePlan ask(Path umbrella) {
-        Proc p = Proc.run(umbrella, Duration.ofMinutes(6), "./release.sh", "--all", "--dry-run");
+        return ask(umbrella, List.of("./release.sh", "--all", "--dry-run"));
+    }
+
+    /**
+     * The same, for a command {@link ReleaseSpec} composed — the Release tab's preview.
+     *
+     * <p>The command is passed whole rather than assembled here, because what a set of flags means is the
+     * script's business: {@code --all} beside an explicit module flag, a level that is not a version, a
+     * module the script does not release. Every one of those is answered by running it.
+     */
+    public static ReleasePlan ask(Path umbrella, List<String> command) {
+        Proc p = Proc.run(umbrella, Duration.ofMinutes(6), command);
         return parse(p.out(), p.exit());
     }
 

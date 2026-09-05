@@ -256,6 +256,36 @@
     -fx-padding: 0 1 0 1;
 }
 
+/* ── the Release tab: the flags on the left, the script's own words on the right ─── */
+
+.flag-box {
+    -fx-background-color: -bm-bg-raised;
+    -fx-background-radius: 4;
+    -fx-padding: 10;
+}
+
+/*
+ * The command line is the tab's deliverable — the window cannot cut a release, so what it hands back is the
+ * exact line to paste. Monospace and selectable; read-only rather than disabled, so it can still be copied.
+ */
+.command-line {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-background-color: -bm-bg-raised;
+    -fx-text-fill: -bm-accent;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.output-text {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 11px;
+}
+
+.output-text .content {
+    -fx-background-color: -bm-bg-raised;
+}
+
 /* ── the empty tabs, until each phase fills one ──────────────────────────── */
 
 .placeholder-title {

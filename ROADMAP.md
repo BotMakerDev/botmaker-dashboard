@@ -8,6 +8,30 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-05 — the Release tab: what a release would do, and the line to type
+
+**Done**
+
+- `umbrella/ReleaseSpec`: the flags as a record, `command()`/`commandLine()`, and `preview(umbrella)`.
+  **`--dry-run` is appended there and nowhere else can leave it off** — Part B visualises and does not
+  execute, and enforcing it in the only class that builds a command means a second caller cannot forget.
+- `ui/ReleaseTab`: the flags on the left, the script's own output whole on the right, and the command line
+  between them as the tab's real deliverable. No execute button.
+- **The module rows are `release.sh`'s list, not one kept here** — they come from the decide pass's verdicts,
+  so they appear after the first preview. A module the pass stops naming is dropped rather than held with a
+  stale verdict.
+- `ReleaseSpec.flagFor` derives `--plugin-toolkit` from `botmaker-plugin-toolkit`; no flag table.
+- A typed version is marked, not refused mid-keystroke, and Preview is disabled while one is marked — so the
+  script is never asked a question it will only answer with `bad version/level`.
+
+**Deferred / next**
+
+- Phase 6, Queue. The execute button arrives with Part C slice 5, not before.
+- The tab runs the whole decide pass to learn the module list. Part C's library removes the cost; a cache
+  here would be a decision this app owns.
+
+---
+
 ## 2026-09-05 — the Releases tab: what the last releases did, and what became of them
 
 **Done**

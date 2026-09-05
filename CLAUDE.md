@@ -80,14 +80,27 @@ com.botmaker.dashboard
 │   ├── ModuleRow       one module as a row
 │   ├── ModuleScan      git per module, then release.sh once, into rows
 │   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
+│   ├── ReleaseSpec     the flags a preview runs with — and the only place --dry-run is appended
 │   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
     ├── Browse          open a URL, best-effort, never an error dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
-    └── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
+    ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
+    └── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
 ```
+
+**There is no execute button and `--dry-run` is not a checkbox.** `ReleaseSpec.command()` appends it
+unconditionally, so the rule that this window visualises and does not execute is enforced by the only class
+that can build a command rather than remembered at each caller. What the Release tab hands back instead is
+the **command line** — the exact thing to paste into a terminal, with that line's own output under it.
+
+**A third list this module does not keep: the module flags.** `--plugin-toolkit` is
+`botmaker-plugin-toolkit` without the `botmaker-` prefix, for all ten, so `ReleaseSpec.flagFor` derives it.
+The one thing that looks like re-deciding and is not is `wellFormed` — `x.y.z` or `patch|minor|major` is the
+*grammar of an argument*, which the script states in its own refusal; what a level **resolves to** is a bump
+off that module's latest tag and stays the script's.
 
 **`umbrella/` holds no JavaFX and the split is load-bearing**, not tidiness: it is what lets every rule in
 this module be a pure function over text a test can hand it, so CI needs no display (see *Commands*). A rule

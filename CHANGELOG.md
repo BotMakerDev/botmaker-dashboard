@@ -30,6 +30,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   so "ok" keeps meaning what `resolve_clean_room` decided it means; the log is rewritten in place, as a
   reviewable diff the operator commits. Right-click a row to open its GitHub Release, its JitPack build or
   the workflow runs for its tag.
+- **The Release tab — a preview, and no way to execute.** Module checkboxes with a version or bump level
+  each, `--all <level>`, `--force` and `--no-wait-jitpack`, rendering `./release.sh --dry-run`'s whole output:
+  the decided version per module, why each was skipped or forced, the tag order and the gate verdicts, none
+  of it re-rendered here. **`--dry-run` is appended by the code that builds the command and cannot be left
+  off** — the terminal stays the only place a tag is pushed — so what the tab hands back is the exact command
+  line to paste. The module rows are the decide pass's own list, which is why they appear after the first
+  preview rather than before it.
 - **`Admin`** — `permissions.push` on `botmaker-plugin-registry`, read from the GitHub API for the
   signed-in account. Every failure (offline, not signed in, a token whose scope was narrowed, a repository
   the account cannot see) is read-only with a reason rather than an error.
