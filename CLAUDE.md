@@ -64,10 +64,29 @@ com.botmaker.dashboard
 ├── DashboardConfig     the one remembered preference (the umbrella path) + looksLikeUmbrella
 ├── github/
 │   └── Admin           permissions.push, and every failure folded into read-only
+├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
+│   ├── Proc            one external command, output captured, a timeout that is a result
+│   ├── Umbrella        the module list, read from .gitmodules and never kept here
+│   ├── ReleasePlan     release.sh --all --dry-run's decide pass, PARSED and never re-derived
+│   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
+│   ├── Changelog       is there an [Unreleased] section for a release to stamp
+│   ├── ModuleRow       one module as a row
+│   └── ModuleScan      git per module, then release.sh once, into rows
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
-    └── AccountBar      the OAuth device-flow control (the flow itself is shared's)
+    ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
+    └── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
 ```
+
+**`umbrella/` holds no JavaFX and the split is load-bearing**, not tidiness: it is what lets every rule in
+this module be a pure function over text a test can hand it, so CI needs no display (see *Commands*). A rule
+that arrives in a `ui/` class is a rule that will not be tested.
+
+**There are two lists this module deliberately does not keep.** Which modules a checkout has is
+`.gitmodules`' answer (`Umbrella.modules`) — a copy here would be short by exactly one module the day an
+eleventh is added, which is the day it matters. And which modules are *releasable* is answered by whether
+`release.sh`'s decide pass names them at all: `botmaker-gallery`, `botmaker-plugin-registry` and this
+repository never appear, and the row says *not released by release.sh* rather than inventing a category.
 
 `src/main/resources/css/dashboard.css` is the whole look, one theme, tokens on `.root`.
 

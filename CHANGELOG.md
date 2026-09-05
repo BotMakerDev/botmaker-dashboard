@@ -18,6 +18,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the directory holds both `release.sh` and `.gitmodules`), GitHub sign-in through the shared OAuth device
   flow, the admin badge, and the four tabs — Modules, Releases, Release, Queue — each stating what it will
   hold. Nothing reads a release or a pull request yet.
+- **The Modules tab.** One row per submodule in the checkout: its newest tag and how far HEAD has moved
+  past it, whether the working tree is dirty, **what `./release.sh --all --dry-run` decided about that
+  movement — quoted in the script's own words, never re-derived here** — whether `CHANGELOG.md` has an
+  `## [Unreleased]` section for a release to stamp, and each `.deps.env` pin with the upstream's newest tag
+  beside it when the two differ. A module the script never names is reported as one it does not release,
+  which is how the gallery, the plugin registry and this repository are told apart from the ten it does.
 - **`Admin`** — `permissions.push` on `botmaker-plugin-registry`, read from the GitHub API for the
   signed-in account. Every failure (offline, not signed in, a token whose scope was narrowed, a repository
   the account cannot see) is read-only with a reason rather than an error.

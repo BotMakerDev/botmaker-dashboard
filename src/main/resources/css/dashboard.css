@@ -135,6 +135,69 @@
     -fx-background-color: -bm-bg;
 }
 
+/* ── a tab's own toolbar, and the line under it that says what just happened ─ */
+
+.tab-bar {
+    -fx-alignment: center-left;
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent transparent -bm-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.status-line {
+    -fx-text-fill: -bm-text-dim;
+}
+
+/* ── tables ──────────────────────────────────────────────────────────────── */
+
+.table-view {
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent;
+}
+
+.table-view .column-header-background,
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: -bm-bg-raised;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: -bm-text-dim;
+    -fx-alignment: center-left;
+}
+
+.table-view .table-row-cell {
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent transparent -bm-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.table-view .table-row-cell:selected {
+    -fx-background-color: derive(-bm-accent, -60%);
+}
+
+.table-view .table-cell {
+    -fx-text-fill: -bm-text;
+    -fx-padding: 6 10 6 10;
+}
+
+/*
+ * Three cell states, and none of them is a verdict of this app's own: "releasing" is what release.sh
+ * decided, "stale" is a pin that is not its upstream's newest tag, and "dim" is everything that is merely
+ * true. Nothing here is red — a module with nothing to release is the normal state, not a fault.
+ */
+.cell--releasing {
+    -fx-text-fill: -bm-ok;
+}
+
+.cell--stale {
+    -fx-text-fill: -bm-warn;
+}
+
+.cell--dim {
+    -fx-text-fill: -bm-text-dim;
+}
+
 /* ── the empty tabs, until each phase fills one ──────────────────────────── */
 
 .placeholder-title {

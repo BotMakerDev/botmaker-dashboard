@@ -8,6 +8,38 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-05 — the Modules tab: what is out of date, before a release
+
+**Done**
+
+- `umbrella/`, a package with no JavaFX in it: `Proc` (one command, output captured, a timeout that returns
+  rather than throws), `Umbrella` (the module list, from `.gitmodules`), `ReleasePlan`, `DepsEnv`,
+  `Changelog`, `ModuleRow`, `ModuleScan`. Every rule is a pure function over text, which is why 14 new tests
+  run with no display.
+- `ui/ModulesTab`: the rows in a table, a refresh that runs off the FX thread, and the script's whole output
+  on the status line's tooltip when a gate refused the dry run.
+- **`ReleasePlan` parses and never decides.** It reads only the block after `Deciding what to release:`,
+  because the lines *before* it are the plan the flags asked for (keyed by short names — `studio-api`, not
+  `botmaker-studio-api`) and the lines *after* it are the gates, which print module-prefixed lines of their
+  own. Reading either would invent verdicts. A non-zero exit is ordinary: the gates run after the decide
+  pass, so the verdicts still stand and are still shown.
+- **Two lists this module refuses to keep**: what modules exist (`.gitmodules` says) and which are
+  releasable (whether the decide pass names them says). `ModuleRow.planLabel` reports the second as *not
+  released by release.sh* rather than as a category invented here.
+- `DepsEnv` adds the one question the file cannot ask about itself — is this pin still the upstream's newest
+  tag — and an unrecognised key still shows, since a key nobody has classified is a *new* upstream.
+
+**Deferred / next**
+
+- Phase 4, Releases: parse `releases/*.md`; re-poll runs `./release.sh --status <file>`.
+- Phase 5, Release **preview only**.
+- Phase 6, Queue: registry and gallery pull requests, gated on `Admin.canWrite`.
+- The Modules tab shells to `release.sh` on every refresh, which costs a Maven run (`check_api_pointers`).
+  Acceptable for a button the operator presses; if it becomes annoying, the answer is Part C's library, not
+  a cache — a cached decision is a decision this app owns.
+
+---
+
 ## 2026-09-05 — the module exists, and it visualises nothing yet
 
 **Done**
