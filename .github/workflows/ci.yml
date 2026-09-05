@@ -1,0 +1,41 @@
+name: CI
+
+# One job, and no release job — this module is not published. There is no tag to react to, no JitPack build
+# to warm and no GitHub Release to cut, so the workflow's whole purpose is "does it still compile and do its
+# rules still hold".
+#
+# botmaker-shared is built FROM SOURCE rather than resolved: this repo's pom pins
+# ${botmaker.shared.version} to 0.0.0-SNAPSHOT — the version the umbrella reactor and a local `mvn install`
+# produce — so there is no published artifact under that coordinate to download.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out botmaker-shared
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-shared
+          path: .deps/botmaker-shared
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Install botmaker-shared (0.0.0-SNAPSHOT)
+        run: mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
+
+      # No display on the runner, and none is needed: every rule in this module is a pure function over
+      # JSON or a path, and the JavaFX classes hold none. If a test ever needs a window, that is the signal
+      # to move the rule out of the window, not to install a virtual framebuffer.
+      - name: Build and test
+        run: mvn -B verify

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      groupId matches the JitPack coordinate like every other module here, and unlike every other module
+      that is a convention rather than a requirement: THIS ONE IS NOT PUBLISHED. It is an application, not
+      a library — nothing resolves it, JitPack never builds it, and there is no tag whose name would
+      override the version below.
+
+      Two consequences follow from that and both are deliberate omissions rather than oversights:
+
+        * NO flatten-maven-plugin. Flatten exists to bake a property-driven BotMaker upstream into the pom a
+          CONSUMER downloads. This module has such a property (botmaker.shared.version) and no consumer, so
+          there is no published pom for a -D to be missing from.
+        * NO .deps.env. Same reason: that file records which upstream tags a released tag was cut with, and
+          is read by a jitpack.yml or by Studio's package job. Neither exists here.
+
+      If this module ever IS published, add both in the same commit — a published pom carrying
+      botmaker-shared:0.0.0-SNAPSHOT is the exact bug that shipped in every SDK up to v1.0.24.
+    -->
+    <groupId>com.github.LiQiyeDev</groupId>
+    <artifactId>botmaker-dashboard</artifactId>
+    <version>0.0.0-SNAPSHOT</version>
+
+    <name>BotMaker Dashboard</name>
+    <description>
+        The maintainer's window onto the release constellation: what each module's latest tag is and whether
+        it has drifted, what the last releases did and whether their artifacts resolve, what a release would
+        decide before it is cut, and the queue of plugin and bot submissions waiting on a verdict.
+    </description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <javafx.version>25.0.4</javafx.version>
+        <junit.version>5.10.2</junit.version>
+        <jackson.version>2.17.0</jackson.version>
+        <!-- The reactor/offline value. An umbrella `mvn install` resolves shared from the reactor; a
+             standalone build here resolves the 0.0.0-SNAPSHOT a local `mvn -pl botmaker-shared install`
+             leaves in ~/.m2. There is no released-tag injection because there is no published build. -->
+        <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!--
+          The only BotMaker dependency, and the list it is NOT on is the interesting half: not
+          botmaker-studio (an application cannot be depended on), not the SDK, not the plugin contract, not
+          plugin-host. This module loads no plugin and opens no bot project — it reads git, GitHub and the
+          umbrella's own files.
+
+          What it wants from shared is com.botmaker.shared.github: the REST client, the OAuth device flow
+          and GitHubConfig's repository names. That package moved out of Studio on 2026-09-05 for this
+          module specifically.
+        -->
+        <dependency>
+            <groupId>com.github.LiQiyeDev</groupId>
+            <artifactId>botmaker-shared</artifactId>
+            <version>${botmaker.shared.version}</version>
+        </dependency>
+
+        <!-- Declared rather than inherited from shared: this module parses GitHub's JSON itself, and a
+             dependency it names in its own source belongs in its own pom. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Pinned for the same reason every module here pins it, even though this one never reaches
+                 JitPack: one compiler version across the project, so a build failure is never "which
+                 maven-compiler-plugin did this module get". 3.11.0 is the project-wide known-good.  -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <!-- `mvn -pl botmaker-dashboard javafx:run` from the umbrella root. -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.botmaker.dashboard.DashboardApp</mainClass>
+                    <options>
+                        <option>--enable-native-access=ALL-UNNAMED</option>
+                    </options>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

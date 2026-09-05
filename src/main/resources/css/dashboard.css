@@ -1,0 +1,162 @@
+/*
+ * The whole look of the dashboard, in one file.
+ *
+ * It does NOT reuse botmaker-studio's stylesheet, and that is the same rule as the account bar: Studio is
+ * an application, its themes are switched at runtime by BlockTheme, and its tokens are named for a block
+ * canvas this window does not have. A copy of four colours is cheaper than a dependency on an app.
+ *
+ * One theme, deliberately. A dark/light switch is a preference to persist, a listener to install and two
+ * palettes to keep honest, for a window one person opens to read a release. If it grows one, take Studio's
+ * approach — tokens redefined on the root, never per-control colours.
+ */
+
+.root {
+    -bm-bg: #1e1f22;
+    -bm-bg-raised: #2b2d30;
+    -bm-line: #3c3f43;
+    -bm-text: #dfe1e5;
+    -bm-text-dim: #9da0a8;
+    -bm-accent: #4c8dff;
+    -bm-ok: #59a869;
+    -bm-warn: #d9a343;
+
+    -fx-background-color: -bm-bg;
+    -fx-font-family: "Inter", "Segoe UI", "Cantarell", sans-serif;
+    -fx-font-size: 13px;
+}
+
+.label {
+    -fx-text-fill: -bm-text;
+}
+
+/* ── top bar ─────────────────────────────────────────────────────────────── */
+
+.top-bar {
+    -fx-background-color: -bm-bg-raised;
+    -fx-border-color: transparent transparent -bm-line transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-alignment: center-left;
+}
+
+.umbrella-bar {
+    -fx-alignment: center-left;
+}
+
+.umbrella-path {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-text-fill: -bm-text;
+}
+
+/* Nothing chosen yet — the one state where this label is an instruction rather than a fact. */
+.umbrella-path:unset {
+    -fx-text-fill: -bm-warn;
+    -fx-font-family: inherit;
+}
+
+.account-bar {
+    -fx-alignment: center-right;
+}
+
+.account-login {
+    -fx-text-fill: -bm-text-dim;
+}
+
+.button {
+    -fx-background-color: -bm-bg;
+    -fx-text-fill: -bm-text;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 4 10 4 10;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-border-color: -bm-accent;
+}
+
+.button:disabled {
+    -fx-opacity: 0.5;
+    -fx-cursor: default;
+}
+
+/* ── the admin badge ─────────────────────────────────────────────────────── */
+
+/*
+ * Two states and no third. It says what this account may do on the plugin registry, as GitHub answers it —
+ * never what role somebody has been given here.
+ */
+.badge {
+    -fx-padding: 3 9 3 9;
+    -fx-background-radius: 10;
+    -fx-font-size: 11px;
+    -fx-background-color: -bm-bg;
+    -fx-text-fill: -bm-text-dim;
+}
+
+.badge--write {
+    -fx-text-fill: -bm-ok;
+    -fx-border-color: -bm-ok;
+    -fx-border-radius: 10;
+}
+
+.badge--read {
+    -fx-text-fill: -bm-text-dim;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 10;
+}
+
+/* ── tabs ────────────────────────────────────────────────────────────────── */
+
+.tab-pane .tab-header-background {
+    -fx-background-color: -bm-bg-raised;
+}
+
+.tab-pane .tab {
+    -fx-background-color: transparent;
+    -fx-padding: 6 16 6 16;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent transparent -bm-accent transparent;
+    -fx-border-width: 0 0 2 0;
+}
+
+.tab-pane .tab .tab-label {
+    -fx-text-fill: -bm-text-dim;
+}
+
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: -bm-text;
+}
+
+.tab-pane > .tab-content-area {
+    -fx-background-color: -bm-bg;
+}
+
+/* ── the empty tabs, until each phase fills one ──────────────────────────── */
+
+.placeholder-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.placeholder-body {
+    -fx-text-fill: -bm-text-dim;
+}
+
+/* ── dialogs ─────────────────────────────────────────────────────────────── */
+
+.dialog-pane {
+    -fx-background-color: -bm-bg-raised;
+}
+
+.dialog-pane .label {
+    -fx-text-fill: -bm-text;
+}
+
+.device-code {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 20px;
+}
