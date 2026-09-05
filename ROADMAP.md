@@ -8,6 +8,35 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-05 — the Queue tab: the submissions, and somebody else's verdict on each
+
+**Done**
+
+- `github/Queue`: both data repositories' open pull requests, their files and their check runs, plus the
+  four writes (approve, request changes, squash-merge, and reading the entry at the PR's own head commit).
+  Reads work signed out — both repos are public — and the token is passed when there is one.
+- `github/Submission`: **the only judgement this app makes is shape.** One entry file and nothing else;
+  `index.json` by hand is the common stray, and two entry files is *no* entry file, because which id is
+  being claimed has no answer. Merge is refused locally on a wrong shape; everything else GitHub decides.
+- `github/Checks`: the CI's conclusion reduced to one verdict, with a failure beating a run still going —
+  nothing the second concludes can make the first pass. **`NONE` is a state of its own**, unlike
+  `ReleaseLog.Health`'s reading of `no run on <tag>` as broken: a tag is finished, a pull request is not.
+- `github/EntryFields`: the entry flattened into rows, **from the file rather than a schema** — a key this
+  window has never heard of is the one a reviewer most needs to see. Broken JSON renders as itself.
+- `ui/QueueTab`, and the last placeholder is gone: all four tabs have content, so `DashboardApp.placeholder`
+  is deleted.
+
+**Deferred / next**
+
+- The queue is 2n+2 requests per refresh (files and checks per submission). Right while n is small, and n is
+  small by construction — this is a queue somebody empties, not a feed. If it stops being small, the answer
+  is the GraphQL API, not a cache.
+- No auto-refresh and no webhook. A window that polls github.com in the background is a service, and this is
+  not one.
+- Part C. The execute button arrives with slice 5.
+
+---
+
 ## 2026-09-05 — the Release tab: what a release would do, and the line to type
 
 **Done**

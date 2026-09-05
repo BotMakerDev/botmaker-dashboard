@@ -3,6 +3,7 @@ package com.botmaker.dashboard;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
 import com.botmaker.dashboard.ui.ModulesTab;
+import com.botmaker.dashboard.ui.QueueTab;
 import com.botmaker.dashboard.ui.ReleaseTab;
 import com.botmaker.dashboard.ui.ReleasesTab;
 import com.botmaker.dashboard.ui.UmbrellaBar;
@@ -17,8 +18,6 @@ import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.nio.file.Path;
@@ -62,6 +61,9 @@ public final class DashboardApp extends Application {
     private ReleasesTab releases;
     private ReleaseTab release;
 
+    /** The one tab that reads GitHub rather than the checkout, and so hears about the admin probe instead. */
+    private QueueTab queue;
+
     @Override
     public void start(Stage stage) {
         Path remembered = DashboardConfig.load().remembered().orElse(null);
@@ -79,13 +81,13 @@ public final class DashboardApp extends Application {
         modules = new ModulesTab(remembered);
         releases = new ReleasesTab(remembered);
         release = new ReleaseTab(remembered);
+        queue = new QueueTab(client, auth);
 
         TabPane tabs = new TabPane(
                 new Tab("Modules", modules),
                 new Tab("Releases", releases),
                 new Tab("Release", release),
-                placeholder("Queue", "Open pull requests on the plugin registry and the gallery, the one "
-                        + "entry file each adds, and the gate's own verdict."));
+                new Tab("Queue", queue));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         BorderPane root = new BorderPane();
@@ -101,31 +103,6 @@ public final class DashboardApp extends Application {
         stage.show();
 
         refreshAdmin();
-    }
-
-    /**
-     * A tab with nothing in it yet, saying what it will hold.
-     *
-     * <p>Four empty tabs rather than one tab added per phase: the shape of the window is a decision, and a
-     * reviewer should be able to see it before any of it works. Each phase replaces one of these.
-     */
-    private static Tab placeholder(String name, String what) {
-        Label title = new Label(name);
-        title.getStyleClass().add("placeholder-title");
-        Label body = new Label(what);
-        body.getStyleClass().add("placeholder-body");
-        body.setWrapText(true);
-        body.setMaxWidth(560);
-
-        VBox box = new VBox(8, title, body);
-        box.getStyleClass().add("placeholder");
-        box.setPadding(new Insets(48));
-
-        Region pad = new Region();
-        VBox.setVgrow(pad, Priority.ALWAYS);
-
-        Tab tab = new Tab(name, new VBox(box, pad));
-        return tab;
     }
 
     private void umbrellaChosen(Path root) {
@@ -147,6 +124,9 @@ public final class DashboardApp extends Application {
             adminBadge.setText(verdict.summary());
             adminBadge.getStyleClass().removeAll("badge--write", "badge--read");
             adminBadge.getStyleClass().add(verdict.canWrite() ? "badge--write" : "badge--read");
+            // The queue's write buttons follow the badge exactly — one probe, one answer, no second list.
+            queue.setAdmin(verdict);
+            queue.reload();
         }));
     }
 

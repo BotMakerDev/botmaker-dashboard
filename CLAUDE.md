@@ -63,14 +63,41 @@ Every probe failure — offline, not signed in, a narrowed token scope, a reposi
 is **read-only with a reason**, never an error dialog. The window stays fully usable for everything it
 reads, which is most of it.
 
+## The queue — one judgement, and it is about shape
+
+A submission is a pull request adding **one file**: `plugins/<plugin-id>.json` or
+`bots/<owner>-<repo>.json`. Everything about whether it is *good* belongs to the registry's CI, which runs
+`RegistryGate` from `botmaker-cli`'s main artifact — the same code its author ran as
+`botmaker plugin validate`. The Gate column is that check run's conclusion, in GitHub's own words.
+
+**The one thing judged here is that shape**, because it is a property of the layout rather than of a plugin:
+one file per entry is what makes two same-day submissions two files that cannot conflict, what makes git
+itself refuse a second claim on an id, and what lets `index.json` be generated rather than edited. So a pull
+request touching anything besides its own entry is flagged loudly and **Merge is refused locally** —
+`index.json` by hand is the common case, and it is stale the moment another submission merges. Two entry
+files is *no* entry file: which id is being claimed has no answer, so there is nothing safe to merge.
+
+**`Checks.NONE` is where this deliberately differs from `ReleaseLog.Health`.** The release log reads
+`no run on <tag>` as **broken**, because a tag is finished and nothing more will fire. A pull request is not
+finished — one opened a minute ago simply has no check run yet. Same JSON, opposite verdict, because the
+subject's lifecycle differs; a shared classifier here would have to be wrong for one of the two.
+
+**`EntryFields` reads the file, never a schema.** What an entry must contain has one owner and it is the
+gate. A copy of it here would go stale on the first field added and, worse, would *hide* a key a submission
+carries that this window has never heard of — which is exactly the key a reviewer needs to see.
+
 ## Layout
 
 ```
 com.botmaker.dashboard
 ├── DashboardApp        the window: top bar + four tabs. The JavaFX entry point.
 ├── DashboardConfig     the one remembered preference (the umbrella path) + looksLikeUmbrella
-├── github/
-│   └── Admin           permissions.push, and every failure folded into read-only
+├── github/            everything read from the API — no JavaFX either, and tested the same way
+│   ├── Admin           permissions.push, and every failure folded into read-only
+│   ├── Queue           the open pull requests on both data repos, and the four writes
+│   ├── Submission      one pull request: who, what one file it adds, and what it must not add
+│   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
+│   └── EntryFields     the submitted entry, flattened into rows — read from the file, not a schema
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
 │   ├── Proc            one external command, output captured, a timeout that is a result
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
@@ -88,7 +115,8 @@ com.botmaker.dashboard
     ├── Browse          open a URL, best-effort, never an error dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
-    └── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
+    ├── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
+    └── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
 ```
 
 **There is no execute button and `--dry-run` is not a checkbox.** `ReleaseSpec.command()` appends it

@@ -37,6 +37,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   off** — the terminal stays the only place a tag is pushed — so what the tab hands back is the exact command
   line to paste. The module rows are the decide pass's own list, which is why they appear after the first
   preview rather than before it.
+- **The Queue tab.** Every open pull request on `botmaker-plugin-registry` and `botmaker-gallery`: who
+  opened it, the one entry file it adds rendered as fields read out of the file itself, and **the gate's own
+  check-run conclusion** — `RegistryGate`, run by the registry's CI, never a validation repeated here. A
+  submission touching anything besides its own entry is flagged and cannot be merged from this window: one
+  file per entry is what makes two same-day submissions conflict-free, and a hand-edited `index.json` is
+  stale the moment the next one merges. Approve, request changes with a comment, and squash-merge, enabled
+  by `permissions.push` and never by a list kept here.
 - **`Admin`** — `permissions.push` on `botmaker-plugin-registry`, read from the GitHub API for the
   signed-in account. Every failure (offline, not signed in, a token whose scope was narrowed, a repository
   the account cannot see) is read-only with a reason rather than an error.

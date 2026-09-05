@@ -286,15 +286,16 @@
     -fx-background-color: -bm-bg-raised;
 }
 
-/* ── the empty tabs, until each phase fills one ──────────────────────────── */
-
+/*
+ * ── a heading inside a tab ───────────────────────────────────────────────
+ *
+ * Named for the empty tabs it was written for; every one of them is filled now, and what is left is the one
+ * line each tab puts above its detail pane (the release being read, the submission being reviewed). Kept
+ * under the old name rather than renamed in three files for a class that does exactly the same job.
+ */
 .placeholder-title {
     -fx-font-size: 16px;
     -fx-font-weight: bold;
-}
-
-.placeholder-body {
-    -fx-text-fill: -bm-text-dim;
 }
 
 /* ── dialogs ─────────────────────────────────────────────────────────────── */
