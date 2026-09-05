@@ -3,6 +3,7 @@ package com.botmaker.dashboard;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
 import com.botmaker.dashboard.ui.ModulesTab;
+import com.botmaker.dashboard.ui.ReleasesTab;
 import com.botmaker.dashboard.ui.UmbrellaBar;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
@@ -55,8 +56,9 @@ public final class DashboardApp extends Application {
 
     private final Label adminBadge = new Label();
 
-    /** The one tab with content so far. Held because the umbrella picker has to tell it the path moved. */
+    /** The tabs with content so far. Held because the umbrella picker has to tell them the path moved. */
     private ModulesTab modules;
+    private ReleasesTab releases;
 
     @Override
     public void start(Stage stage) {
@@ -73,13 +75,11 @@ public final class DashboardApp extends Application {
         top.setPadding(new Insets(8, 12, 8, 12));
 
         modules = new ModulesTab(remembered);
-        Tab modulesTab = new Tab("Modules", modules);
+        releases = new ReleasesTab(remembered);
 
         TabPane tabs = new TabPane(
-                modulesTab,
-                placeholder("Releases", "The committed releases/*.md logs, newest first, with a re-poll that "
-                        + "runs ./release.sh --status so JitPack and Actions are re-read the same way the "
-                        + "release read them."),
+                new Tab("Modules", modules),
+                new Tab("Releases", releases),
                 placeholder("Release", "What ./release.sh --dry-run decides for a given set of flags: the "
                         + "version per module, why each is skipped or forced, the tag order and the gates."),
                 placeholder("Queue", "Open pull requests on the plugin registry and the gallery, the one "
@@ -129,6 +129,7 @@ public final class DashboardApp extends Application {
     private void umbrellaChosen(Path root) {
         DashboardConfig.save(new DashboardConfig(root));
         modules.setUmbrella(root);
+        releases.setUmbrella(root);
     }
 
     /**

@@ -12,9 +12,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
-import java.awt.Desktop;
-import java.net.URI;
-
 /**
  * Sign in with GitHub, through the OAuth <b>device flow</b> — the operator authorizes in a browser and
  * never pastes a token.
@@ -128,19 +125,9 @@ public final class AccountBar extends HBox {
         alert.initOwner(owner);
         alert.show();
 
-        browse(code.verificationUri());
+        // Best-effort: the code is on screen either way, so a headless or restricted desktop costs nothing.
+        Browse.open(code.verificationUri());
         return alert;
-    }
-
-    /** Best-effort: the code is on screen either way, so a headless or restricted desktop costs nothing. */
-    private static void browse(String url) {
-        try {
-            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(URI.create(url));
-            }
-        } catch (Exception e) {
-            System.err.println("Could not open the browser: " + e.getMessage());
-        }
     }
 
     private void failed(Throwable error) {

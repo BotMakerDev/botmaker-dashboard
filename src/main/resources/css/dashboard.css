@@ -198,6 +198,64 @@
     -fx-text-fill: -bm-text-dim;
 }
 
+/*
+ * The release log's own verdicts, coloured by what they mean and never reworded. "n/a" is dim rather than
+ * green: a module that is not a Maven artifact was never asked the JitPack question, which is not the same
+ * as having passed it.
+ */
+.cell--ok {
+    -fx-text-fill: -bm-ok;
+}
+
+.cell--pending {
+    -fx-text-fill: -bm-text-dim;
+}
+
+.cell--broken {
+    -fx-text-fill: -bm-warn;
+}
+
+/* ── lists, and the error text under a release ───────────────────────────── */
+
+.list-view {
+    -fx-background-color: -bm-bg-raised;
+    -fx-border-color: transparent;
+}
+
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-padding: 6 12 6 12;
+}
+
+.list-view .list-cell:selected {
+    -fx-background-color: -bm-bg;
+    -fx-text-fill: -bm-text;
+}
+
+/* The full message Maven or Actions printed — what a reader actually needs six weeks later. */
+.error-text {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 12px;
+}
+
+.error-text,
+.error-text .content {
+    -fx-background-color: -bm-bg-raised;
+    -fx-text-fill: -bm-warn;
+}
+
+.split-pane {
+    -fx-background-color: -bm-bg;
+    -fx-padding: 0;
+}
+
+.split-pane .split-pane-divider {
+    -fx-background-color: -bm-line;
+    -fx-padding: 0 1 0 1;
+}
+
 /* ── the empty tabs, until each phase fills one ──────────────────────────── */
 
 .placeholder-title {

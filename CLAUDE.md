@@ -33,6 +33,13 @@ computation appears here that the script could have answered, that is the bug �
 parsed stdout for typed objects. Until that exists, **this window visualises and does not execute** — no
 tag is pushed from a GUI.
 
+**The re-poll button is the worked example.** Asking JitPack for a `.pom` with a HEAD request would be four
+lines here and would answer a *different question* than the release asked: `resolve_clean_room` runs a real
+`dependency:resolve` into a throwaway repository, which is the only thing that catches a published pom
+naming a dependency nobody can resolve — the `0.0.0-SNAPSHOT` bug that shipped in every SDK up to v1.0.24.
+A cheaper check here would turn a broken row green. So re-poll runs `./release.sh --status <file>` and
+re-reads the file the script rewrote.
+
 The same rule covers the queue. A submission's verdict is **the registry CI's check run**, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact. Read that verdict; validate nothing here. *The check
 that refuses a pull request must be the one its author already ran* — the whole reason that validator is a
@@ -71,11 +78,15 @@ com.botmaker.dashboard
 │   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
 │   ├── Changelog       is there an [Unreleased] section for a release to stamp
 │   ├── ModuleRow       one module as a row
-│   └── ModuleScan      git per module, then release.sh once, into rows
+│   ├── ModuleScan      git per module, then release.sh once, into rows
+│   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
+│   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
-    └── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
+    ├── Browse          open a URL, best-effort, never an error dialog
+    ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
+    └── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
 ```
 
 **`umbrella/` holds no JavaFX and the split is load-bearing**, not tidiness: it is what lets every rule in

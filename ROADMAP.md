@@ -8,6 +8,31 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-05 — the Releases tab: what the last releases did, and what became of them
+
+**Done**
+
+- `umbrella/ReleaseLog`: parses one `releases/*.md` — the `# Release <stamp>` heading, the six-column table,
+  and the `## Errors` blocks kept whole. A table line of any other width is skipped rather than shown with
+  its columns shifted by one.
+- `Health` classifies the script's own words for colour and never rewrites them. Two calls worth knowing:
+  **`n/a (not a Maven artifact)` is dim, not green** — a module never asked the JitPack question has not
+  passed it — and **`no run on <tag>` is broken, not pending**, because a tag that fired no workflow at all
+  is the exact failure this log was added to catch.
+- **Re-poll is `./release.sh --status <file>`.** A JitPack HEAD from here would be four lines and would
+  answer a different question than the release asked; see `CLAUDE.md`. The file is rewritten in place, so a
+  re-poll is a reviewable diff, and committing it stays the operator's call.
+- `umbrella/Links` + `ui/Browse` (extracted from `AccountBar`, which had the only copy): the GitHub Release,
+  the JitPack build and the Actions runs for a tag, on a row's context menu.
+
+**Deferred / next**
+
+- The log list does not mark which releases are broken without opening them. Cheap to add (the files are
+  small) and deliberately not done yet — it means parsing every log on every reload.
+- Phase 5, Release **preview only**. Phase 6, Queue.
+
+---
+
 ## 2026-09-05 — the Modules tab: what is out of date, before a release
 
 **Done**

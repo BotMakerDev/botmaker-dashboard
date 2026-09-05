@@ -24,6 +24,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `## [Unreleased]` section for a release to stamp, and each `.deps.env` pin with the upstream's newest tag
   beside it when the two differ. A module the script never names is reported as one it does not release,
   which is how the gallery, the plugin registry and this repository are told apart from the ten it does.
+- **The Releases tab.** The committed `releases/*.md` logs, newest first: the table as the release wrote it,
+  the full error text under it, and each verdict coloured by what it means without a word of it being
+  rewritten. **Re-poll runs `./release.sh --status <file>`** rather than asking JitPack and Actions directly,
+  so "ok" keeps meaning what `resolve_clean_room` decided it means; the log is rewritten in place, as a
+  reviewable diff the operator commits. Right-click a row to open its GitHub Release, its JitPack build or
+  the workflow runs for its tag.
 - **`Admin`** — `permissions.push` on `botmaker-plugin-registry`, read from the GitHub API for the
   signed-in account. Every failure (offline, not signed in, a token whose scope was narrowed, a repository
   the account cannot see) is read-only with a reason rather than an error.
