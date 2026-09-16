@@ -38,6 +38,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   release is drawn with the same tiles and lanes as a running one. JitPack and Actions are polled and cached,
   with each answer's age; *Deep check* runs the release's own clean-room resolve, and a quick check says
   `published (pom HEAD)` rather than `ok`.
+- **A Changelog tab.** The `## [Unreleased]` section of any module, in an editor, with the commits since its
+  newest tag and its last released section beside it. Save rewrites that one section — every other byte of
+  the file survives — and commits `CHANGELOG.md` inside the submodule, without pushing. It refuses a file
+  somebody was already editing. This is what a release refused for *no section to stamp* now sends you to,
+  instead of out of the window.
+- **Draft with Claude**, for the maintainer only: it asks the least-used `cswap` account, rotating on a
+  refusal, and fills the editor. Nothing is saved until Save. The status line names the account slot and
+  never the address.
 - **Links everywhere.** Every module row carries GitHub · Actions · JitPack · Releases, with
   *Changes since \<tag\>* on its right-click menu when HEAD has moved past the tag; every catalog entry
   carries the same four for the repository it names, plus its entry file. Beside them, **what CI says about

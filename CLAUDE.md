@@ -96,6 +96,36 @@ The same rule covers the queue. A submission's verdict is **the registry CI's ch
 that refuses a pull request must be the one its author already ran* — the whole reason that validator is a
 library rather than part of a command.
 
+## The changelog tab — one section, one commit, no push
+
+`ChangelogGate` refuses a module whose `CHANGELOG.md` describes neither the version being cut nor an
+`## [Unreleased]` release, and `Stamp` renames that heading in the release commit. So the section is the one
+piece of a release a human has to write, and until 2026-09-16 the only way to write it was to leave this
+window. **`umbrella/ChangelogEdit` splices that section by offset** — the heading, the body up to the next
+`## ` heading, and nothing else — for `Stamp`'s own reason: a whole-file rewrite normalises line endings and
+the final newline in a file the maintainer has been editing all week, and the commit then carries that
+reformatting as if it were the edit. A missing section is **inserted** above the newest stamped one rather
+than refused, since leaving that state behind is what the tab is for.
+
+**Save commits one file inside the submodule and pushes nothing.** It refuses a `CHANGELOG.md` that already
+had uncommitted changes when the tab read it: this commit's message is about the notes, and an edit somebody
+had in flight would ride along under it. A push is the release's business — the pointer commit is where that
+gets decided.
+
+**Draft with Claude fills the editor and saves nothing.** It is the one place here that spends somebody's
+account, so two conditions hold before it is even visible: `claude` and `cswap` on `PATH`, and the signed-in
+GitHub login equal to the repository owner. **Hidden, not disabled** — a disabled button is a promise this
+window cannot keep for another account. The prompt carries facts only (the module's own changelog preamble,
+its newest stamped section as the house style, the commits since its tag and a `git diff --stat`) and asks for
+Keep-a-Changelog bullets and nothing else; `--allowedTools ""`, because the draft is writing about text
+already in the prompt and a model reading this working copy is not what was asked for.
+
+**An account is a slot and never an address.** `CswapAccounts` parses `cswap list` and keeps the number and
+the five-hour usage, deliberately dropping the email — the status line says `account 1 (5h: 9%)`. The
+least-used account is tried first and the rest in order after it, so a rate limit moves the work along.
+`claude` **exits 0 on a usage limit** and prints the sentence, which is why the output is checked for one:
+the exit code alone would write that sentence into the changelog as release notes.
+
 ## Admin — GitHub answers it, and there is no second list
 
 `Admin.probe` reads `permissions.push` from `GET /repos/LiQiyeDev/botmaker-plugin-registry` for the
@@ -242,6 +272,9 @@ com.botmaker.dashboard
 │   ├── Verdicts        pom HEAD ("published", never "ok"), CleanRoom as deep check, Actions.poll
 │   ├── VerdictCache    releases-cache.json under CacheDirs; settled verdicts are not asked again
 │   ├── CiStatus        what CI says about main — CiGate's verdict rendered, never a second read of gh
+│   ├── ChangelogEdit   read and rewrite one [Unreleased] section, and commit that one file — no push
+│   ├── CswapAccounts   cswap list as slots and 5h usage — a slot, never an address
+│   ├── ClaudeDraft     the prompt, the argv and the rotation; it fills the editor and saves nothing
 │   └── Links           a tag's three pages (Release, JitPack, Actions), and a repository's four
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
@@ -253,6 +286,7 @@ com.botmaker.dashboard
     ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board
     ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard, LinkBar — draw,
     │                   never count
+    ├── ChangelogTab    write the [Unreleased] section, commit it in the submodule, optionally draft it
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
 ```

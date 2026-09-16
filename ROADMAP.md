@@ -8,6 +8,37 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — round 2, phase 6: the Changelog tab, and a drafter through cswap
+
+**Done**
+- **`umbrella/ChangelogEdit`**: `section` / `lastStamped` / `replace` are pure and spliced by offset —
+  `Stamp`'s rule, so line endings, the final newline and every other section survive. A missing
+  `## [Unreleased]` is inserted above the newest stamped heading; a file with no heading at all gets one at
+  the end. `save` writes it and runs `git commit -- CHANGELOG.md` **inside the submodule, no push**, refusing
+  a file that was already dirty when the tab read it, one that changed on disk since, and an edit that
+  changes nothing. `commitsSince` / `diffStat` are the raw material for a draft.
+- **`umbrella/CswapAccounts`**: `cswap list` parsed to slot + 5h/7d usage, **no email kept anywhere**;
+  `byLeastUsed` orders by five-hour usage, ties by slot. A listing it does not recognise is no accounts, not
+  a wrong one.
+- **`umbrella/ClaudeDraft`**: `cswap run <slot> -- claude -p --model sonnet --effort medium --output-format
+  text --allowedTools ""`, prompt on stdin, three-minute timeout, each account tried in turn. `claude` exits
+  0 on a usage limit, so the output is checked for one — otherwise that sentence becomes the release notes.
+  The prompt carries the changelog preamble, the last stamped section, the commits and the diff stat, and
+  asks for the section body only.
+- **`ui/ChangelogTab`** (sixth tab, beside Release): module list, the `[Unreleased]` body in an editor, the
+  commits since the newest tag and the last stamped section below it. The tag name is `Tags.latest` +
+  `Tags.existingRef`, the library's answer. *Draft with Claude* is visible only when both programs are on
+  `PATH` **and** the signed-in login is the repository owner — hidden, not disabled — and it only fills the
+  editor.
+- Tests: `ChangelogEditTest` (sections, CRLF, insertion, the empty body), `ChangelogSaveTest` (a real git
+  repository: one file in the commit, a dirty file refused, a no-op save), `CswapAccountsTest`,
+  `ClaudeDraftTest` (argv, prompt, the usage-limit sentence). 161 green.
+- Checked against the real checkout: `botmaker-studio` reads as *no [Unreleased] section* — the state the
+  half-cut release left it in — `botmaker-pilot` as *no CHANGELOG.md*, and `botmaker-session` with 492
+  characters of prose and `## [0.0.12] — 2026-09-04` as its last stamped section.
+
+---
+
 ## 2026-09-16 — round 2, phase 5: links everywhere, and a CI badge
 
 **Done**

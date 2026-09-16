@@ -4,6 +4,7 @@ import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
 import com.botmaker.dashboard.ui.Browse;
 import com.botmaker.dashboard.ui.CatalogTab;
+import com.botmaker.dashboard.ui.ChangelogTab;
 import com.botmaker.dashboard.ui.ModulesTab;
 import com.botmaker.dashboard.ui.QueueTab;
 import com.botmaker.dashboard.ui.ReleaseTab;
@@ -72,6 +73,7 @@ public final class DashboardApp extends Application {
     private ModulesTab modules;
     private ReleasesTab releases;
     private ReleaseTab release;
+    private ChangelogTab changelog;
 
     /** The tabs that read GitHub rather than the checkout, and so hear about the admin probe instead. */
     private QueueTab queue;
@@ -110,6 +112,7 @@ public final class DashboardApp extends Application {
         modules = new ModulesTab(remembered);
         releases = new ReleasesTab(remembered);
         release = new ReleaseTab(remembered);
+        changelog = new ChangelogTab(remembered, client, auth);
         queue = new QueueTab(client, auth);
         catalog = new CatalogTab(client, auth);
 
@@ -122,10 +125,13 @@ public final class DashboardApp extends Application {
         release.setShowing(false);
         releaseTab.selectedProperty().addListener((o, was, is) -> release.setShowing(is));
 
+        // Changelog sits beside Release because it is what a refused release sends you to write: the gate
+        // refuses a module whose CHANGELOG.md describes neither the version nor an [Unreleased] section.
         TabPane tabs = new TabPane(
                 new Tab("Modules", modules),
                 new Tab("Releases", releases),
                 releaseTab,
+                new Tab("Changelog", changelog),
                 new Tab("Queue", queue),
                 new Tab("Catalog", catalog));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -150,6 +156,7 @@ public final class DashboardApp extends Application {
         modules.setUmbrella(root);
         releases.setUmbrella(root);
         release.setUmbrella(root);
+        changelog.setUmbrella(root);
     }
 
     /** The toggle names the palette it switches <i>to</i>, which is the only thing a click would change. */
@@ -178,6 +185,9 @@ public final class DashboardApp extends Application {
             // there is one, which lifts the anonymous rate limit — so a sign-in is a reason to read again.
             catalog.setAdmin(verdict);
             catalog.reload();
+            // The drafter is the owner's, and who is signed in has just changed — so it is asked again
+            // rather than left showing what the previous account could do.
+            changelog.signedInChanged(client, auth);
         }));
     }
 
