@@ -1,24 +1,23 @@
 package com.botmaker.dashboard.ui;
 
-import com.botmaker.dashboard.umbrella.Links;
-import com.botmaker.dashboard.umbrella.Proc;
+import com.botmaker.cli.release.Actions;
+import com.botmaker.cli.release.Module;
+import com.botmaker.cli.release.Version;
+import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
+import com.botmaker.dashboard.umbrella.ReleaseHistory;
 import com.botmaker.dashboard.umbrella.ReleaseLog;
+import com.botmaker.dashboard.umbrella.ReleaseProgress;
+import com.botmaker.dashboard.umbrella.VerdictCache;
+import com.botmaker.dashboard.umbrella.Verdicts;
 import javafx.application.Platform;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.MenuItem;
+import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -26,82 +25,157 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
- * The Releases tab: the committed {@code releases/*.md} logs, newest first, and a re-poll.
+ * The Releases tab: every release the tags describe, newest first, each drawn as the board a running release
+ * is drawn as.
  *
- * <p>The log is the record and this tab is a reader of it. It parses nothing the release did not write and
- * asks GitHub nothing directly — <b>re-poll calls {@code ReleaseStatus.repoll}</b>, which rewrites the file
- * in place through the very same clean-room resolve the release used. An easier check here (a HEAD on the
- * {@code .pom}) would answer a different question and could turn a broken row green: a published pom naming
- * a dependency nobody can resolve passes a HEAD and fails a real build.
+ * <p><b>It works with no log at all</b> (since 2026-09-16). It listed {@code releases/*.md} until then, and the
+ * release cut that day died before writing one, so the tab's newest entry was eleven days old while four tags
+ * sat on origin. {@link ReleaseHistory} groups the tags into releases; a log that matches a group is laid over
+ * it and names it, and never hides a tag it does not mention.
  *
- * <p>Because {@code --status} rewrites the file, a re-poll is a <b>reviewable diff</b> in the umbrella
- * working copy, and committing it is the operator's call. The tab says so rather than committing anything.
+ * <p><b>Verdicts are polled, not read.</b> JitPack is a {@code .pom} HEAD, shown as {@code published (pom HEAD)}
+ * — never as {@code ok}, which is the clean room's word — and <i>Deep check</i> runs the clean-room resolve the
+ * release runs. Actions is {@code Actions.poll}. Answers go to a {@link VerdictCache}, so the tab opens from the
+ * cache, each verdict shows its age, and only stale unsettled ones are asked again in the background.
+ * <i>Refresh verdicts</i> asks every one of the selected release again, and fetches tags.
+ *
+ * <p><b>Writing back to a log is still {@code ReleaseStatus.repoll}</b>, offered only where a log exists: it
+ * rewrites the committed file through the release's own readers, as a reviewable diff.
  */
 public final class ReleasesTab extends BorderPane {
 
-    private final ObservableList<Path> logs = FXCollections.observableArrayList();
-    private final ListView<Path> logList = new ListView<>(logs);
+    /** What this tab calls outside itself — git, the network, the cache — so a test can hand in answers. */
+    interface Backend {
+        List<ReleaseHistory.TagRow> tags(Path umbrella, boolean fetch);
 
-    private final ObservableList<ReleaseLog.Row> rows = FXCollections.observableArrayList();
-    private final TableView<ReleaseLog.Row> table = new TableView<>(rows);
+        List<ReleaseLog> logs(Path umbrella);
 
+        VerdictCache cache();
+
+        String jitpackHead(Module module, Version version);
+
+        Actions.Poll actions(Module module, Version version);
+
+        Verdicts.Deep deepCheck(Module module, Version version);
+
+        ReleaseLog.Repoll repoll(Path umbrella, Path file, Consumer<String> line);
+
+        Backend REAL = new Backend() {
+            @Override
+            public List<ReleaseHistory.TagRow> tags(Path umbrella, boolean fetch) {
+                return ReleaseHistory.tags(umbrella, fetch);
+            }
+
+            @Override
+            public List<ReleaseLog> logs(Path umbrella) {
+                return ReleaseLog.list(umbrella).stream().flatMap(file -> {
+                    try {
+                        return java.util.stream.Stream.of(ReleaseLog.read(file));
+                    } catch (RuntimeException e) {
+                        return java.util.stream.Stream.empty();
+                    }
+                }).toList();
+            }
+
+            @Override
+            public VerdictCache cache() {
+                return VerdictCache.load();
+            }
+
+            @Override
+            public String jitpackHead(Module module, Version version) {
+                return Verdicts.jitpackHead(module, version);
+            }
+
+            @Override
+            public Actions.Poll actions(Module module, Version version) {
+                return Verdicts.actions(module, version);
+            }
+
+            @Override
+            public Verdicts.Deep deepCheck(Module module, Version version) {
+                return Verdicts.deepCheck(module, version);
+            }
+
+            @Override
+            public ReleaseLog.Repoll repoll(Path umbrella, Path file, Consumer<String> line) {
+                return ReleaseLog.repoll(umbrella, file, line);
+            }
+        };
+    }
+
+    private static final DateTimeFormatter WHEN =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
+
+    private final Backend backend;
+    private final ObservableList<ReleaseHistory.Release> releases = FXCollections.observableArrayList();
+    private final ListView<ReleaseHistory.Release> list = new ListView<>(releases);
+    private final ReleaseBoard board = new ReleaseBoard(url -> Browse.open(url, this::say));
     private final Label heading = new Label();
     private final Label status = new Label();
-    private final TextArea errors = new TextArea();
-    private final Button repoll = new Button("Re-poll");
+    private final Button refresh = new Button("Refresh verdicts");
+    private final Button deep = new Button("Deep check");
+    private final Button writeBack = new Button("Write back to the log");
+
+    /** One thread for every poll: a history's worth of {@code gh} calls at once is a rate limit, not speed. */
+    private final ExecutorService polls = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "release-verdicts");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private Path umbrella;
-    private ReleaseLog current;
+    private VerdictCache cache;
 
     public ReleasesTab(Path umbrella) {
-        this.umbrella = umbrella;
+        this(umbrella, Backend.REAL);
+    }
 
-        heading.getStyleClass().add("placeholder-title");
+    ReleasesTab(Path umbrella, Backend backend) {
+        this.umbrella = umbrella;
+        this.backend = backend;
+
+        heading.getStyleClass().add("placeholder-body");
+        heading.setWrapText(true);
         status.getStyleClass().add("status-line");
-        repoll.setDisable(true);
-        repoll.setOnAction(e -> repoll());
 
         Button reload = new Button("Reload");
         reload.setOnAction(e -> reload());
+        refresh.setOnAction(e -> refresh());
+        deep.setOnAction(e -> deepCheck());
+        writeBack.setOnAction(e -> writeBack());
+        refresh.setDisable(true);
+        deep.setDisable(true);
+        writeBack.setDisable(true);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, reload, repoll, status, spacer);
+        HBox bar = new HBox(10, reload, refresh, deep, writeBack, status, spacer);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
-        logList.setCellFactory(v -> new ListCell<>() {
-            @Override
-            protected void updateItem(Path item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getFileName().toString().replace(".md", ""));
-            }
-        });
-        logList.getSelectionModel().selectedItemProperty()
-                .addListener((obs, was, now) -> show(now));
+        list.setCellFactory(v -> new ReleaseCell());
+        list.setPlaceholder(new Label("No release tags in this checkout."));
+        list.getSelectionModel().selectedItemProperty().addListener((o, was, is) -> select(is));
 
-        buildColumns();
-        table.setPlaceholder(new Label("Pick a release on the left."));
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        table.setContextMenu(rowMenu());
-
-        errors.setEditable(false);
-        errors.getStyleClass().add("error-text");
-        errors.setPrefRowCount(8);
-        errors.setWrapText(false);
-
-        VBox right = new VBox(8, heading, table, errors);
+        VBox right = new VBox(8, heading, board);
+        VBox.setVgrow(board, Priority.ALWAYS);
         right.setPadding(new Insets(12));
-        VBox.setVgrow(table, Priority.ALWAYS);
 
-        SplitPane split = new SplitPane(logList, right);
-        split.setDividerPositions(0.22);
-
+        SplitPane split = new SplitPane(list, right);
+        split.setDividerPositions(0.24);
         setTop(bar);
         setCenter(split);
 
@@ -114,138 +188,262 @@ public final class ReleasesTab extends BorderPane {
         reload();
     }
 
-    /** Re-lists the logs on disk and selects the newest — the one a release just wrote. */
+    /**
+     * Lists the releases from local tags and the logs at once, then fetches tags and lists again if that found
+     * anything new. The cache is read here too, so the list's health dots are there before any poll.
+     */
     public void reload() {
-        if (umbrella == null) {
-            logs.clear();
-            rows.clear();
-            status.setText("No umbrella checkout chosen — pick one in the top bar.");
+        Path root = umbrella;
+        if (root == null) {
+            releases.clear();
+            say("No umbrella checkout chosen — pick one in the top bar.");
             return;
         }
-        List<Path> found = ReleaseLog.list(umbrella);
-        logs.setAll(found);
-        status.setText(found.size() + " release logs in " + umbrella.resolve("releases"));
+        say("Reading tags and release logs…");
+        CompletableFuture.supplyAsync(() -> {
+            List<ReleaseHistory.TagRow> tags = backend.tags(root, false);
+            return new Read(backend.cache(), tags, ReleaseHistory.releases(tags, backend.logs(root)));
+        }).whenComplete((read, error) -> Platform.runLater(() -> {
+            if (error != null || !root.equals(umbrella)) {
+                say(error == null ? "" : "Could not read the history: " + error.getMessage());
+                return;
+            }
+            cache = read.cache();
+            setReleases(read.releases());
+            say(read.releases().size() + " releases from tags · fetching tags from origin…");
+            fetchThenRelist(root, read.tags());
+        }));
+    }
+
+    /** What one off-thread read hands back to the FX thread. */
+    private record Read(VerdictCache cache, List<ReleaseHistory.TagRow> tags, List<ReleaseHistory.Release> releases) {
+    }
+
+    private void fetchThenRelist(Path root, List<?> before) {
+        CompletableFuture.supplyAsync(() -> {
+            List<ReleaseHistory.TagRow> tags = backend.tags(root, true);
+            return tags.equals(before) ? null : ReleaseHistory.releases(tags, backend.logs(root));
+        }).whenComplete((found, error) -> Platform.runLater(() -> {
+            if (!root.equals(umbrella)) {
+                return;
+            }
+            if (found != null) {
+                setReleases(found);
+            }
+            say(releases.size() + " releases from tags" + (error != null ? " · the tag fetch failed" : ""));
+        }));
+    }
+
+    /** Replaces the list, keeping the selected release when it is still there (matched by its start). */
+    private void setReleases(List<ReleaseHistory.Release> found) {
+        Instant selected = Optional.ofNullable(list.getSelectionModel().getSelectedItem())
+                .map(ReleaseHistory.Release::start).orElse(null);
+        releases.setAll(found);
+        int index = 0;
+        for (int i = 0; i < found.size(); i++) {
+            if (found.get(i).start().equals(selected)) {
+                index = i;
+            }
+        }
         if (!found.isEmpty()) {
-            logList.getSelectionModel().select(0);
+            list.getSelectionModel().select(index);
+            // The same release selected again fires no change; its tags or log may have.
+            select(found.get(index));
         } else {
-            rows.clear();
+            board.setVisible(false);
             heading.setText("");
-            errors.clear();
         }
     }
 
-    private void show(Path file) {
-        if (file == null) {
+    private void select(ReleaseHistory.Release release) {
+        refresh.setDisable(release == null);
+        deep.setDisable(release == null || release.tags().isEmpty());
+        writeBack.setDisable(release == null || release.log().isEmpty());
+        if (release == null || cache == null) {
             return;
         }
-        current = ReleaseLog.read(file);
-        rows.setAll(current.rows());
-        heading.setText("Release " + current.stamp()
-                + (current.broken() ? "  —  something is broken" : ""));
-        errors.setText(current.problems().isEmpty()
-                ? ""
-                : String.join("\n\n", current.problems().stream()
-                        .map(p -> p.module() + " — " + p.kind() + "\n" + p.text())
-                        .toList()));
-        errors.setVisible(!current.problems().isEmpty());
-        errors.setManaged(!current.problems().isEmpty());
-        repoll.setDisable(false);
+        draw(release);
+        poll(release, false);
+    }
+
+    private void draw(ReleaseHistory.Release release) {
+        board.setVisible(true);
+        board.show(ReleaseProgress.past(release, cache, Instant.now()));
+        heading.setText(release.log()
+                .map(l -> "Log releases/" + l.file().getFileName() + " · ")
+                .orElse("No release log — read from tags alone · ")
+                + release.tags().size() + " tag(s)"
+                + (release.moduleCount() > release.tags().size()
+                ? ", " + (release.moduleCount() - release.tags().size()) + " module(s) the log names never tagged"
+                : ""));
+        list.refresh();
     }
 
     /**
-     * Calls {@link ReleaseLog#repoll} and re-reads the file it rewrote.
+     * Asks JitPack and Actions about each tag of a release, one at a time, redrawing as each answers.
      *
-     * <p>Off the FX thread and slow by nature: it resolves every module's artifacts into a throwaway local
-     * repository and calls {@code gh} once per module. Minutes, not seconds — which is why the line says
-     * what it is doing rather than only that it is busy.
+     * @param all every verdict, not only the stale ones — the Refresh button
      */
-    private void repoll() {
-        if (current == null || umbrella == null) {
+    private void poll(ReleaseHistory.Release release, boolean all) {
+        VerdictCache polling = cache;
+        polls.submit(() -> {
+            int asked = 0;
+            for (ReleaseHistory.TagRow tag : release.tags()) {
+                Optional<Module> module = Module.byDirectory(tag.module());
+                Optional<Version> version = Version.parse(tag.tag());
+                if (module.isEmpty() || version.isEmpty()) {
+                    continue;
+                }
+                Instant now = Instant.now();
+                VerdictCache.Entry entry = polling.get(tag.module(), tag.tag());
+                boolean jitpackDue = com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())
+                        && (all || entry.jitpackAt() == 0 || entry.jitpackStale(now))
+                        // A deep check's answer outranks a HEAD, and a refresh must not downgrade it.
+                        && !entry.jitpack().startsWith("ok (resolves") && !entry.jitpack().startsWith("BROKEN");
+                boolean actionsDue = all || entry.actionsAt() == 0 || entry.actionsStale(now);
+                if (!jitpackDue && !actionsDue) {
+                    continue;
+                }
+                asked++;
+                Platform.runLater(() -> say("Polling " + tag.module() + " " + tag.tag() + "…"));
+                if (jitpackDue) {
+                    entry = entry.withJitpack(backend.jitpackHead(module.get(), version.get()), "", Instant.now());
+                }
+                if (actionsDue) {
+                    Actions.Poll answer = backend.actions(module.get(), version.get());
+                    entry = entry.withActions(answer.verdict(), answer.error(), Instant.now());
+                }
+                polling.put(tag.module(), tag.tag(), entry);
+                redraw(release);
+            }
+            polling.save();
+            int count = asked;
+            Platform.runLater(() -> {
+                if (Objects.equals(list.getSelectionModel().getSelectedItem(), release)) {
+                    say(count == 0 ? "Every verdict is cached and current." : "Polled " + count + " tag(s).");
+                }
+            });
+        });
+    }
+
+    private void redraw(ReleaseHistory.Release release) {
+        Platform.runLater(() -> {
+            if (Objects.equals(list.getSelectionModel().getSelectedItem(), release)) {
+                draw(release);
+            } else {
+                list.refresh();
+            }
+        });
+    }
+
+    private void refresh() {
+        ReleaseHistory.Release release = list.getSelectionModel().getSelectedItem();
+        if (release == null || umbrella == null) {
             return;
         }
-        Path file = current.file();
+        poll(release, true);
+        fetchThenRelist(umbrella, List.of());
+    }
+
+    /** The release's own clean-room resolve over each JitPack module: about forty seconds apiece. */
+    private void deepCheck() {
+        ReleaseHistory.Release release = list.getSelectionModel().getSelectedItem();
+        if (release == null) {
+            return;
+        }
+        VerdictCache polling = cache;
+        deep.setDisable(true);
+        polls.submit(() -> {
+            for (ReleaseHistory.TagRow tag : release.tags()) {
+                Optional<Module> module = Module.byDirectory(tag.module());
+                Optional<Version> version = Version.parse(tag.tag());
+                if (module.isEmpty() || version.isEmpty()
+                        || !com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())) {
+                    continue;
+                }
+                Platform.runLater(() -> say("Deep check: resolving " + tag.module() + ":" + tag.tag()
+                        + " in a clean repository (about 40 s)…"));
+                Verdicts.Deep answer = backend.deepCheck(module.get(), version.get());
+                polling.put(tag.module(), tag.tag(),
+                        polling.get(tag.module(), tag.tag()).withJitpack(answer.verdict(), answer.error(), Instant.now()));
+                redraw(release);
+            }
+            polling.save();
+            Platform.runLater(() -> {
+                deep.setDisable(false);
+                say("Deep check done.");
+            });
+        });
+    }
+
+    /** {@code ReleaseStatus.repoll} over the log this release has, then everything read again. */
+    private void writeBack() {
+        ReleaseHistory.Release release = list.getSelectionModel().getSelectedItem();
+        if (release == null || release.log().isEmpty() || umbrella == null) {
+            return;
+        }
+        Path file = release.log().get().file();
         Path root = umbrella;
-        repoll.setDisable(true);
-        status.setText("Re-polling " + file.getFileName() + " — resolving artifacts and polling Actions…");
+        writeBack.setDisable(true);
+        say("Re-polling " + file.getFileName() + " — resolving artifacts and polling Actions…");
         CompletableFuture
-                .supplyAsync(() -> ReleaseLog.repoll(root, file,
-                        line -> Platform.runLater(() -> status.setText(line.strip()))))
+                .supplyAsync(() -> backend.repoll(root, file, line -> Platform.runLater(() -> say(line.strip()))))
                 .whenComplete((polled, error) -> Platform.runLater(() -> {
-                    repoll.setDisable(false);
+                    writeBack.setDisable(false);
                     if (error != null) {
-                        status.setText("Re-poll failed: " + error.getMessage());
+                        say("Re-poll failed: " + error.getMessage());
                         return;
                     }
-                    show(file);
-                    status.setText(polled.ok()
+                    say(polled.ok()
                             ? "Re-polled. The log was rewritten in place — commit it as a diff."
                             : "Re-poll stopped: " + polled.error().orElse("no reason given"));
+                    reload();
                 }));
     }
 
-    /**
-     * The three places a release can be looked at.
-     *
-     * <p>A context menu rather than three columns of links: the row's own verdict is the answer most of the
-     * time, and the pages are what you open on the one row that says otherwise.
-     */
-    private ContextMenu rowMenu() {
-        MenuItem release = new MenuItem("Open the GitHub Release");
-        release.setOnAction(e -> withSelected(r -> Links.release(r.module(), r.tag())));
-        MenuItem jitpack = new MenuItem("Open the JitPack build");
-        jitpack.setOnAction(e -> withSelected(r -> Links.jitpack(r.module(), r.tag())));
-        MenuItem actions = new MenuItem("Open the Actions runs for this tag");
-        actions.setOnAction(e -> withSelected(r -> Links.actions(r.module(), r.tag())));
-        return new ContextMenu(release, jitpack, actions);
+    private void say(String text) {
+        status.setText(text);
     }
 
-    private void withSelected(Function<ReleaseLog.Row, String> url) {
-        ReleaseLog.Row row = table.getSelectionModel().getSelectedItem();
-        if (row != null) {
-            Browse.open(url.apply(row), status::setText);
+    /** Date, module count and a health dot: red on any failure, dim while anything is unanswered. */
+    private final class ReleaseCell extends ListCell<ReleaseHistory.Release> {
+        private final Region dot = new Region();
+
+        ReleaseCell() {
+            dot.getStyleClass().add("health-dot");
+            dot.setMinSize(9, 9);
+            dot.setMaxSize(9, 9);
+        }
+
+        @Override
+        protected void updateItem(ReleaseHistory.Release item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+                setGraphic(null);
+                return;
+            }
+            setText(WHEN.format(item.start()) + " · " + item.moduleCount() + " module"
+                    + (item.moduleCount() == 1 ? "" : "s") + (item.log().isEmpty() ? " · no log" : ""));
+            dot.getStyleClass().removeAll("health-dot--ok", "health-dot--broken", "health-dot--pending");
+            if (cache != null) {
+                dot.getStyleClass().add("health-dot--" + ReleaseProgress.past(item, cache, Instant.now()).health());
+            }
+            setGraphic(dot);
         }
     }
 
-    private void buildColumns() {
-        table.getColumns().setAll(
-                column("Module", 200, ReleaseLog.Row::module),
-                column("Tag", 110, ReleaseLog.Row::tag),
-                column("Changelog", 110, ReleaseLog.Row::changelog),
-                healthColumn("JitPack", 240, ReleaseLog.Row::jitpack, ReleaseLog.Row::jitpackHealth),
-                healthColumn("Actions", 220, ReleaseLog.Row::actions, ReleaseLog.Row::actionsHealth));
+    // ---- for tests --------------------------------------------------------------------------------------
+
+    ListView<ReleaseHistory.Release> list() {
+        return list;
     }
 
-    private static TableColumn<ReleaseLog.Row, String> column(String title, double width,
-                                                              Function<ReleaseLog.Row, String> text) {
-        TableColumn<ReleaseLog.Row, String> col = new TableColumn<>(title);
-        col.setPrefWidth(width);
-        col.setCellValueFactory(c -> new SimpleStringProperty(text.apply(c.getValue())));
-        return col;
+    ReleaseBoard board() {
+        return board;
     }
 
-    /** The script's word, coloured by what it means. The word itself is never rewritten. */
-    private static TableColumn<ReleaseLog.Row, String> healthColumn(
-            String title, double width,
-            Function<ReleaseLog.Row, String> text,
-            Function<ReleaseLog.Row, ReleaseLog.Health> health) {
-        TableColumn<ReleaseLog.Row, String> col = column(title, width, text);
-        col.setCellFactory(c -> new TableCell<>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty ? null : item);
-                getStyleClass().removeAll("cell--ok", "cell--pending", "cell--broken", "cell--dim");
-                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
-                    return;
-                }
-                getStyleClass().add(switch (health.apply(getTableRow().getItem())) {
-                    case OK -> "cell--ok";
-                    case PENDING -> "cell--pending";
-                    case BROKEN -> "cell--broken";
-                    case NA -> "cell--dim";
-                });
-            }
-        });
-        return col;
+    Label heading() {
+        return heading;
     }
 }

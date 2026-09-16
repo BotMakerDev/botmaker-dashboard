@@ -33,6 +33,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   of where the minutes went; and a lane per module with a `Commit — Tag — JitPack — Actions` stepper that
   opens to the error text when a step fails. Close the window mid-release and reopen it: the tab reattaches.
   The tab's header shows `● Releasing — 4/10` from any other tab.
+- **The Releases tab lists every release from its tags**, so a release that wrote no log — the one of
+  2026-09-16 — is there. A log, where one exists, names the release and fills in what it recorded. Each
+  release is drawn with the same tiles and lanes as a running one. JitPack and Actions are polled and cached,
+  with each answer's age; *Deep check* runs the release's own clean-room resolve, and a quick check says
+  `published (pom HEAD)` rather than `ok`.
 - **Every module has a row before any preview**, in tag order, with its latest tag and what a level would
   cut. The previous table stayed empty until the first preview.
 - **A refusal is a red banner above the output**, one line per gate in its own words, instead of a count in

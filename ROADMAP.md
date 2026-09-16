@@ -8,6 +8,38 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — round 2, phase 4: the Releases tab from tags, with or without a log
+
+**Done**
+- **`umbrella/ReleaseHistory`**: every version tag of every `Module` (`git for-each-ref … %(creatordate:iso-strict)`,
+  local first, then after `git fetch --tags`), grouped into releases. **The plan's 90-minute gap was wrong for
+  this history**: 2026-09-04 23:06 and 23:18 are twelve minutes apart and tag the same seven modules, and
+  00:30/00:48 are one cli release each. The rule is a 15-minute gap (a JitPack wait is ten at most) **or** a
+  module already tagged in the group. Checked against the real checkout: 83 releases, all 8 committed logs
+  land on a group, and 2026-09-16 is one group of 4 with no log.
+- A log is laid over the group sharing the most `(module, tag)` pairs and names it; its untagged rows
+  (`FAILED`, `not reached`) become lanes; a log matching no group is still listed. **Caveat**: tags are
+  lightweight, so a tag's date is its commit's. A module whose release commit was skipped (the pilot, a
+  resumed release) dates from an older commit and can land in an earlier group.
+- **`umbrella/Verdicts`**: a `.pom` HEAD on `Jitpack.pomUrl`, spelled `published (pom HEAD)` /
+  `missing (pom HEAD)` — never `ok`; `CleanRoom.resolve` as **Deep check** (`ok (resolves clean)` / `BROKEN`);
+  `Actions.poll` for Actions. `ReleaseLog.Health` reads `published` as OK.
+- **`umbrella/VerdictCache`**: `releases-cache.json` under `CacheDirs`, keyed `module@tag`, each half stamped.
+  Settled: `success`, `FAILED —` (Actions' real words — the first draft used `failure`, which Actions never
+  prints; found by polling host v0.1.0), `published`, and both clean-room answers. Anything else is stale after
+  10 minutes. A refresh never downgrades a deep-check answer to a HEAD.
+- **`ReleaseProgress.past`** draws a past release with Phase 3's lanes: cache, then log cell, then `pending`;
+  the lane's stage line says the words behind each node and their age; elapsed is the gap since the previous
+  tag. `health()` feeds the list's dot.
+- **`ui/ReleasesTab`** rewritten: list of releases (date · modules · `no log`, health dot) on the left, the
+  `ReleaseBoard` on the right. Opens from cache, polls stale verdicts of the selected release on one background
+  thread. *Refresh verdicts* re-polls all of them and fetches tags; *Deep check*; *Write back to the log* is
+  `ReleaseStatus.repoll`, offered only when a log exists. A `Backend` seam for tests.
+- Tests: `ReleaseHistoryTest` (the real tag dates, the repeat-module split, gaps, log merge, a checkout with no
+  modules, a past release over cache and log), `VerdictCacheTest`, `ReleasesTabTest` (tags, no `releases/`).
+
+---
+
 ## 2026-09-16 — round 2, phase 3: Execute in its own process, and a board instead of log text
 
 **Done**

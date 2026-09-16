@@ -40,7 +40,11 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
 
     /** How a verdict should read at a glance. It colours the script's word; it never replaces it. */
     public enum Health {
-        /** {@code ok (resolves clean)}, {@code success (1)} — the release worked. */
+        /**
+         * {@code ok (resolves clean)}, {@code success (1)} — the release worked. Also the Releases tab's
+         * {@code published (pom HEAD)}, a weaker answer that keeps its own words so it never reads as the
+         * clean-room one.
+         */
         OK,
         /** {@code pending}, {@code running (1 of 2)}, {@code unknown (no gh on PATH)} — ask again later. */
         PENDING,
@@ -61,7 +65,8 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
             if (s.startsWith("n/a")) {
                 return NA;
             }
-            if (s.startsWith("ok") || s.startsWith("success") || s.startsWith("stamped")) {
+            if (s.startsWith("ok") || s.startsWith("success") || s.startsWith("stamped")
+                    || s.startsWith("published")) {
                 return OK;
             }
             if (s.startsWith("pending") || s.startsWith("running") || s.startsWith("unknown")) {

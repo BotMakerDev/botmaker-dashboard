@@ -55,7 +55,9 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         /** Something threw; the log says which module and where. */
         STOPPED("Stopped", false),
         /** The process is gone and never said it had finished — killed, or the machine went down. */
-        DIED("The release process ended without finishing", false);
+        DIED("The release process ended without finishing", false),
+        /** A release read from its tags on the Releases tab, not one being watched. */
+        PAST("Released", false);
 
         private final String label;
         private final boolean running;
@@ -316,6 +318,92 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         return new ReleaseProgress(phase, List.copyOf(lanes), started, Duration.between(started, clockEnd));
     }
 
+    /**
+     * A past release, drawn with the same lanes as a running one — so the two look alike and are read alike.
+     *
+     * <p>Every tag in the group is a lane whose commit and tag are done, since the tag exists. Its JitPack and
+     * Actions nodes come from the newest answer there is: the cache's polled verdict, else the log's cell, else
+     * {@code pending}. A module the log names with no tag — {@code FAILED}, {@code not reached} — is a lane too,
+     * read the way a live one is. The lane's stage line carries the words behind each node and how old they are,
+     * because {@code published (pom HEAD)} and {@code ok (resolves clean)} are both green and are not the same
+     * answer.
+     *
+     * <p>A lane's elapsed time is the gap since the previous tag: what the timeline is for is where the minutes
+     * went, and for a finished release that is the time between tags.
+     */
+    public static ReleaseProgress past(ReleaseHistory.Release release, VerdictCache cache, Instant now) {
+        Optional<ReleaseLog> log = release.log();
+        List<ReleaseLog.Row> rows = new ArrayList<>();
+        List<ReleaseLog.Problem> problems = new ArrayList<>();
+        Map<String, Duration> gaps = new java.util.HashMap<>();
+        Map<String, String> ages = new java.util.HashMap<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        Instant previous = null;
+        for (ReleaseHistory.TagRow tag : release.tags()) {
+            String key = tag.module() + "@" + tag.tag();
+            seen.add(key);
+            gaps.put(key, previous == null ? Duration.ZERO : Duration.between(previous, tag.date()));
+            previous = tag.date();
+
+            Optional<ReleaseLog.Row> logged = log.flatMap(l -> l.rows().stream()
+                    .filter(r -> r.module().equals(tag.module()) && r.tag().equals(tag.tag())).findFirst());
+            VerdictCache.Entry entry = cache.get(tag.module(), tag.tag());
+            boolean onJitpack = Module.byDirectory(tag.module())
+                    .map(com.botmaker.cli.release.ReleaseLog::onJitpack).orElse(true);
+
+            String jitpack = !onJitpack ? "n/a (not a Maven artifact)"
+                    : !entry.jitpack().isBlank() ? entry.jitpack()
+                    : logged.map(ReleaseLog.Row::jitpack).filter(s -> !s.isBlank()).orElse("pending");
+            String actions = !entry.actions().isBlank() ? entry.actions()
+                    : logged.map(ReleaseLog.Row::actions).filter(s -> !s.isBlank()).orElse("pending");
+            String stage = logged.map(ReleaseLog.Row::stage).filter(s -> !s.isBlank()).orElse("tagged");
+            // The tag exists, so whatever the log last said about how far it got, it got at least this far.
+            if (stage.equals("pending") || stage.equals("FAILED") || stage.equals("not reached")) {
+                stage = "tagged";
+            }
+            rows.add(new ReleaseLog.Row(tag.module(), tag.tag().replaceFirst("^v", ""), tag.tag(),
+                    logged.map(ReleaseLog.Row::changelog).orElse(""), jitpack, actions, stage));
+
+            for (String kind : List.of("jitpack", "actions")) {
+                String cached = kind.equals("jitpack") ? entry.jitpackError() : entry.actionsError();
+                boolean polled = kind.equals("jitpack") ? !entry.jitpack().isBlank() : !entry.actions().isBlank();
+                if (polled) {
+                    if (!cached.isBlank()) {
+                        problems.add(new ReleaseLog.Problem(tag.module(), kind, cached));
+                    }
+                } else {
+                    log.ifPresent(l -> l.problemsFor(tag.module()).stream()
+                            .filter(p -> p.kind().equals(kind)).forEach(problems::add));
+                }
+            }
+            ages.put(key, "jitpack: " + jitpack
+                    + (onJitpack && !entry.jitpack().isBlank() ? ", " + VerdictCache.age(entry.jitpackTime(), now) : "")
+                    + " · actions: " + actions
+                    + (!entry.actions().isBlank() ? ", " + VerdictCache.age(entry.actionsTime(), now) : ""));
+        }
+        // What the log names and no tag carries: the module that failed and those never reached.
+        log.ifPresent(l -> {
+            for (ReleaseLog.Row row : l.rows()) {
+                if (!seen.contains(row.module() + "@" + row.tag())) {
+                    rows.add(row);
+                    l.problemsFor(row.module()).stream().filter(p -> p.kind().equals("release")).forEach(problems::add);
+                }
+            }
+        });
+
+        ReleaseLog synthetic = new ReleaseLog(log.map(ReleaseLog::file).orElse(null),
+                log.map(ReleaseLog::stamp).orElse(""), rows, problems);
+        List<Lane> lanes = new ArrayList<>();
+        for (ReleaseLog.Row row : rows) {
+            String key = row.module() + "@" + row.tag();
+            Lane lane = lane(row, synthetic, Segment.NONE, false, now);
+            lanes.add(new Lane(lane.module(), lane.tag(), ages.getOrDefault(key, row.stage()), lane.steps(),
+                    lane.errors(), Optional.ofNullable(gaps.get(key))));
+        }
+        return new ReleaseProgress(Phase.PAST, List.copyOf(lanes), release.start(), release.span());
+    }
+
     public Tiles tiles() {
         int tagged = 0;
         boolean tagFailed = false;
@@ -349,6 +437,15 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
 
     public List<Lane> lanes(Filter filter) {
         return lanes.stream().filter(lane -> lane.shownUnder(filter)).toList();
+    }
+
+    /** {@code broken} on any failure, {@code pending} while any node is unanswered, else {@code ok}. */
+    public String health() {
+        if (failed()) {
+            return "broken";
+        }
+        boolean open = lanes.stream().anyMatch(lane -> lane.steps().containsValue(NodeState.PENDING));
+        return open ? "pending" : "ok";
     }
 
     public boolean failed() {

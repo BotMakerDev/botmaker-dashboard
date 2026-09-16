@@ -71,10 +71,16 @@ have to *decide* something? Then it calls the library. Is it merely presentation
 lines here and would answer a *different question* than the release asked: `CleanRoom` runs a real
 `dependency:resolve` into a throwaway repository, which is the only thing that catches a published pom
 naming a dependency nobody can resolve — the `0.0.0-SNAPSHOT` bug that shipped in every SDK up to v1.0.24.
-A cheaper check here would turn a broken row green. So re-poll calls `ReleaseStatus.repoll` and re-reads the
-file it rewrote. It shelled to `./release.sh --status <file>` until 2026-09-16, which kept the same property
-by keeping the readers out of reach; the script is a wrapper now, so shelling would build a jar to run the
-code already on this classpath.
+A cheaper check here would turn a broken row green. So writing back to a log calls `ReleaseStatus.repoll`
+and re-reads the file it rewrote. It shelled to `./release.sh --status <file>` until 2026-09-16, which kept
+the same property by keeping the readers out of reach; the script is a wrapper now, so shelling would build a
+jar to run the code already on this classpath.
+
+**The Releases tab does send that HEAD now (2026-09-16), and it keeps the rule by its words.** A history of
+eighty releases cannot run a forty-second clean room per module on open, so `umbrella/Verdicts.jitpackHead`
+asks for the `.pom` and says `published (pom HEAD)` or `missing (pom HEAD)` — never `ok`, which stays the
+clean room's word, reached through *Deep check*. Both are green on a lane; the lane's line says which answer it
+is and how old. **A quick question is allowed; a quick question wearing the release's verdict is not.**
 
 The same rule covers the queue. A submission's verdict is **the registry CI's check run**, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact. Read that verdict; validate nothing here. *The check
@@ -223,6 +229,9 @@ com.botmaker.dashboard
 │   ├── ReleaseProgress where a running release is — lanes, tiles, phase — from its output and its log
 │   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes, as two command lines, and back
 │   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
+│   ├── ReleaseHistory  releases from tags: 15-min gap or a repeated module starts a new one; logs laid over
+│   ├── Verdicts        pom HEAD ("published", never "ok"), CleanRoom as deep check, Actions.poll
+│   ├── VerdictCache    releases-cache.json under CacheDirs; settled verdicts are not asked again
 │   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
@@ -230,7 +239,7 @@ com.botmaker.dashboard
     ├── Browse          open a URL off the FX thread (platform opener, then HostServices) — never AWT
     ├── Themed          the palette on every window's scene root, and the owner on every dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
-    ├── ReleasesTab     the logs, newest first, with re-poll = ReleaseStatus.repoll
+    ├── ReleasesTab     every release from tags, drawn as a board; write back = ReleaseStatus.repoll
     ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board
     ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard — draw, never count
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite

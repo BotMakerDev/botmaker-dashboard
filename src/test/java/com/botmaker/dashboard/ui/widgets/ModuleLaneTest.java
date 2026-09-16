@@ -90,7 +90,7 @@ class ModuleLaneTest extends FxHeadless {
         assertTrue(nodeIs(Step.JITPACK, NodeState.FAILED));
         assertTrue(nodeIs(Step.ACTIONS, NodeState.FAILED));
         assertFalse(lane.pulsing());
-        assertTrue(lane.errorText().getText().startsWith("actions: ci: https://"));
+        assertTrue(lane.errorText().getText().startsWith("actions: CI: failure — https://"));
     }
 
     @Test

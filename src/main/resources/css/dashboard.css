@@ -771,6 +771,24 @@
     -fx-background-color: -bm-ok;
 }
 
+/* The Releases tab's list: one dot per release. Dim until every verdict is in. */
+.health-dot {
+    -fx-background-radius: 5;
+    -fx-background-color: -bm-line;
+}
+
+.health-dot--ok {
+    -fx-background-color: -bm-ok;
+}
+
+.health-dot--broken {
+    -fx-background-color: -bm-danger;
+}
+
+.health-dot--pending {
+    -fx-background-color: -bm-text-dim;
+}
+
 .live-badge {
     -fx-text-fill: -bm-accent;
     -fx-font-size: 11px;

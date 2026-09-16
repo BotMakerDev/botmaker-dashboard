@@ -178,7 +178,7 @@ class ReleaseProgressTest {
         assertEquals(List.of(NodeState.OK, NodeState.OK, NodeState.OK, NodeState.OK), states(lanes.get(0)));
         assertEquals(List.of(NodeState.OK, NodeState.OK, NodeState.FAILED, NodeState.FAILED), states(lanes.get(1)));
         assertEquals(List.of(NodeState.OK, NodeState.OK, NodeState.SKIPPED, NodeState.OK), states(lanes.get(2)));
-        assertTrue(lanes.get(1).errors().getFirst().startsWith("actions: ci: https://"));
+        assertTrue(lanes.get(1).errors().getFirst().startsWith("actions: CI: failure — https://"));
 
         ReleaseProgress.Tiles tiles = progress.tiles();
         assertEquals(3, tiles.tagged());
