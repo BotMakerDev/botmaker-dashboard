@@ -22,6 +22,10 @@ import java.util.concurrent.CompletableFuture;
  * one code path serves a public read, a rate-limited anonymous read and a private repository, and the
  * response carries the blob {@code sha} — which is what an edit has to send back to prove it is changing
  * the file it read.
+ *
+ * <p>The same API writes, which is why {@link #put} and {@link #delete} are here beside the read rather
+ * than in {@link Catalog}: one URL builder, so a path that escapes correctly for a read escapes correctly
+ * for the write that follows it.
  */
 final class Contents {
 
@@ -31,9 +35,36 @@ final class Contents {
     /** {@code GET /repos/{repo}/contents/{path}} at a ref — a file object, or a directory's array. */
     static CompletableFuture<JsonNode> read(GitHubClient client, GitHubAuth auth,
                                             String repo, String path, String ref) {
-        String url = GitHubConfig.API_BASE + "/repos/" + repo + "/contents/" + encodePath(path)
-                + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
+        String url = contentsUrl(repo, path) + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
         return client.get(url, token(auth));
+    }
+
+    /**
+     * {@code PUT /repos/{repo}/contents/{path}} — write a file on a branch.
+     *
+     * <p>The body carries {@code message}, {@code content} (base64), {@code sha} (the blob being replaced)
+     * and {@code branch}. The {@code sha} is what makes the write optimistic rather than last-one-wins:
+     * GitHub refuses it if the file moved since it was read.
+     */
+    static CompletableFuture<JsonNode> put(GitHubClient client, GitHubAuth auth,
+                                           String repo, String path, Object body) {
+        return client.put(contentsUrl(repo, path), body, token(auth));
+    }
+
+    /**
+     * {@code DELETE /repos/{repo}/contents/{path}} — remove a file on a branch.
+     *
+     * <p>Through {@link GitHubClient#delete(String, Object, String)}, the one that sends a body: the
+     * contents API requires {@code message}, {@code sha} and {@code branch}, and {@code HttpRequest.DELETE()}
+     * sends none.
+     */
+    static CompletableFuture<JsonNode> delete(GitHubClient client, GitHubAuth auth,
+                                              String repo, String path, Object body) {
+        return client.delete(contentsUrl(repo, path), body, token(auth));
+    }
+
+    private static String contentsUrl(String repo, String path) {
+        return GitHubConfig.API_BASE + "/repos/" + repo + "/contents/" + encodePath(path);
     }
 
     /**

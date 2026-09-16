@@ -23,8 +23,8 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
   same bytes one ref apart: `Queue` at a pull request's head, because the file does not exist on `main`
   yet; `Catalog` on `main`, because the point is that it was merged. The token rule ("reads work signed
   out, writes do not") had been written twice and is now written once.
-- **`CatalogTest`** — twelve cases over the reading, with no network and no JavaFX, which is the module's
-  own rule: everything with a rule in it is a pure function over one entry file's text.
+- **`CatalogTest`** — sixteen cases over the reading and the branch naming, with no network and no
+  JavaFX, which is the module's own rule: everything with a rule in it is a pure function over text.
 
 **Why it exists at all.** The Queue tab is what is *waiting* — open pull requests, which is zero most days.
 The operator asking "what can somebody install" got an empty window and no way to tell that from a broken
@@ -49,14 +49,42 @@ check run on the pull request that added it. The typed halves are `botmaker-cli`
 `GalleryEntry`, read through `Registry.mapper()` (unknown keys ignored), so a field added to the entry shape
 tomorrow lists today instead of reading as a corrupt file.
 
+**Also done, the same day — Edit and Unpublish**
+
+- **`Catalog.edit` / `Catalog.unpublish`** — branch `main`, `PUT` or `DELETE` the one entry file on that
+  branch, open a pull request. Neither touches `main`; merging is a decision taken where every other
+  submission is decided, with `RegistryGate` having run over the result. Both gated on `Admin.canWrite`,
+  which is a courtesy and never a boundary — GitHub answers 403 regardless.
+- **`Contents.put` / `Contents.delete`** beside the read, so one URL builder escapes the path for both.
+  `GitHubClient.delete(url, body, token)` already existed for exactly this: the contents API's deletion
+  needs `message`, `sha` and `branch`, and `HttpRequest.DELETE()` sends no body.
+- **No fork**, which is the difference from `PluginPublishCommand`: that command forks because a submitter
+  usually cannot push to the registry, and GitHub will not fork a repository into the account that owns it.
+  An operator with `permissions.push` pushes the branch directly.
+- **The blob `sha` goes back with the write**, so GitHub refuses it if the file moved since it was read.
+  Optimistic locking rather than last-one-wins — two operators editing one entry is the case
+  one-file-per-entry was shaped to make visible.
+- **The branch carries a UTC timestamp and the id is reduced to legal ref characters.** Without the
+  timestamp, a second edit while the first pull request is open is a 422 naming an existing ref, which
+  reads as a bug here; without the reduction, a bot's `owner/repo` id puts a second segment in the name.
+
+**Two things that look like gates and are not.** The edit dialog says whether the text parses and does
+**not** refuse it — whether an entry is good is `RegistryGate`'s answer, and a syntax opinion here is the
+first step towards a second gate. An edit that changed nothing opens no pull request, which is arithmetic.
+Unpublish asks the operator to **type the id**, because merging it removes the entry for everyone and the
+filename is the claim; that is a confirmation, not a judgement. The editor is a text area over the JSON and
+not a form, for `EntryFields`' own reason: a form shows only the keys it was written to know about.
+
+**The catalog is not reloaded after a proposal.** Nothing published has changed. The proposal is in the
+Queue tab, with the gate's verdict against it.
+
 **Deferred / next**
 
-- **Edit and unpublish a merged entry**, as pull requests rather than pushes to `main`: create a branch,
-  `PUT`/`DELETE` the entry file, open the pull request, and let `RegistryGate` judge the result the way it
-  judges a submission. Gated on `Admin.canWrite` like the Queue's writes. No fork is needed — an operator
-  with `permissions.push` pushes the branch directly, which is the difference from `PluginPublishCommand`.
-- The entry editor should be a **plain text area over the JSON**, not a form built from a field list. A form
-  hides a key this window has never heard of, which is the same reason `EntryFields` reads the file.
+- **Nothing verifies the write path end to end.** `CatalogTest` covers the branch naming, the sha carried
+  with the entry and the reading; the four HTTP calls are only exercised by actually opening a pull request
+  against a live data repository. A fake `GitHubClient` would be the way, and `GitHubClient` is a concrete
+  class in `botmaker-shared` with no interface to stub — extracting one is a shared-module change and was
+  not made for this.
 
 ---
 

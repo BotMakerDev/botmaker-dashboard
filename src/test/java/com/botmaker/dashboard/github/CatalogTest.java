@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -144,5 +145,40 @@ class CatalogTest {
     void theUrlPointsAtTheFileOnMain() {
         assertEquals("https://github.com/" + Queue.REGISTRY + "/blob/main/plugins/com.botmaker.sdk.json",
                 plugin("{\"id\": \"com.botmaker.sdk\"}").url());
+    }
+
+    @Test
+    void aBranchNameIsALegalRefEvenThoughEveryPluginIdHasDotsInIt() {
+        String branch = Catalog.branchFor("edit", plugin("{\"id\": \"com.botmaker.sdk\"}"));
+        assertTrue(branch.startsWith("dashboard/edit-com.botmaker.sdk-"), branch);
+        assertTrue(branch.matches("[A-Za-z0-9._/-]+"), "must be a legal git ref: " + branch);
+    }
+
+    @Test
+    void aSlashInAnIdDoesNotBecomeASecondPathSegment() {
+        // A bot's id is `owner/repo`, and a branch named `dashboard/edit-owner/repo-…` is a different ref
+        // from the one the pull request would be opened for.
+        String branch = Catalog.branchFor("unpublish",
+                bot("{\"name\": \"g\", \"owner\": \"LiQiyeDev\", \"repo\": \"botmaker-gamebot\"}"));
+        assertEquals(1, branch.chars().filter(c -> c == '/').count(), branch);
+        assertTrue(branch.startsWith("dashboard/unpublish-LiQiyeDev-botmaker-gamebot-"), branch);
+    }
+
+    @Test
+    void twoBranchesForOneEntryDoNotCollide() throws Exception {
+        // A second edit while the first pull request is still open would otherwise be refused with a 422
+        // naming a reference that already exists, which reads as a bug in the window.
+        Catalog.Entry entry = plugin("{\"id\": \"com.botmaker.sdk\"}");
+        String first = Catalog.branchFor("edit", entry);
+        Thread.sleep(1100);
+        assertNotEquals(first, Catalog.branchFor("edit", entry));
+    }
+
+    @Test
+    void theBlobShaTravelsWithTheEntrySoAWriteCanBeRefusedIfTheFileMoved() {
+        // Optimistic locking rather than last-one-wins: two operators editing one entry is exactly the case
+        // one-file-per-entry was shaped to make visible.
+        assertEquals("sha1", plugin("{\"id\": \"com.botmaker.sdk\"}").sha());
+        assertEquals("sha2", bot("{\"name\": \"g\", \"owner\": \"o\", \"repo\": \"r\"}").sha());
     }
 }

@@ -136,8 +136,9 @@ public final class DashboardApp extends Application {
             // The queue's write buttons follow the badge exactly — one probe, one answer, no second list.
             queue.setAdmin(verdict);
             queue.reload();
-            // The catalog has no write yet, but it is read with the token when there is one, which lifts
-            // the anonymous rate limit — so a sign-in is a reason to read it again.
+            // The catalog's Edit and Unpublish follow the same badge, and it is read with the token when
+            // there is one, which lifts the anonymous rate limit — so a sign-in is a reason to read again.
+            catalog.setAdmin(verdict);
             catalog.reload();
         }));
     }

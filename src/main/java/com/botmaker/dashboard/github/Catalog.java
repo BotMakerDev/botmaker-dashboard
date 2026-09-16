@@ -5,11 +5,18 @@ import com.botmaker.cli.registry.Registry;
 import com.botmaker.cli.registry.RegistryEntry;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -110,6 +117,16 @@ public final class Catalog {
 
     /** The branch every published entry is read from. Both data repositories publish from {@code main}. */
     static final String MAIN = "main";
+
+    /**
+     * A pull request this window opened against a data repository.
+     *
+     * @param number the pull request number
+     * @param url    its page on github.com
+     * @param branch the branch it was raised from
+     */
+    public record Proposal(int number, String url, String branch) {
+    }
 
     private Catalog() {
     }
@@ -225,5 +242,110 @@ public final class Catalog {
 
     private static String blankTo(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    // ---------------------------------------------------------------------------------------------------
+    // The two writes. Both are pull requests; neither touches main.
+    // ---------------------------------------------------------------------------------------------------
+
+    /**
+     * Proposes new text for an entry, as a pull request.
+     *
+     * <p><b>A pull request and never a push to {@code main}</b>, for the reason the layout gives: the entry
+     * file is the source of truth and {@code index.json} is generated from it by CI, so an edit committed
+     * straight to {@code main} leaves an index that disagrees with the entries until the next job runs. A
+     * pull request also runs {@code RegistryGate} over the result — which is the whole point of the gate
+     * being a library rather than a step in somebody's command, and the reason this window validates
+     * nothing itself.
+     *
+     * <p>The blob {@code sha} the listing reported is sent back, so GitHub refuses the write if the file
+     * moved since it was read. That is optimistic locking rather than a courtesy: two operators editing one
+     * entry is exactly the case a registry with one file per entry was shaped to make visible.
+     */
+    public static CompletableFuture<Proposal> edit(GitHubClient client, GitHubAuth auth,
+                                                   Entry entry, String json, String why) {
+        String branch = branchFor("edit", entry);
+        String message = "edit " + entry.id();
+        return branch(client, auth, entry, branch)
+                .thenCompose(ignored -> Contents.put(client, auth, entry.kind().repo(), entry.path(),
+                        Map.of("message", message,
+                                "content", Base64.getEncoder()
+                                        .encodeToString(json.getBytes(StandardCharsets.UTF_8)),
+                                "sha", entry.sha(),
+                                "branch", branch)))
+                .thenCompose(ignored -> pull(client, auth, entry, branch, message,
+                        body("Edits `" + entry.path() + "`.", why)));
+    }
+
+    /**
+     * Proposes removing an entry, as a pull request.
+     *
+     * <p>Nothing is deleted by this call. It opens a pull request whose merge removes the file; until
+     * somebody merges it the entry is published exactly as before, which is the only safe shape for an
+     * action whose effect is that a plugin disappears from every user's Manage Plugins.
+     */
+    public static CompletableFuture<Proposal> unpublish(GitHubClient client, GitHubAuth auth,
+                                                        Entry entry, String why) {
+        String branch = branchFor("unpublish", entry);
+        String message = "unpublish " + entry.id();
+        return branch(client, auth, entry, branch)
+                .thenCompose(ignored -> Contents.delete(client, auth, entry.kind().repo(), entry.path(),
+                        Map.of("message", message, "sha", entry.sha(), "branch", branch)))
+                .thenCompose(ignored -> pull(client, auth, entry, branch, message,
+                        body("Removes `" + entry.path() + "`, unpublishing `" + entry.id() + "`.", why)));
+    }
+
+    /** Branches {@code main} at whatever it is now. */
+    private static CompletableFuture<JsonNode> branch(GitHubClient client, GitHubAuth auth,
+                                                      Entry entry, String branch) {
+        String repo = entry.kind().repo();
+        return client.get(GitHubConfig.API_BASE + "/repos/" + repo + "/git/ref/heads/" + MAIN, token(auth))
+                .thenCompose(ref -> {
+                    String sha = ref == null ? "" : ref.path("object").path("sha").asText("");
+                    if (sha.isBlank()) {
+                        return CompletableFuture.failedFuture(new IllegalStateException(
+                                "could not read " + repo + "'s " + MAIN + " — nothing to branch from"));
+                    }
+                    return client.post(GitHubConfig.API_BASE + "/repos/" + repo + "/git/refs",
+                            Map.of("ref", "refs/heads/" + branch, "sha", sha), token(auth));
+                });
+    }
+
+    private static CompletableFuture<Proposal> pull(GitHubClient client, GitHubAuth auth, Entry entry,
+                                                    String branch, String title, String body) {
+        return client.post(GitHubConfig.API_BASE + "/repos/" + entry.kind().repo() + "/pulls",
+                        Map.of("title", title, "head", branch, "base", MAIN, "body", body), token(auth))
+                .thenApply(pr -> new Proposal(pr.path("number").asInt(),
+                        pr.path("html_url").asText(""), branch));
+    }
+
+    /**
+     * A body that says what the pull request does and, when the operator wrote one, why.
+     *
+     * <p>It also says where it came from. A reviewer who finds a branch nobody recognises on a data
+     * repository should be able to read what opened it, and the answer is a desktop app rather than CI.
+     */
+    private static String body(String what, String why) {
+        String reason = why == null || why.isBlank() ? "" : "\n\n" + why.strip();
+        return what + reason + "\n\nOpened from the BotMaker Dashboard.";
+    }
+
+    /**
+     * A branch name that cannot collide with the last one.
+     *
+     * <p>The timestamp is not decoration: a second edit while the first pull request is still open would
+     * otherwise be refused with a 422 naming a reference that already exists, which reads as a bug in this
+     * window rather than as what it is. The id is reduced to the characters a git ref may hold, so a plugin
+     * id with a dot in it — every plugin id — still produces a legal ref.
+     */
+    static String branchFor(String verb, Entry entry) {
+        String slug = entry.id().replaceAll("[^A-Za-z0-9._-]", "-");
+        return "dashboard/" + verb + "-" + slug + "-"
+                + DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC)
+                        .format(Instant.now());
+    }
+
+    private static String token(GitHubAuth auth) {
+        return Contents.token(auth);
     }
 }

@@ -129,6 +129,46 @@ status line, and its bytes still reach `EntryFields`. Burying it in a total is h
 **`Contents` is the one HTTP shape both readers share.** `Queue` wants the entry a pull request adds, at
 that pull request's head; `Catalog` wants the entry that is merged, on `main`. One ref apart — so the
 request, the base64 decode and the "reads work signed out" token rule live in one place rather than two.
+The writes are there too, for the same reason: one URL builder, so a path that escapes correctly for a read
+escapes correctly for the write after it.
+
+## Editing and unpublishing — pull requests, never `main`
+
+**`Catalog.edit` and `Catalog.unpublish` open a pull request and change nothing else.** Branch `main`,
+`PUT` or `DELETE` the entry file on that branch, open the pull request. Merging is somebody's decision,
+made where every other submission is decided.
+
+**Why not a push to `main`.** The entry file is the source of truth and `index.json` is generated from it by
+CI, so a commit straight to `main` leaves an index that disagrees with the entries until the next job runs —
+which is the same hazard as a hand-edited `index.json`, from the other end. And a pull request runs
+`RegistryGate` over the *result*, which is the only way an edit gets the same check a submission gets.
+
+**No fork, and that is the difference from `PluginPublishCommand`.** That command forks because a submitter
+usually cannot push to the registry; an operator with `permissions.push` can, so the branch goes straight
+there. Reusing that command's flow would mean shelling to `gh` from a GUI and forking the maintainer's own
+repository, which GitHub refuses anyway.
+
+**The blob `sha` from the listing is sent back with the write.** GitHub then refuses it if the file moved
+since it was read — optimistic locking, not a courtesy: two operators editing one entry is exactly the case
+one-file-per-entry exists to make visible.
+
+**The branch name carries a UTC timestamp**, and the id is reduced to the characters a git ref may hold.
+Without the timestamp a second edit while the first pull request is open is a 422 naming an existing ref,
+which reads as a bug in this window; without the reduction, a bot's `owner/repo` id would put a second
+segment in the branch name.
+
+**Two things the dialogs do that are not gates.** The edit dialog says whether the text parses and does
+**not** refuse it — whether an entry is good is `RegistryGate`'s answer, and a syntax opinion here is the
+first step towards a second gate. An edit that changed nothing opens no pull request, which is arithmetic
+rather than judgement. Unpublish asks the operator to **type the id**, because merging it removes the entry
+for everyone and the id is the one thing re-submitting cannot recover — the filename is the claim.
+
+**It is a text area over the JSON, not a form.** A form shows only the keys it was written to know about,
+so it would silently drop one an entry carries that this window has never heard of. Same rule as
+`EntryFields`.
+
+**The catalog is not reloaded after a proposal**, and that is the honest thing: nothing published has
+changed. The proposal is in the Queue tab now, with the gate's verdict against it.
 
 ## Layout
 
@@ -139,8 +179,8 @@ com.botmaker.dashboard
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
 │   ├── Admin           permissions.push, and every failure folded into read-only
 │   ├── Queue           the open pull requests on both data repos, and the four writes
-│   ├── Catalog         the MERGED entries on both data repos: plugins, bots, and which are templates
-│   ├── Contents        the contents API and its base64, shared by Queue (at a head) and Catalog (on main)
+│   ├── Catalog         the MERGED entries on both data repos, and the two writes over them (as PRs)
+│   ├── Contents        the contents API — read, put, delete — shared by Queue (at a head) and Catalog (main)
 │   ├── Submission      one pull request: who, what one file it adds, and what it must not add
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
 │   └── EntryFields     an entry, flattened into rows — read from the file, not a schema
@@ -164,7 +204,7 @@ com.botmaker.dashboard
     ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
     ├── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
-    └── CatalogTab      what is published, counted by kind, with the entry as fields
+    └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
 ```
 
 **There is no execute button and `--dry-run` is not a checkbox.** `ReleaseSpec.command()` appends it

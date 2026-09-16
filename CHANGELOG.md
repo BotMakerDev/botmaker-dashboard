@@ -33,6 +33,27 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `Registry.mapper()`, which ignores unknown keys — so a field added to the entry shape tomorrow lists
   today, and still shows up in the field view beside it.
 
+- **Edit and Unpublish, as pull requests.** Both branch `main`, write or delete the one entry file on that
+  branch, and open a pull request; neither touches `main` and neither publishes or unpublishes anything by
+  itself. Gated on `permissions.push`, like the Queue tab's writes and for the same reason — a courtesy so
+  the operator learns before typing, never a boundary, since GitHub answers 403 regardless.
+
+  A pull request rather than a push because `index.json` is generated from the entry files by CI, so a
+  commit straight to `main` leaves an index that disagrees with the entries until the next job runs — and
+  because a pull request runs `RegistryGate` over the *result*, which is the only way an edit gets the same
+  check a submission gets. No fork: an operator with push rights pushes the branch directly, which is why
+  this is not a reuse of `PluginPublishCommand`'s flow.
+
+  The blob `sha` from the listing goes back with the write, so GitHub refuses it if the file moved since it
+  was read. The branch carries a UTC timestamp, so a second edit while the first pull request is still open
+  is not a 422 naming an existing ref.
+
+  Two things the dialogs do that are deliberately **not** gates: the editor says whether the text parses and
+  does not refuse it, and an edit that changed nothing opens no pull request. Unpublish asks for the id to be
+  **typed**, because merging it removes the entry for everyone and the filename is the claim. The editor is
+  a text area over the JSON rather than a form — a form shows only the keys it knows, which is the same
+  reason `EntryFields` reads the file and not a schema.
+
 - **The app shell.** One window: the umbrella-checkout picker (remembered under `CacheDirs`, refused unless
   the directory holds both `release.sh` and `.gitmodules`), GitHub sign-in through the shared OAuth device
   flow, the admin badge, and the tabs — Modules, Releases, Release, Queue, Catalog — each stating what it
