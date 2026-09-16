@@ -3,6 +3,7 @@ package com.botmaker.dashboard.github;
 import com.botmaker.cli.gallery.GalleryEntry;
 import com.botmaker.cli.registry.Registry;
 import com.botmaker.cli.registry.RegistryEntry;
+import com.botmaker.dashboard.umbrella.Links;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
@@ -89,10 +90,23 @@ public final class Catalog {
      * @param readable whether {@link #json} parsed as the entry shape it claims to be
      */
     public record Entry(Kind kind, String path, String sha, String id, String name, String summary,
-                        List<String> tags, boolean template, String json, boolean readable) {
+                        List<String> tags, boolean template, String json, boolean readable, String repo) {
 
         public Entry {
             tags = tags == null ? List.of() : List.copyOf(tags);
+            repo = repo == null ? "" : repo;
+        }
+
+        /**
+         * The pages worth opening for this entry: the repository it names, then the entry file itself.
+         *
+         * <p>An entry whose repository cannot be read — an unparseable file, or a {@code repo} that is not
+         * {@code owner/name} — offers only the entry file, rather than a link guessed from its id.
+         */
+        public List<Links.Link> links() {
+            List<Links.Link> links = new ArrayList<>(repo.isEmpty() ? List.of() : Links.forRepository(repo));
+            links.add(new Links.Link("Entry file", url()));
+            return List.copyOf(links);
         }
 
         /** What the row is called: the identity, never the display name — the filename is the key. */
@@ -215,21 +229,21 @@ public final class Catalog {
      */
     static Entry read(Kind kind, String path, String sha, String idFromName, String json) {
         if (json == null) {
-            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, null, false);
+            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, null, false, "");
         }
         try {
             if (kind == Kind.PLUGIN) {
                 RegistryEntry plugin = Registry.mapper().readValue(json, RegistryEntry.class);
                 String id = plugin.id() == null || plugin.id().isBlank() ? idFromName : plugin.id();
                 return new Entry(kind, path, sha, id, blankTo(plugin.name(), id), plugin.description(),
-                        plugin.tags(), false, json, true);
+                        plugin.tags(), false, json, true, Links.slug(plugin.repo()).orElse(""));
             }
             GalleryEntry bot = Registry.mapper().readValue(json, GalleryEntry.class);
             String id = bot.slug().equals("/") ? idFromName : bot.slug();
             return new Entry(kind, path, sha, id, blankTo(bot.name(), id), bot.description(),
-                    bot.tags(), bot.isTemplate(), json, true);
+                    bot.tags(), bot.isTemplate(), json, true, Links.slug(bot.slug()).orElse(""));
         } catch (Exception e) {
-            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, json, false);
+            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, json, false, "");
         }
     }
 

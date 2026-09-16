@@ -1,7 +1,10 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.dashboard.umbrella.CiStatus;
+import com.botmaker.dashboard.umbrella.Links;
 import com.botmaker.dashboard.umbrella.ModuleRow;
 import com.botmaker.dashboard.umbrella.ModuleScan;
+import com.botmaker.dashboard.ui.widgets.LinkBar;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -11,6 +14,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
@@ -20,7 +24,12 @@ import javafx.scene.layout.Region;
 import javafx.util.Duration;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 /**
@@ -41,6 +50,25 @@ public final class ModulesTab extends BorderPane {
     private final Label status = new Label();
     private final Button refresh = new Button("Refresh");
 
+    /**
+     * What CI said about each module's {@code main}, filled in as the answers arrive.
+     *
+     * <p>Concurrent because the checks run on a pool and each writes its own key; the table is only ever
+     * refreshed from the FX thread.
+     */
+    private final Map<String, CiStatus> ci = new ConcurrentHashMap<>();
+
+    /**
+     * Four threads, because every check is a {@code gh} process waiting on the network.
+     *
+     * <p>A daemon pool: closing the window must not be held open by a badge nobody is looking at any more.
+     */
+    private final ExecutorService checks = Executors.newFixedThreadPool(4, runnable -> {
+        Thread thread = new Thread(runnable, "ci-badge");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private Path umbrella;
 
     public ModulesTab(Path umbrella) {
@@ -58,6 +86,16 @@ public final class ModulesTab extends BorderPane {
         buildColumns();
         table.setPlaceholder(new Label("Nothing scanned yet."));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setRowFactory(t -> {
+            TableRow<ModuleRow> row = new TableRow<>();
+            // Asked for at right-click time, so a recycled row never offers the previous module's pages.
+            row.setOnContextMenuRequested(e -> {
+                if (row.getItem() != null) {
+                    LinkBar.menu(linksFor(row.getItem()), this::open).show(row, e.getScreenX(), e.getScreenY());
+                }
+            });
+            return row;
+        });
 
         setTop(bar);
         setCenter(table);
@@ -103,7 +141,38 @@ public final class ModulesTab extends BorderPane {
                     rows.setAll(scan.rows());
                     status.setText(summary(scan));
                     showOutput(scan.output());
+                    askCi(scan.rows());
                 }));
+    }
+
+    /**
+     * Asks each module's CI about {@code main}, one {@code gh} call per module.
+     *
+     * <p>Separate from the scan and never blocking it: the git half of the tab is complete without an
+     * answer, and a network call per module is exactly the thing that must not decide when rows appear. The
+     * previous answers are dropped first, so a badge is never left over from another checkout.
+     */
+    private void askCi(List<ModuleRow> scanned) {
+        ci.clear();
+        table.refresh();
+        for (ModuleRow row : scanned) {
+            String module = row.name();
+            checks.submit(() -> {
+                CiStatus answer = CiStatus.check(module);
+                Platform.runLater(() -> {
+                    ci.put(module, answer);
+                    table.refresh();
+                });
+            });
+        }
+    }
+
+    private List<Links.Link> linksFor(ModuleRow row) {
+        return Links.forModule(row.name(), row.latestTag(), row.ahead());
+    }
+
+    private void open(String url) {
+        Browse.open(url, status::setText);
     }
 
     /**
@@ -131,9 +200,82 @@ public final class ModulesTab extends BorderPane {
                 column("Module", 200, ModuleRow::name),
                 column("Latest tag", 140, ModuleRow::tagLabel),
                 column("Working tree", 110, r -> r.dirty() ? "dirty" : "clean"),
+                ciColumn(),
                 planColumn(),
                 column("Changelog", 130, r -> r.changelog().label()),
+                linksColumn(),
                 pinsColumn());
+    }
+
+    /**
+     * What CI says about {@code main}, in {@code CiGate}'s own words.
+     *
+     * <p>The gate is what refuses a red module's release, so this column is that verdict rather than a
+     * second reading of {@code gh} — see {@link CiStatus}. Clicking the cell opens the runs on {@code main},
+     * which is the next question after a red badge.
+     */
+    private TableColumn<ModuleRow, String> ciColumn() {
+        TableColumn<ModuleRow, String> col = new TableColumn<>("CI on main");
+        col.setPrefWidth(200);
+        col.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().name()));
+        col.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String module, boolean empty) {
+                super.updateItem(module, empty);
+                getStyleClass().removeAll("cell--ok", "cell--broken", "cell--dim");
+                setTooltip(null);
+                setOnMouseClicked(null);
+                if (empty || module == null) {
+                    setText(null);
+                    return;
+                }
+                CiStatus answer = ci.get(module);
+                if (answer == null) {
+                    setText("asking…");
+                    getStyleClass().add("cell--dim");
+                    return;
+                }
+                setText(answer.text());
+                getStyleClass().add(answer.health().styleClass());
+                if (!answer.detail().isBlank()) {
+                    Tooltip tip = new Tooltip(answer.detail());
+                    tip.setShowDuration(Duration.minutes(2));
+                    tip.setWrapText(true);
+                    tip.setMaxWidth(700);
+                    setTooltip(tip);
+                }
+                setOnMouseClicked(e -> open(Links.actions(module)));
+            }
+        });
+        return col;
+    }
+
+    /**
+     * The module's four pages, as buttons.
+     *
+     * <p>The comparison is on the context menu only: its label carries the tag it starts from, which is what
+     * makes it readable and also what makes it too wide for a column of buttons.
+     */
+    private TableColumn<ModuleRow, ModuleRow> linksColumn() {
+        TableColumn<ModuleRow, ModuleRow> col = new TableColumn<>("Links");
+        col.setPrefWidth(280);
+        col.setSortable(false);
+        col.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
+        col.setCellFactory(c -> new TableCell<>() {
+            private final LinkBar bar = new LinkBar(ModulesTab.this::open);
+
+            @Override
+            protected void updateItem(ModuleRow row, boolean empty) {
+                super.updateItem(row, empty);
+                if (empty || row == null) {
+                    setGraphic(null);
+                    return;
+                }
+                bar.show(Links.forModule(row.name()));
+                setGraphic(bar);
+            }
+        });
+        return col;
     }
 
     /**

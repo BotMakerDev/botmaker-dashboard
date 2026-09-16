@@ -82,6 +82,15 @@ asks for the `.pom` and says `published (pom HEAD)` or `missing (pom HEAD)` — 
 clean room's word, reached through *Deep check*. Both are green on a lane; the lane's line says which answer it
 is and how old. **A quick question is allowed; a quick question wearing the release's verdict is not.**
 
+**The CI badge on the Modules tab is the same rule once more, and it is the strictest case yet.** What
+refuses a red module's release is `CiGate`, so the badge *is* that gate's verdict — `umbrella/CiStatus` calls
+`CiGate.check(module, false)` and renders the `GateVerdict` it gets back, keeping the gate's own sentence.
+A badge that read `gh run list` itself would eventually disagree with the gate, and the operator would see
+green on one tab and a refusal on another with nothing to say which asked the right question. `force` is
+always `false` here: forcing belongs to a release being cut, and a badge that went quiet because somebody
+ticked `--force` elsewhere would be reporting an intention rather than a build. A module the release never
+cuts is asked nothing at all, which is also why no `ci.yml` is ever requested from `botmaker-gallery`.
+
 The same rule covers the queue. A submission's verdict is **the registry CI's check run**, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact. Read that verdict; validate nothing here. *The check
 that refuses a pull request must be the one its author already ran* — the whole reason that validator is a
@@ -232,7 +241,8 @@ com.botmaker.dashboard
 │   ├── ReleaseHistory  releases from tags: 15-min gap or a repeated module starts a new one; logs laid over
 │   ├── Verdicts        pom HEAD ("published", never "ok"), CleanRoom as deep check, Actions.poll
 │   ├── VerdictCache    releases-cache.json under CacheDirs; settled verdicts are not asked again
-│   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
+│   ├── CiStatus        what CI says about main — CiGate's verdict rendered, never a second read of gh
+│   └── Links           a tag's three pages (Release, JitPack, Actions), and a repository's four
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
@@ -241,7 +251,8 @@ com.botmaker.dashboard
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     every release from tags, drawn as a board; write back = ReleaseStatus.repoll
     ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board
-    ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard — draw, never count
+    ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard, LinkBar — draw,
+    │                   never count
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
 ```

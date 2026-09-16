@@ -3,6 +3,7 @@ package com.botmaker.dashboard.ui;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
+import com.botmaker.dashboard.ui.widgets.LinkBar;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +21,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -30,6 +32,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -70,7 +73,7 @@ public final class CatalogTab extends BorderPane {
     private final Label status = new Label();
 
     private final Button refresh = new Button("Refresh");
-    private final Button openOnGitHub = new Button("Open on GitHub");
+    private final LinkBar links = new LinkBar(url -> Browse.open(url, status::setText));
     private final Button edit = new Button("Edit…");
     private final Button unpublish = new Button("Unpublish…");
 
@@ -85,13 +88,12 @@ public final class CatalogTab extends BorderPane {
         where.getStyleClass().add("status-line");
 
         refresh.setOnAction(e -> reload());
-        openOnGitHub.setOnAction(e -> withSelected(entry -> Browse.open(entry.url(), status::setText)));
         edit.setOnAction(e -> withSelected(this::edit));
         unpublish.setOnAction(e -> withSelected(this::unpublish));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, refresh, openOnGitHub, edit, unpublish, spacer, status);
+        HBox bar = new HBox(10, refresh, edit, unpublish, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -99,6 +101,17 @@ public final class CatalogTab extends BorderPane {
         table.setPlaceholder(new Label("Nothing published yet — or press Refresh."));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.getSelectionModel().selectedItemProperty().addListener((obs, was, now) -> show(now));
+        table.setRowFactory(t -> {
+            TableRow<Catalog.Entry> row = new TableRow<>();
+            // Built when the menu is asked for, so a recycled row never offers the previous entry's pages.
+            row.setOnContextMenuRequested(e -> {
+                if (row.getItem() != null) {
+                    LinkBar.menu(row.getItem().links(), url -> Browse.open(url, status::setText))
+                            .show(row, e.getScreenX(), e.getScreenY());
+                }
+            });
+            return row;
+        });
 
         detail.setPlaceholder(new Label("Pick an entry above to see what it says."));
         detail.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -106,7 +119,7 @@ public final class CatalogTab extends BorderPane {
                 field("Field", 220, EntryFields.Field::name),
                 field("Value", 480, EntryFields.Field::value));
 
-        VBox bottom = new VBox(8, heading, where, detail);
+        VBox bottom = new VBox(8, heading, where, links, detail);
         bottom.setPadding(new Insets(12));
         VBox.setVgrow(detail, Priority.ALWAYS);
 
@@ -173,9 +186,11 @@ public final class CatalogTab extends BorderPane {
         if (entry == null) {
             heading.setText("");
             where.setText("");
+            links.show(List.of());
             fields.clear();
             return;
         }
+        links.show(entry.links());
         heading.setText(entry.kindLabel() + " · " + entry.label()
                 + (entry.name().equals(entry.label()) ? "" : " — " + entry.name()));
         where.setText(entry.kind().repo() + " · " + entry.path());
@@ -208,7 +223,6 @@ public final class CatalogTab extends BorderPane {
     private void gateButtons() {
         Catalog.Entry selected = table.getSelectionModel().getSelectedItem();
         boolean row = selected != null;
-        openOnGitHub.setDisable(!row);
         edit.setDisable(!row || !admin.canWrite());
         unpublish.setDisable(!row || !admin.canWrite() || !selected.readable());
     }

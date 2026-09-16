@@ -148,6 +148,32 @@ class CatalogTest {
     }
 
     @Test
+    void anEntryLinksTheRepositoryItNamesAndThenItsOwnFile() {
+        Catalog.Entry sdk = plugin("""
+                {"id": "com.botmaker.sdk", "repo": "https://github.com/LiQiyeDev/botmaker-sdk.git"}
+                """);
+        assertEquals("LiQiyeDev/botmaker-sdk", sdk.repo());
+        assertEquals(List.of("GitHub", "Actions", "JitPack", "Releases", "Entry file"),
+                sdk.links().stream().map(l -> l.label()).toList());
+        assertEquals("https://github.com/LiQiyeDev/botmaker-sdk", sdk.links().get(0).url());
+        assertEquals(sdk.url(), sdk.links().get(4).url());
+
+        Catalog.Entry gamebot = bot("""
+                {"name": "g", "owner": "LiQiyeDev", "repo": "botmaker-gamebot", "tags": ["template"]}
+                """);
+        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-gamebot", gamebot.links().get(2).url());
+    }
+
+    @Test
+    void anEntryWhoseRepositoryCannotBeReadOffersOnlyItsFile() {
+        // A link guessed from the id would open somebody else's page.
+        assertEquals(List.of("Entry file"),
+                plugin("{\"id\": \"com.example.demo\"}").links().stream().map(l -> l.label()).toList());
+        assertEquals(List.of("Entry file"),
+                plugin("{ not json").links().stream().map(l -> l.label()).toList());
+    }
+
+    @Test
     void aBranchNameIsALegalRefEvenThoughEveryPluginIdHasDotsInIt() {
         String branch = Catalog.branchFor("edit", plugin("{\"id\": \"com.botmaker.sdk\"}"));
         assertTrue(branch.startsWith("dashboard/edit-com.botmaker.sdk-"), branch);

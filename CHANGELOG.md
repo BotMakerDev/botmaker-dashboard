@@ -38,6 +38,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   release is drawn with the same tiles and lanes as a running one. JitPack and Actions are polled and cached,
   with each answer's age; *Deep check* runs the release's own clean-room resolve, and a quick check says
   `published (pom HEAD)` rather than `ok`.
+- **Links everywhere.** Every module row carries GitHub · Actions · JitPack · Releases, with
+  *Changes since \<tag\>* on its right-click menu when HEAD has moved past the tag; every catalog entry
+  carries the same four for the repository it names, plus its entry file. Beside them, **what CI says about
+  `main`** — the release's own `CiGate` verdict, in its words, with the whole refusal on hover and a click
+  that opens the runs.
 - **Every module has a row before any preview**, in tag order, with its latest tag and what a level would
   cut. The previous table stayed empty until the first preview.
 - **A refusal is a red banner above the output**, one line per gate in its own words, instead of a count in

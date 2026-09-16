@@ -8,6 +8,33 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — round 2, phase 5: links everywhere, and a CI badge
+
+**Done**
+- **`umbrella/Links` grew a second kind of destination.** It named a *tag's* three pages (Release, JitPack,
+  Actions); it now also names a *repository's* four — `repo`, `actions` on `main`, `jitpackPage`, `releases`
+  — plus `compare(module, from, to)`. `forModule(module[, tag, ahead])` and `forRepository(slug)` return the
+  list a tab draws, and `slug(repo)` reduces a registry entry's `repo` field (a URL, a `.git` suffix, a bare
+  slug) to `owner/name`, or to empty — a guessed link opens somebody else's page.
+- **`ui/widgets/LinkBar`**: the buttons and the row's context menu, built from one list, so the two cannot
+  offer different pages. Opening is the caller's `Consumer<String>` (`Browse.open` in the app), because the
+  phase 1 crash was a widget knowing how to start a browser.
+- **Modules tab**: a *Links* column of four buttons per module, and a right-click menu that adds
+  *Changes since \<tag\>* when HEAD has moved past it (too wide for the column, exactly right on a menu).
+- **A *CI on main* column**, filled in after the scan by `umbrella/CiStatus` — `CiGate.check(module, false)`
+  rendered: green, red, or dim with the gate's own sentence, the whole refusal as the tooltip, and a click
+  opening the runs on `main`. Four daemon threads, since each check is a `gh` process on the network; the git
+  half of the tab never waits for it. A module the release does not cut is not asked.
+- **Catalog tab**: the entry's repository, its Actions, its JitPack project, its releases and the entry file,
+  as a link row under the heading and as a right-click menu on the row. The old single *Open on GitHub*
+  button is gone — it is the *Entry file* link now. An entry whose repository cannot be read offers only its
+  own file.
+- Tests: `LinksTest` (the lists, the comparison rule, the slug reductions), `CiStatusTest` (each
+  `GateVerdict` arm, and that an unreleased module is never asked), `LinkBarTest` (buttons open, a redraw
+  replaces, the menu matches), `CatalogTest` (an entry's links, and an unreadable one's).
+
+---
+
 ## 2026-09-16 — round 2, phase 4: the Releases tab from tags, with or without a log
 
 **Done**

@@ -427,6 +427,31 @@
     -fx-text-fill: -bm-warn;
 }
 
+/* ── link buttons ────────────────────────────────────────────────────────────
+   A row of these sits in a table cell, so they are small, borderless and read as
+   text until hovered: a cell of four bordered buttons looks like four controls
+   competing with the row's own data. The colour is the accent, because every one
+   of them leaves this window. */
+
+.link-bar {
+    -fx-alignment: center-left;
+}
+
+.link-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: -bm-accent;
+    -fx-font-size: 11px;
+    -fx-padding: 1 5 1 5;
+    -fx-cursor: hand;
+}
+
+.link-button:hover {
+    -fx-background-color: -bm-bg-raised;
+    -fx-border-color: transparent;
+    -fx-underline: true;
+}
+
 /* ── the level picker in the Release tab ─────────────────────────────────────
    Three buttons that read as one control, plus the box for a typed version. The
    segments are a ToggleGroup rather than a ComboBox because the whole point is
