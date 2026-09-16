@@ -146,8 +146,8 @@ reads, which is most of it.
 
 ## The queue — one judgement, and it is about shape
 
-A submission is a pull request adding **one file**: `plugins/<plugin-id>.json` or
-`bots/<owner>-<repo>.json`. Everything about whether it is *good* belongs to the registry's CI, which runs
+A submission is a pull request adding **one file**: `plugins/<plugin-id>.json`,
+`bots/<owner>-<repo>.json` or — a maintainer's vetting — `vetted/<owner>-<repo>.json`. Everything about whether it is *good* belongs to the registry's CI, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact — the same code its author ran as
 `botmaker plugin validate`. The Gate column is that check run's conclusion, in GitHub's own words.
 
@@ -240,6 +240,25 @@ so it would silently drop one an entry carries that this window has never heard 
 **The catalog is not reloaded after a proposal**, and that is the honest thing: nothing published has
 changed. The proposal is in the Queue tab now, with the gate's verdict against it.
 
+## Tiers and vetting — the gallery decides, this window proposes (2026-09-16)
+
+**A bot is Vetted exactly when `vetted/<owner>-<repo>.json` exists on the gallery's `main`**, and Community
+otherwise. That is `GalleryCatalog`'s rule, in `botmaker-cli`, and the Tier column reads the same files rather
+than the generated `catalog.json`, for the reason the Catalog reads entry files. `Catalog.attach` matches on
+`owner/repo` without case because `GalleryCatalog` does; a column that disagreed with the catalog Studio reads
+would be the second implementation this module exists not to have.
+
+**`Vetting.vet` and `Vetting.revoke` are pull requests, like every write here**, and they check nothing. The
+gallery's gate runs over a maintainer's `vetted/` change and refuses a release that does not download or a
+bot that is not listed; its merge job sends every change outside `bots/` to a maintainer, so the proposal
+waits in the Queue tab and is merged there. The record is `VettedRecord` through `Registry.mapper()`, which
+is why a dashboard vetting is byte-identical to one written by hand.
+
+**The Queue's Auto-merge column is the merge job's labels, read and never recomputed.** `ListingPolicy` in
+`botmaker-cli` decides; `automerge.yml` writes `waiting` or `needs-maintainer` and one comment starting
+`<!-- botmaker-listing -->`. `Submission.autoMerge()` reads the labels; the comment is fetched for the
+selected row only.
+
 ## Layout
 
 ```
@@ -249,7 +268,8 @@ com.botmaker.dashboard
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
 │   ├── Admin           permissions.push, and every failure folded into read-only
 │   ├── Queue           the open pull requests on both data repos, and the four writes
-│   ├── Catalog         the MERGED entries on both data repos, and the two writes over them (as PRs)
+│   ├── Catalog         the MERGED entries on both data repos, their vetted/ records, and two writes (as PRs)
+│   ├── Vetting         vet a bot at a release, or revoke it — vetted/ in the gallery, as a pull request
 │   ├── Contents        the contents API — read, put, delete — shared by Queue (at a head) and Catalog (main)
 │   ├── Submission      one pull request: who, what one file it adds, and what it must not add
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line

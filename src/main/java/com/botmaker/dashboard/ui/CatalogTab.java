@@ -3,6 +3,7 @@ package com.botmaker.dashboard.ui;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
+import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
@@ -76,6 +77,8 @@ public final class CatalogTab extends BorderPane {
     private final LinkBar links = new LinkBar(url -> Browse.open(url, status::setText));
     private final Button edit = new Button("Edit…");
     private final Button unpublish = new Button("Unpublish…");
+    private final Button vet = new Button("Vet…");
+    private final Button revoke = new Button("Revoke vetting…");
 
     private Admin admin = new Admin(false, "not checked yet");
 
@@ -90,10 +93,12 @@ public final class CatalogTab extends BorderPane {
         refresh.setOnAction(e -> reload());
         edit.setOnAction(e -> withSelected(this::edit));
         unpublish.setOnAction(e -> withSelected(this::unpublish));
+        vet.setOnAction(e -> withSelected(this::vet));
+        revoke.setOnAction(e -> withSelected(this::revoke));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, refresh, edit, unpublish, spacer, status);
+        HBox bar = new HBox(10, refresh, edit, unpublish, vet, revoke, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -169,10 +174,11 @@ public final class CatalogTab extends BorderPane {
         long plugins = found.stream().filter(e -> e.kind() == Catalog.Kind.PLUGIN).count();
         long bots = found.stream().filter(e -> e.kind() == Catalog.Kind.BOT).count();
         long templates = found.stream().filter(Catalog.Entry::template).count();
+        long vetted = found.stream().filter(e -> e.vetted() != null).count();
         long broken = found.stream().filter(e -> !e.readable()).count();
         return plugins + " plugin" + (plugins == 1 ? "" : "s")
                 + " · " + bots + " bot" + (bots == 1 ? "" : "s")
-                + " (" + templates + " template" + (templates == 1 ? "" : "s") + ")"
+                + " (" + templates + " template" + (templates == 1 ? "" : "s") + ", " + vetted + " vetted)"
                 + (broken == 0 ? "" : " — " + broken + " that could not be read");
     }
 
@@ -193,7 +199,9 @@ public final class CatalogTab extends BorderPane {
         links.show(entry.links());
         heading.setText(entry.kindLabel() + " · " + entry.label()
                 + (entry.name().equals(entry.label()) ? "" : " — " + entry.name()));
-        where.setText(entry.kind().repo() + " · " + entry.path());
+        where.setText(entry.kind().repo() + " · " + entry.path()
+                + (entry.vetted() == null ? "" : " · vetted " + entry.vetted().record().vettedAt()
+                        + " by " + entry.vetted().record().vettedBy()));
         where.getStyleClass().removeAll("cell--broken", "cell--dim");
         where.getStyleClass().add(entry.readable() ? "cell--dim" : "cell--broken");
         // The bytes are already in hand from the listing pass, so there is nothing to fetch and nothing to
@@ -225,6 +233,74 @@ public final class CatalogTab extends BorderPane {
         boolean row = selected != null;
         edit.setDisable(!row || !admin.canWrite());
         unpublish.setDisable(!row || !admin.canWrite() || !selected.readable());
+        // A vetting names owner/repo, which only a readable bot entry states rather than guesses.
+        boolean bot = row && selected.kind() == Catalog.Kind.BOT && selected.readable();
+        vet.setDisable(!bot || !admin.canWrite());
+        revoke.setDisable(!bot || !admin.canWrite() || selected.vetted() == null);
+    }
+
+    /**
+     * Proposes vetting the selected bot at one release.
+     *
+     * <p>The version box starts on the newest release, which is almost always the one just looked at, and is
+     * editable because it need not be. Nothing about the release is checked here: the gallery's gate checks
+     * that it downloads, on the pull request this opens.
+     */
+    private void vet(Catalog.Entry entry) {
+        TextField version = new TextField(entry.vetted() == null ? "" : entry.vetted().record().vettedVersion());
+        version.setPromptText("release tag, e.g. v0.1.0");
+        Vetting.latestRelease(client, auth, entry).thenAccept(tag -> Platform.runLater(() -> {
+            if (!tag.isBlank() && version.getText().isBlank()) {
+                version.setText(tag);
+            }
+        }));
+        TextField why = new TextField();
+        why.setPromptText("What you looked at (optional) — goes in the pull request body");
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Vet " + entry.id());
+        dialog.setHeaderText((entry.vetted() == null ? "" : "Vetted now at "
+                + entry.vetted().record().vettedVersion() + ".\n")
+                + "Opens a pull request writing vetted/ in " + entry.kind().repo() + ". Once merged, Studio shows "
+                + entry.id() + " as Vetted and installs exactly this release.\n\nThe release you looked at:");
+        VBox body = new VBox(8, version, why);
+        DialogPane pane = dialog.getDialogPane();
+        pane.setContent(body);
+        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
+        pane.getButtonTypes().setAll(open, ButtonType.CANCEL);
+        pane.lookupButton(open).disableProperty().bind(version.textProperty().isEmpty());
+        Themed.dialog(dialog, window());
+
+        Optional<ButtonType> chose = dialog.showAndWait();
+        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
+            return;
+        }
+        String tag = version.getText().trim();
+        if (entry.vetted() != null && tag.equals(entry.vetted().record().vettedVersion())) {
+            status.setText(entry.id() + " is already vetted at " + tag + ", so no pull request was opened.");
+            return;
+        }
+        propose(entry, "Vet", Vetting.vet(client, auth, entry, tag, why.getText()));
+    }
+
+    /** Proposes removing the selected bot's vetting; its listing stays. */
+    private void revoke(Catalog.Entry entry) {
+        TextField why = new TextField();
+        why.setPromptText("Why (optional) — goes in the pull request body");
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Revoke vetting of " + entry.id());
+        dialog.setHeaderText("Opens a pull request deleting " + entry.vetted().path() + ".\nOnce merged, "
+                + entry.id() + " is Community again: still listed, installed at its newest release, and gone from "
+                + "the index older Studios read.");
+        dialog.getDialogPane().setContent(new VBox(8, why));
+        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
+        dialog.getDialogPane().getButtonTypes().setAll(open, ButtonType.CANCEL);
+        Themed.dialog(dialog, window());
+        Optional<ButtonType> chose = dialog.showAndWait();
+        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
+            return;
+        }
+        propose(entry, "Revoke", Vetting.revoke(client, auth, entry, why.getText()));
     }
 
     /**
@@ -366,6 +442,8 @@ public final class CatalogTab extends BorderPane {
     private void setWritesDisabled(boolean disabled) {
         edit.setDisable(disabled);
         unpublish.setDisable(disabled);
+        vet.setDisable(disabled);
+        revoke.setDisable(disabled);
     }
 
     /**
@@ -409,6 +487,7 @@ public final class CatalogTab extends BorderPane {
         table.getColumns().setAll(
                 kindColumn(),
                 column("Entry", 260, Catalog.Entry::label),
+                tierColumn(),
                 column("Name", 180, Catalog.Entry::name),
                 column("Tags", 200, Catalog.Entry::tagLine),
                 column("Description", 380, Catalog.Entry::summary));
@@ -419,6 +498,36 @@ public final class CatalogTab extends BorderPane {
         TableColumn<Catalog.Entry, String> col = new TableColumn<>(title);
         col.setPrefWidth(width);
         col.setCellValueFactory(c -> new SimpleStringProperty(text.apply(c.getValue())));
+        return col;
+    }
+
+    /**
+     * Vetted (with its release) or Community, for a bot; blank for a plugin. Double-clicking opens the bot's
+     * repository, which is what somebody deciding whether to vet it has to read.
+     */
+    private TableColumn<Catalog.Entry, String> tierColumn() {
+        TableColumn<Catalog.Entry, String> col = column("Tier", 130, Catalog.Entry::tierLabel);
+        col.setCellFactory(c -> {
+            TableCell<Catalog.Entry, String> cell = new TableCell<>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    setText(empty ? null : item);
+                    getStyleClass().removeAll("cell--ok", "cell--dim");
+                    if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                        return;
+                    }
+                    getStyleClass().add(getTableRow().getItem().vetted() != null ? "cell--ok" : "cell--dim");
+                }
+            };
+            cell.setOnMouseClicked(e -> {
+                Catalog.Entry entry = cell.getTableRow() == null ? null : cell.getTableRow().getItem();
+                if (e.getClickCount() == 2 && entry != null && !entry.repo().isEmpty()) {
+                    Browse.open("https://github.com/" + entry.repo(), status::setText);
+                }
+            });
+            return cell;
+        });
         return col;
     }
 

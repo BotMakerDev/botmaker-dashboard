@@ -1,6 +1,8 @@
 package com.botmaker.dashboard.github;
 
 import com.botmaker.cli.gallery.GalleryEntry;
+import com.botmaker.cli.gallery.Tier;
+import com.botmaker.cli.gallery.VettedRecord;
 import com.botmaker.cli.registry.Registry;
 import com.botmaker.cli.registry.RegistryEntry;
 import com.botmaker.dashboard.umbrella.Links;
@@ -18,6 +20,7 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -88,13 +91,32 @@ public final class Catalog {
      * @param template whether it is a starting template — a gallery-only idea, always false for a plugin
      * @param json     the file, verbatim, for the field view
      * @param readable whether {@link #json} parsed as the entry shape it claims to be
+     * @param repo     {@code owner/name} of the repository the entry names, blank when unreadable
+     * @param vetted   the bot's {@code vetted/} record, or {@code null} — always null for a plugin
      */
     public record Entry(Kind kind, String path, String sha, String id, String name, String summary,
-                        List<String> tags, boolean template, String json, boolean readable, String repo) {
+                        List<String> tags, boolean template, String json, boolean readable, String repo,
+                        Vetted vetted) {
 
         public Entry {
             tags = tags == null ? List.of() : List.copyOf(tags);
             repo = repo == null ? "" : repo;
+        }
+
+        public Entry withVetted(Vetted record) {
+            return new Entry(kind, path, sha, id, name, summary, tags, template, json, readable, repo, record);
+        }
+
+        /**
+         * The gallery tier, as {@code CatalogBuilder} would decide it: Vetted exactly when a record exists.
+         * Blank for a plugin, which has no tiers — the registry's {@code verifiedVersion} is a different idea.
+         */
+        public String tierLabel() {
+            if (kind != Kind.BOT) {
+                return "";
+            }
+            return vetted == null ? Tier.COMMUNITY.displayName()
+                    : Tier.VETTED.displayName() + " " + vetted.record().vettedVersion();
         }
 
         /**
@@ -131,6 +153,17 @@ public final class Catalog {
         public String url() {
             return "https://github.com/" + kind.repo() + "/blob/main/" + path;
         }
+    }
+
+    /**
+     * A bot's vetting record as it stands on {@code main}.
+     *
+     * @param path   {@code vetted/<owner>-<repo>.json}
+     * @param sha    the blob sha, which a revocation must send back
+     * @param record the parsed file — {@code botmaker-cli}'s own record, the one the gate and the catalog
+     *               builder read
+     */
+    public record Vetted(String path, String sha, VettedRecord record) {
     }
 
     /** The branch every published entry is read from. Both data repositories publish from {@code main}. */
@@ -196,8 +229,38 @@ public final class Catalog {
                 }
                 each.add(entry(client, auth, kind, file));
             }
-            return CompletableFuture.allOf(each.toArray(CompletableFuture[]::new))
+            CompletableFuture<List<Entry>> entries = CompletableFuture.allOf(each.toArray(CompletableFuture[]::new))
                     .thenApply(ignored -> each.stream().map(CompletableFuture::join).toList());
+            return kind == Kind.BOT
+                    ? entries.thenCombine(vettings(client, auth), Catalog::attach)
+                    : entries;
+        });
+    }
+
+    /**
+     * Every {@code vetted/} record on the gallery's {@code main}. No directory is an empty list: a gallery
+     * nobody has vetted anything in yet is an ordinary gallery.
+     */
+    private static CompletableFuture<List<Vetted>> vettings(GitHubClient client, GitHubAuth auth) {
+        String repo = Kind.BOT.repo();
+        return Contents.read(client, auth, repo, VettedRecord.DIRECTORY, MAIN).thenCompose(listing -> {
+            if (listing == null || !listing.isArray() || listing.isEmpty()) {
+                return CompletableFuture.completedFuture(List.<Vetted>of());
+            }
+            List<CompletableFuture<Optional<Vetted>>> each = new ArrayList<>();
+            for (JsonNode file : listing) {
+                String name = file.path("name").asText("");
+                if (!"file".equals(file.path("type").asText("")) || !name.endsWith(".json")) {
+                    continue;
+                }
+                String path = file.path("path").asText("");
+                String sha = file.path("sha").asText("");
+                each.add(Contents.read(client, auth, repo, path, MAIN)
+                        .thenApply(contents -> readVetted(path, sha, Contents.decode(contents))));
+            }
+            return CompletableFuture.allOf(each.toArray(CompletableFuture[]::new))
+                    .thenApply(ignored -> each.stream().map(CompletableFuture::join)
+                            .flatMap(Optional::stream).toList());
         });
     }
 
@@ -233,22 +296,60 @@ public final class Catalog {
      */
     static Entry read(Kind kind, String path, String sha, String idFromName, String json) {
         if (json == null) {
-            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, null, false, "");
+            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, null, false, "",
+                    null);
         }
         try {
             if (kind == Kind.PLUGIN) {
                 RegistryEntry plugin = Registry.mapper().readValue(json, RegistryEntry.class);
                 String id = plugin.id() == null || plugin.id().isBlank() ? idFromName : plugin.id();
                 return new Entry(kind, path, sha, id, blankTo(plugin.name(), id), plugin.description(),
-                        plugin.tags(), false, json, true, Links.slug(plugin.repo()).orElse(""));
+                        plugin.tags(), false, json, true, Links.slug(plugin.repo()).orElse(""), null);
             }
             GalleryEntry bot = Registry.mapper().readValue(json, GalleryEntry.class);
             String id = bot.slug().equals("/") ? idFromName : bot.slug();
             return new Entry(kind, path, sha, id, blankTo(bot.name(), id), bot.description(),
-                    bot.tags(), bot.isTemplate(), json, true, Links.slug(bot.slug()).orElse(""));
+                    bot.tags(), bot.isTemplate(), json, true, Links.slug(bot.slug()).orElse(""), null);
         } catch (Exception e) {
-            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, json, false, "");
+            return new Entry(kind, path, sha, idFromName, idFromName, "", List.of(), false, json, false, "",
+                    null);
         }
+    }
+
+    /**
+     * Reads one {@code vetted/} file, or empty when it will not parse.
+     *
+     * <p>Unlike an entry, an unreadable vetting is not a row: it names no bot of its own, and the gallery's
+     * {@code CatalogBuilder} fails the index build on it, which is where that problem is reported.
+     */
+    static Optional<Vetted> readVetted(String path, String sha, String json) {
+        if (json == null) {
+            return Optional.empty();
+        }
+        try {
+            VettedRecord record = Registry.mapper().readValue(json, VettedRecord.class);
+            return record.owner().isEmpty() || record.repo().isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(new Vetted(path, sha, record));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Each bot with its vetting attached, matched on {@code owner/repo} without case — GitHub's own rule, and
+     * {@code GalleryCatalog}'s, which is what decides the tier Studio shows.
+     */
+    static List<Entry> attach(List<Entry> bots, List<Vetted> vettings) {
+        Map<String, Vetted> bySlug = new java.util.HashMap<>();
+        for (Vetted v : vettings) {
+            bySlug.put(v.record().slug().toLowerCase(java.util.Locale.ROOT), v);
+        }
+        return bots.stream()
+                .map(e -> e.kind() == Kind.BOT && e.readable()
+                        ? e.withVetted(bySlug.get(e.id().toLowerCase(java.util.Locale.ROOT)))
+                        : e)
+                .toList();
     }
 
     /** {@code plugins/com.botmaker.sdk.json} claims {@code com.botmaker.sdk} — the layout doing a key's job. */
@@ -313,8 +414,8 @@ public final class Catalog {
                         body("Removes `" + entry.path() + "`, unpublishing `" + entry.id() + "`.", why)));
     }
 
-    /** Branches {@code main} at whatever it is now. */
-    private static CompletableFuture<JsonNode> branch(GitHubClient client, GitHubAuth auth,
+    /** Branches {@code main} at whatever it is now. {@link Vetting}'s writes go through it too. */
+    static CompletableFuture<JsonNode> branch(GitHubClient client, GitHubAuth auth,
                                                       Entry entry, String branch) {
         String repo = entry.kind().repo();
         return client.get(GitHubConfig.API_BASE + "/repos/" + repo + "/git/ref/heads/" + MAIN, token(auth))
@@ -329,7 +430,7 @@ public final class Catalog {
                 });
     }
 
-    private static CompletableFuture<Proposal> pull(GitHubClient client, GitHubAuth auth, Entry entry,
+    static CompletableFuture<Proposal> pull(GitHubClient client, GitHubAuth auth, Entry entry,
                                                     String branch, String title, String body) {
         return client.post(GitHubConfig.API_BASE + "/repos/" + entry.kind().repo() + "/pulls",
                         Map.of("title", title, "head", branch, "base", MAIN, "body", body), token(auth))
@@ -343,7 +444,7 @@ public final class Catalog {
      * <p>It also says where it came from. A reviewer who finds a branch nobody recognises on a data
      * repository should be able to read what opened it, and the answer is a desktop app rather than CI.
      */
-    private static String body(String what, String why) {
+    static String body(String what, String why) {
         String reason = why == null || why.isBlank() ? "" : "\n\n" + why.strip();
         return what + reason + "\n\nOpened from the BotMaker Dashboard.";
     }

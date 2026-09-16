@@ -80,6 +80,7 @@ public final class QueueTab extends BorderPane {
         status.getStyleClass().add("status-line");
         shape.setWrapText(true);
         verdict.getStyleClass().add("status-line");
+        verdict.setWrapText(true);
 
         refresh.setOnAction(e -> reload());
         openOnGitHub.setOnAction(e -> withSelected(s -> Browse.open(s.url(), status::setText)));
@@ -161,7 +162,17 @@ public final class QueueTab extends BorderPane {
         shape.setText(submission.shape());
         shape.getStyleClass().removeAll("cell--broken", "cell--dim");
         shape.getStyleClass().add(submission.wellShaped() ? "cell--dim" : "cell--broken");
-        verdict.setText("Gate: " + submission.checks().text());
+        verdict.setText("Gate: " + submission.checks().text()
+                + (submission.autoMerge().isEmpty() ? "" : "  ·  auto-merge: " + submission.autoMerge()));
+        // The merge job's own sentence — when it will merge, or why it will not — is a comment on the pull
+        // request. Fetched for the selected row only: one request per click, not one per row per reload.
+        if (!submission.autoMerge().isEmpty()) {
+            Queue.listingComment(client, auth, submission).thenAccept(reason -> Platform.runLater(() -> {
+                if (table.getSelectionModel().getSelectedItem() == submission && !reason.isBlank()) {
+                    verdict.setText(verdict.getText() + "\n" + reason);
+                }
+            }));
+        }
 
         if (submission.entryFile().isEmpty()) {
             return;
@@ -271,7 +282,8 @@ public final class QueueTab extends BorderPane {
                 column("Author", 130, s -> "@" + s.author()),
                 column("Title", 260, Submission::title),
                 shapeColumn(),
-                gateColumn());
+                gateColumn(),
+                column("Auto-merge", 170, Submission::autoMerge));
     }
 
     private static TableColumn<Submission, String> column(String title, double width,

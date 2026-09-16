@@ -12,6 +12,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Gallery tiers in the Catalog tab.** A Tier column shows each bot as Vetted (with the release) or
+  Community; double-click it to open the bot's repository. **Vet…** proposes a `vetted/` record pinning a
+  release (the newest, by default), and **Revoke vetting…** proposes deleting it. Both open a pull request
+  that the gallery's checks run over, and you merge it from the Queue tab.
+- **The Queue tab shows what the gallery's merge job decided.** An Auto-merge column reads `waiting (rate
+  limit)`, `needs maintainer` or `merges when checks pass`, and the selected row shows the job's own
+  comment. A `vetted/` pull request now counts as a well-shaped one-file submission.
+
 ### Fixed
 
 - **Opening a link no longer freezes and then kills the window.** Links opened through `java.awt.Desktop` on

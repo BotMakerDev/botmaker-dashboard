@@ -106,6 +106,36 @@ public final class Queue {
                 .thenApply(Contents::decode);
     }
 
+    /** The first line of every comment the gallery's merge job writes; it edits that one comment in place. */
+    static final String LISTING_MARKER = "<!-- botmaker-listing -->";
+
+    /**
+     * The gallery merge job's sentence on a pull request — when it merges, or why it will not — or blank.
+     *
+     * <p>Its words verbatim, marker stripped: {@code ListingPolicy} wrote the reason, and a paraphrase here
+     * would be a second statement of a rule this window does not own.
+     */
+    public static CompletableFuture<String> listingComment(GitHubClient client, GitHubAuth auth,
+                                                          Submission submission) {
+        String url = GitHubConfig.API_BASE + "/repos/" + submission.repo()
+                + "/issues/" + submission.number() + "/comments?per_page=100";
+        return client.get(url, token(auth)).thenApply(Queue::listingReason);
+    }
+
+    static String listingReason(JsonNode comments) {
+        if (comments == null || !comments.isArray()) {
+            return "";
+        }
+        String reason = "";
+        for (JsonNode comment : comments) {
+            String body = comment.path("body").asText("");
+            if (body.startsWith(LISTING_MARKER)) {
+                reason = body.substring(LISTING_MARKER.length()).strip();
+            }
+        }
+        return reason;
+    }
+
     /** Approve, as a review with no body — the ordinary "this is fine, merge it". */
     public static CompletableFuture<JsonNode> approve(GitHubClient client, GitHubAuth auth,
                                                       Submission submission) {
@@ -142,8 +172,9 @@ public final class Queue {
                                                     Submission submission) {
         String url = GitHubConfig.API_BASE + "/repos/" + submission.repo()
                 + "/pulls/" + submission.number() + "/merge";
+        String verb = submission.entryFile().filter(f -> f.startsWith("vetted/")).isPresent() ? "vet " : "add ";
         String title = submission.claimedId()
-                .map(id -> "add " + id + " (#" + submission.number() + ")")
+                .map(id -> verb + id + " (#" + submission.number() + ")")
                 .orElse(submission.title() + " (#" + submission.number() + ")");
         return client.put(url, Map.of("merge_method", "squash", "commit_title", title), token(auth));
     }

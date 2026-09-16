@@ -8,6 +8,24 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — gallery v2, phase 5: tiers, vetting and the merge job's word
+
+**Done**
+- `Catalog` reads `vetted/` beside `bots/` and attaches each record to its bot (`Catalog.Vetted`, matched on
+  `owner/repo` without case, as `GalleryCatalog` does); `Entry.tierLabel()` is the Tier column.
+- `Vetting` — `vet` writes `botmaker-cli`'s `VettedRecord` through `Registry.mapper()` (byte-identical to the
+  hand-written records), `revoke` deletes it; both through `Catalog`'s branch-and-pull-request path, now
+  package-visible. Nothing is checked here: the gallery gate checks a maintainer's `vetted/` change, and its
+  merge job leaves one for a human.
+- `Submission.labels` and `autoMerge()` read `automerge.yml`'s `waiting` / `needs-maintainer` labels;
+  `Queue.listingComment` reads its `<!-- botmaker-listing -->` comment for the selected row. `vetted/` joined
+  the one-file shape so a vetting can be merged from the Queue tab.
+- `VettingTest`, and `SubmissionTest` cases for the labels and the `vetted/` shape.
+
+**Deferred / next**
+- `Admin` still probes push on the plugin registry; vetting needs push on the gallery. Same owner today, so
+  the answer is the same; a second probe is owed the day the two repositories have different maintainers.
+
 ## 2026-09-16 — round 2, phase 6: the Changelog tab, and a drafter through cswap
 
 **Done**

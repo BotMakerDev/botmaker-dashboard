@@ -30,24 +30,37 @@ import java.util.regex.Pattern;
  * @param url     its page on github.com
  * @param files   every path the pull request touches
  * @param checks  the gate's verdict for {@link #headSha}
+ * @param labels  the pull request's label names — the gallery's merge job speaks through two of them
  */
 public record Submission(String repo, int number, String title, String author, String headSha,
-                         String url, List<String> files, Checks checks) {
+                         String url, List<String> files, Checks checks, List<String> labels) {
 
     /**
      * The one shape a submission may have.
      *
-     * <p>Both directories in one pattern rather than one per repository: the rule is the same rule, and a
-     * per-repo copy would be a second place to edit when a third data repository appears.
+     * <p>All three directories in one pattern rather than one per repository: the rule is the same rule, and
+     * a per-repo copy would be a second place to edit when a fourth appears. {@code vetted/} is the gallery's
+     * maintainer-only one — a vetting is also exactly one file, opened from this window's Catalog tab.
      */
-    private static final Pattern ENTRY = Pattern.compile("(plugins|bots)/[^/]+\\.json");
+    private static final Pattern ENTRY = Pattern.compile("(plugins|bots|vetted)/[^/]+\\.json");
+
+    /** The label {@code automerge.yml} puts on a listing over its author's new-listings limit. */
+    public static final String LABEL_WAITING = "waiting";
+
+    /** The label {@code automerge.yml} puts on a listing it will not merge by itself. */
+    public static final String LABEL_NEEDS_MAINTAINER = "needs-maintainer";
 
     public Submission {
         files = List.copyOf(files);
+        labels = labels == null ? List.of() : List.copyOf(labels);
     }
 
     /** Reads a pull request object and the file list that goes with it. */
     public static Submission read(String repo, JsonNode pr, List<String> files, Checks checks) {
+        List<String> labels = new ArrayList<>();
+        for (JsonNode label : pr.path("labels")) {
+            labels.add(label.path("name").asText(""));
+        }
         return new Submission(
                 repo,
                 pr.path("number").asInt(),
@@ -56,7 +69,25 @@ public record Submission(String repo, int number, String title, String author, S
                 pr.path("head").path("sha").asText(""),
                 pr.path("html_url").asText(""),
                 files,
-                checks);
+                checks,
+                labels);
+    }
+
+    /**
+     * What the gallery's merge job has decided, in one word — blank for the plugin registry, which merges by
+     * hand, and for a listing it has not labelled.
+     *
+     * <p>Read off the labels {@code automerge.yml} sets rather than recomputed: the policy is
+     * {@code botmaker-cli}'s {@code ListingPolicy}, and a second reading of it here would be the second
+     * implementation this window exists not to have. An unlabelled open listing is one whose checks are
+     * still running, or failed, or that the job has not reached yet — the Gate column says which.
+     */
+    public String autoMerge() {
+        if (labels.contains(LABEL_NEEDS_MAINTAINER)) return "needs maintainer";
+        if (labels.contains(LABEL_WAITING)) return "waiting (rate limit)";
+        if (!repo.equals(Queue.GALLERY)) return "";
+        return files.stream().allMatch(f -> f.startsWith("bots/")) && !files.isEmpty()
+                ? "merges when checks pass" : "";
     }
 
     /** The paths of a pull request's changed files, from {@code GET /pulls/{n}/files}. */
