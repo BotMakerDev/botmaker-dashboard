@@ -48,6 +48,25 @@ class ReleaseLogTest {
     }
 
     @Test
+    void aLogWithTheStageColumnReadsTheSameColumnsAndTheStage() {
+        ReleaseLog log = ReleaseLog.parse(Path.of("releases/2026-09-16-1020.md"), """
+                # Release 2026-09-16 10:20
+
+                | module | version | tag | stage | changelog | jitpack | actions |
+                |---|---|---|---|---|---|---|
+                | botmaker-studio-api | 0.1.0 | v0.1.0 | built on jitpack | stamped | pending | pending |
+                | botmaker-shared | 0.1.0 | v0.1.0 | FAILED | — | not tagged | not tagged |
+                """);
+
+        assertEquals(2, log.rows().size());
+        assertEquals("built on jitpack", log.rows().get(0).stage());
+        assertEquals("stamped", log.rows().get(0).changelog());
+        assertEquals("pending", log.rows().get(0).jitpack());
+        assertEquals("FAILED", log.rows().get(1).stage());
+        assertEquals("", parsed().rows().get(0).stage());
+    }
+
+    @Test
     void neitherTheHeaderNorTheSeparatorIsARow() {
         assertTrue(parsed().rows().stream().noneMatch(r -> r.module().equals("module")));
         assertTrue(parsed().rows().stream().noneMatch(r -> r.module().startsWith("---")));

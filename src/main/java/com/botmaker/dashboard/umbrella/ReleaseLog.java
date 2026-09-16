@@ -71,9 +71,13 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
         }
     }
 
-    /** One module's row: {@code | module | version | tag | changelog | jitpack | actions |}. */
+    /**
+     * One module's row: {@code | module | version | tag | stage | changelog | jitpack | actions |}.
+     *
+     * @param stage how far the release got with this module; empty for a log older than the column
+     */
     public record Row(String module, String version, String tag,
-                      String changelog, String jitpack, String actions) {
+                      String changelog, String jitpack, String actions, String stage) {
 
         public Health jitpackHealth() {
             return Health.of(jitpack);
@@ -228,8 +232,9 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
 
     /**
      * One table line, or {@code null} for anything else — the header, the {@code |---|} separator and every
-     * line of prose. Six cells exactly: a table with a different width is a log this version cannot read,
-     * and skipping it is better than showing a row whose columns have shifted by one.
+     * line of prose. Six cells or seven: logs written since 2026-09-16 carry a {@code stage} after the tag,
+     * which is how far that module got. Any other width is a log this version cannot read, and skipping it
+     * is better than showing a row whose columns have shifted by one.
      */
     private static Row row(String line) {
         String trimmed = line.strip();
@@ -237,7 +242,7 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
             return null;
         }
         String[] cells = trimmed.substring(1, trimmed.length() - 1).split("\\|", -1);
-        if (cells.length != 6) {
+        if (cells.length != 6 && cells.length != 7) {
             return null;
         }
         for (int i = 0; i < cells.length; i++) {
@@ -246,6 +251,9 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
         if (cells[0].equals("module") || cells[0].isEmpty()) {
             return null;
         }
-        return new Row(cells[0], cells[1], cells[2], cells[3], cells[4], cells[5]);
+        if (cells.length == 7) {
+            return new Row(cells[0], cells[1], cells[2], cells[4], cells[5], cells[6], cells[3]);
+        }
+        return new Row(cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], "");
     }
 }

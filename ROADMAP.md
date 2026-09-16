@@ -34,8 +34,11 @@ Unpublish, and the release was running in the same JVM. Plan: `~/.claude/plans/a
 - `DashboardConfig` keeps both keys on every save (`withUmbrella`, `withTheme`) and has path-taking
   `load`/`save` overloads for tests.
 
-**Deferred / next** — phases 2–6 of the plan: the live release log and the CI gate in the library, Execute as
-a child process with progress widgets, the Releases tab from tags alone, links, and the Changelog tab.
+**Deferred / next** — phases 3–6 of the plan: Execute as a child process with progress widgets, the Releases
+tab from tags alone, links, and the Changelog tab.
+
+**Phase 2 (same day, in `botmaker-cli`)** gave release logs a `stage` column after `tag`. `umbrella/ReleaseLog`
+reads six- and seven-cell rows and keeps the stage on `Row`; nothing draws it yet.
 
 ---
 
