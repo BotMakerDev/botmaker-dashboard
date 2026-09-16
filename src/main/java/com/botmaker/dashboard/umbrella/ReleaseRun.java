@@ -28,11 +28,14 @@ import java.util.function.Consumer;
  * produced by the code that will do the work. A separate preview is free to drift, and the drift is
  * discovered as a tag, which cannot be edited.
  *
- * <p><b>In-process rather than spawning the jar</b>, because the jar is already on this application's
- * classpath — {@code botmaker-dashboard} depends on {@code botmaker-cli}'s main artifact — and because a
- * subprocess would put the output back behind a pipe that has to be parsed. The cost is stated plainly:
- * this runs inside the window's JVM, so it must never be called on the FX thread, and a
+ * <p><b>A call, not the jar spawned</b>, because the library is already on this application's classpath —
+ * {@code botmaker-dashboard} depends on {@code botmaker-cli}'s main artifact — and a spawned jar would put the
+ * output back behind a pipe that has to be parsed. It must never be called on the FX thread, and a
  * {@link ReleaseRefusal} is a return value here rather than an exit code.
+ *
+ * <p><b>Where it runs depends on the Runner</b>, since 2026-09-16. A preview is called in the window's JVM. A
+ * real release is called by {@link ReleaseJob}, in a process of its own, because the release cut in the
+ * window's JVM that day died with the window after four tags. Both are this method.
  *
  * @param executed  whether a {@link Runner#real()} was used — false for a preview
  * @param output    every line the run produced, whole, in order

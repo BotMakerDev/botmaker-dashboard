@@ -22,8 +22,21 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Modena's black on white. The Release tab's output no longer renders dark text on a dark background, and
   verdict colours in tables now apply.
 
+- **Picking a level on a row now asks for that row.** It used to change nothing unless the row was already
+  ticked, while Execute stayed armed for the `--all` level. Choosing a level or typing a version ticks the
+  row, which changes the command line and so disarms Execute.
+
 ### Added
 
+- **Execute starts the release as a process of its own**, which outlives the window. The Release tab draws it
+  from the files that process leaves: a tile each for tagged, JitPack, Actions and elapsed time; a timeline
+  of where the minutes went; and a lane per module with a `Commit — Tag — JitPack — Actions` stepper that
+  opens to the error text when a step fails. Close the window mid-release and reopen it: the tab reattaches.
+  The tab's header shows `● Releasing — 4/10` from any other tab.
+- **Every module has a row before any preview**, in tag order, with its latest tag and what a level would
+  cut. The previous table stayed empty until the first preview.
+- **A refusal is a red banner above the output**, one line per gate in its own words, instead of a count in
+  the status line.
 - **A light theme**, and a ☀/☾ toggle in the top bar. The choice is remembered. With no choice, the window
   follows the desktop's colour scheme.
 

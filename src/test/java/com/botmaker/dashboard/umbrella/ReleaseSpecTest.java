@@ -140,4 +140,28 @@ class ReleaseSpecTest {
         assertFalse(ReleaseSpec.wellFormed("v1.2.0"));
         assertFalse(ReleaseSpec.wellFormed("tiny"));
     }
+
+    @Test
+    void theFlagsReadBackIntoTheSameSpec() {
+        // The release process receives the spec as flags. Read back differently, it would cut a release other
+        // than the one that was previewed and armed — so the round trip is value equality, the arming's own test.
+        Map<Module, String> two = new LinkedHashMap<>();
+        two.put(Module.SDK, "1.2.0");
+        two.put(Module.CLI, "");
+        List<ReleaseSpec> specs = List.of(
+                new ReleaseSpec(Optional.of("minor"), two, true, true),
+                new ReleaseSpec(Optional.of(""), Map.of(), false, false),
+                new ReleaseSpec(Optional.empty(), modules(Module.PLUGIN_TOOLKIT, "major"), false, true));
+        for (ReleaseSpec spec : specs) {
+            List<String> command = spec.command(true);
+            assertEquals(spec, ReleaseSpec.parse(command.subList(2, command.size())), spec.executeCommandLine());
+        }
+    }
+
+    @Test
+    void anArgumentTheReleaseDoesNotTakeIsRefusedNotDropped() {
+        IllegalArgumentException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> ReleaseSpec.parse(List.of("--sdk", "1.2.0", "--dry-run")));
+        assertEquals("unknown arg: --dry-run", refused.getMessage());
+    }
 }

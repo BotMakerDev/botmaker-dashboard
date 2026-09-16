@@ -563,6 +563,223 @@
     -fx-text-fill: -bm-text-dim;
 }
 
+/* ── a refusal, above the output ──────────────────────────────────────────
+   One line per gate, in the gate's words. Red-edged rather than red-filled, so the words stay readable in
+   both themes. */
+
+.refusal-banner {
+    -fx-background-color: -bm-bg-raised;
+    -fx-border-color: -bm-danger;
+    -fx-border-width: 0 0 0 3;
+    -fx-padding: 8 10 8 10;
+}
+
+.refusal-title {
+    -fx-text-fill: -bm-danger;
+    -fx-font-weight: bold;
+}
+
+.refusal-line {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 12px;
+}
+
+.output-pane > .title {
+    -fx-background-color: -bm-bg-raised;
+    -fx-border-color: -bm-line;
+}
+
+.output-pane > .title > .text {
+    -fx-fill: -bm-text-dim;
+}
+
+.output-pane > .title > .arrow-button > .arrow {
+    -fx-background-color: -bm-text-dim;
+}
+
+.output-pane > .content {
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent;
+}
+
+/* ── a release in progress: tiles, timeline, lanes ────────────────────────── */
+
+.summary-tiles .tile {
+    -fx-background-color: -bm-bg-raised;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 6;
+    -fx-padding: 8 12 8 10;
+    -fx-cursor: hand;
+}
+
+.summary-tiles .tile--elapsed {
+    -fx-cursor: default;
+}
+
+.summary-tiles .tile--selected {
+    -fx-border-color: -bm-accent;
+}
+
+.tile-number {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.tile-caption {
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-size: 11px;
+}
+
+.tile-arc-track {
+    -fx-stroke: -bm-line;
+    -fx-stroke-width: 3;
+    -fx-fill: transparent;
+}
+
+.tile-arc {
+    -fx-stroke: -bm-ok;
+    -fx-stroke-width: 3;
+    -fx-stroke-line-cap: round;
+    -fx-fill: transparent;
+}
+
+.tile--failed {
+    -fx-border-color: -bm-danger;
+}
+
+.tile--failed .tile-number {
+    -fx-text-fill: -bm-danger;
+}
+
+.tile--failed .tile-arc {
+    -fx-stroke: -bm-danger;
+}
+
+.release-timeline {
+    -fx-background-color: -bm-line;
+    -fx-background-radius: 4;
+}
+
+.timeline-segment {
+    -fx-background-radius: 3;
+}
+
+.timeline-segment--done {
+    -fx-background-color: -bm-ok;
+}
+
+.timeline-segment--running {
+    -fx-background-color: -bm-accent;
+}
+
+.timeline-segment--failed {
+    -fx-background-color: -bm-danger;
+}
+
+.module-lane {
+    -fx-background-color: -bm-bg-raised;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 6;
+    -fx-padding: 8 12 8 12;
+}
+
+.module-lane--failed {
+    -fx-border-color: -bm-danger;
+}
+
+.lane-module {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+}
+
+.tag-chip {
+    -fx-background-color: -bm-bg;
+    -fx-background-radius: 10;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 10;
+    -fx-padding: 1 8 1 8;
+    -fx-text-fill: -bm-accent;
+    -fx-underline: false;
+}
+
+.lane-stage,
+.lane-elapsed,
+.step-label {
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-size: 11px;
+}
+
+.lane-elapsed {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+}
+
+/* A node is a circle drawn by its border; the ring behind it is what pulses while the step runs. */
+.step-node {
+    -fx-background-radius: 9;
+    -fx-border-radius: 9;
+    -fx-border-width: 2;
+    -fx-border-color: -bm-line;
+    -fx-background-color: transparent;
+}
+
+.step-ring {
+    -fx-background-radius: 9;
+    -fx-border-radius: 9;
+    -fx-border-width: 2;
+    -fx-border-color: transparent;
+}
+
+.step-mark {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -bm-on-accent;
+}
+
+.step--running {
+    -fx-border-color: -bm-accent;
+}
+
+.step--running .step-ring {
+    -fx-border-color: -bm-accent;
+}
+
+.step--ok {
+    -fx-border-color: -bm-ok;
+    -fx-background-color: -bm-ok;
+}
+
+.step--failed {
+    -fx-border-color: -bm-danger;
+    -fx-background-color: -bm-danger;
+}
+
+.step--skipped {
+    -fx-border-color: -bm-line;
+    -fx-opacity: 0.6;
+}
+
+.step--skipped .step-mark {
+    -fx-text-fill: -bm-text-dim;
+}
+
+.step-connector {
+    -fx-background-color: -bm-line;
+}
+
+.step-connector--filled {
+    -fx-background-color: -bm-ok;
+}
+
+.live-badge {
+    -fx-text-fill: -bm-accent;
+    -fx-font-size: 11px;
+}
+
+.live-badge--failed {
+    -fx-text-fill: -bm-danger;
+}
+
 /* ── dialogs ─────────────────────────────────────────────────────────────── */
 
 .dialog-pane {

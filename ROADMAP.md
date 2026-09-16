@@ -8,6 +8,49 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — round 2, phase 3: Execute in its own process, and a board instead of log text
+
+**Done**
+- **`umbrella/ReleaseJob`** is a `main` that runs `ReleaseRun.go(…, execute=true, …)` and nothing else, with
+  every line stamped (`<instant> <text>`) and flushed, and a last `release-job: done|refused|stopped …` line.
+  That line is the only way to tell *finished* from *killed*: a refusal leaves no log, and a run that died
+  after its last tag leaves a log that looks finished. `--dry-run` rehearses the machinery by hand; the
+  window never passes it.
+- **`umbrella/ReleaseLauncher`** starts it as `setsid <java.home>/bin/java -cp <this JVM's class path>
+  ReleaseJob <umbrella> <stamp> <flags>`, output to `releases/.running/<stamp>.out`, pid beside it
+  (gitignored in the umbrella). `setsid` because an IDE's stop button signals the whole process group.
+  **The classpath risk the plan named did not bite**: under `javafx:run` the plugin puts every jar, JavaFX
+  included, on `-classpath` (read from `/proc/<pid>/cmdline`). `jdk.module.path` is folded in anyway, for a
+  launcher that does split them. Liveness is `ProcessHandle` plus a check that the pid still runs
+  `ReleaseJob`, since pids are reused.
+- **`ReleaseSpec.parse`**, `command()`'s inverse, and a round-trip test by value equality — the arming's own
+  comparison. An argument the release does not take is refused, never dropped.
+- **`umbrella/ReleaseProgress`**, pure: the log wins wherever it has an answer, and the output fills in a row
+  the log still calls `pending` (which step it reached, whether it is waiting on JitPack). Lanes, the four
+  tiles' counts, a phase (`DECIDING … DONE/REFUSED/STOPPED/DIED`), per-lane elapsed time closed at the next
+  module's line, and the tile filters. A JitPack timeout reads as *waiting*, not failed, until the verify
+  pass answers.
+- **`ui/widgets/`**: `SummaryTiles`, `ModuleLane`, `ReleaseTimeline`, `LiveBadge`, and `ReleaseBoard` composing
+  them. They draw a model and compute nothing. The pulse runs only while a node is running and the tab is
+  selected.
+- **Release tab rework.** Rows for every `Order.TAG` module at construction. Choosing a level or typing a
+  version ticks the row — the reported bug, where a level on an unticked row changed nothing while Execute
+  stayed armed. Refusals are a banner. Execute launches the child and the tab polls its two files once a
+  second (a poll rather than a `WatchService`: two directories, one file rewritten whole, and a process
+  liveness no file event reports); the output moves to a collapsed *Output* pane. Preview and Execute are
+  dead while a job is alive, and a live job is reattached when the tab opens. A `Backend` seam lets a test
+  hand in a preview.
+- **TestFX + Monocle**, Studio's pairing (monocle 21.0.2 on JavaFX 25). `ReleaseProgressTest`,
+  `ReleaseLauncherTest`, `ModuleLaneTest`, `SummaryTilesTest`, `ReleaseTabTest`. The module's "headless by
+  construction" rule still holds for rules; these test drawing.
+
+**Deferred / next** — the Actions node reads `pending` for the whole chain, because Actions is polled only
+after the last tag; a live Actions poll per tag would be a second reader beside the library's and is not
+planned. Nothing drives a real release through the board in a test: the maintainer's scratch-umbrella run is
+the check (plan, *Verification*).
+
+---
+
 ## 2026-09-16 — round 2, phase 1: the crash, readability, and a light theme
 
 The first real `--all minor` cut from the Release tab stopped after four tags. The window died during an

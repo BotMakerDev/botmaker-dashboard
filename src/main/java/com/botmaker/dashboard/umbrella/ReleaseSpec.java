@@ -114,6 +114,47 @@ public record ReleaseSpec(Optional<String> all, Map<Module, String> modules,
         return List.copyOf(out);
     }
 
+    /**
+     * The flags back into a spec — {@link #command}'s inverse, for {@link ReleaseJob}, which receives them on
+     * its command line.
+     *
+     * <p>The grammar is {@code botmaker release}'s and only that: a flag, then an optional word that is not
+     * itself a flag. {@code --execute} is accepted and ignored, because the child is told to execute by
+     * being started at all. Anything else is refused rather than dropped — a flag the child did not
+     * understand is a release different from the one that was previewed.
+     *
+     * @param flags everything after {@code botmaker release}
+     * @throws IllegalArgumentException naming the first argument that is not a flag of the release
+     */
+    public static ReleaseSpec parse(List<String> flags) {
+        Optional<String> all = Optional.empty();
+        Map<Module, String> modules = new LinkedHashMap<>();
+        boolean force = false;
+        boolean noWait = false;
+        for (int i = 0; i < flags.size(); i++) {
+            String flag = flags.get(i);
+            String value = i + 1 < flags.size() && !flags.get(i + 1).startsWith("--") ? flags.get(i + 1) : null;
+            switch (flag) {
+                case "--force" -> force = true;
+                case "--no-wait-jitpack" -> noWait = true;
+                case "--execute" -> {
+                    // The child executes by being started; the word is harmless and so accepted.
+                }
+                case "--all" -> {
+                    all = Optional.of(value == null ? "" : value);
+                    i += value == null ? 0 : 1;
+                }
+                default -> {
+                    Module module = Module.byFlag(flag)
+                            .orElseThrow(() -> new IllegalArgumentException("unknown arg: " + flag));
+                    modules.put(module, value == null ? "" : value);
+                    i += value == null ? 0 : 1;
+                }
+            }
+        }
+        return new ReleaseSpec(all, modules, force, noWait);
+    }
+
     /** The preview line — the command this window runs when Preview is pressed. */
     public String commandLine() {
         return String.join(" ", command(false));

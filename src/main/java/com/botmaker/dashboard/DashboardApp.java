@@ -115,10 +115,17 @@ public final class DashboardApp extends Application {
 
         // Catalog sits beside Queue because they are the two halves of one question — what shipped, and
         // what is waiting — and after it because a queue is usually empty while the catalog never is.
+        // The Release tab's header carries the live badge, so a release running in its own process is visible
+        // from every other tab; and its board's pulses stop while the tab cannot be seen.
+        Tab releaseTab = new Tab("Release", release);
+        releaseTab.setGraphic(release.badge());
+        release.setShowing(false);
+        releaseTab.selectedProperty().addListener((o, was, is) -> release.setShowing(is));
+
         TabPane tabs = new TabPane(
                 new Tab("Modules", modules),
                 new Tab("Releases", releases),
-                new Tab("Release", release),
+                releaseTab,
                 new Tab("Queue", queue),
                 new Tab("Catalog", catalog));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);

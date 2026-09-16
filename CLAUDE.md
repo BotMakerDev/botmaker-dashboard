@@ -53,6 +53,11 @@ is not a weaker rule but a different guard, and it is worth stating where the ol
   from done is a dialog people dismiss.
 - **A release never arms anything.** Whatever it leaves behind, the way to get the button back is to preview
   again against the checkout as it now is.
+- **A release runs in a process of its own, a preview does not** (since 2026-09-16). The first release cut
+  from this window ran in its JVM and died with it, four tags in. Execute starts `umbrella/ReleaseJob` through
+  `ReleaseLauncher` (`setsid` on Linux); the tab only *watches* `releases/.running/<stamp>.out` and the release
+  log, through `ReleaseProgress`, and reattaches to a live job when reopened. The child is `ReleaseRun.go`
+  and nothing else — a second code path to the library there would be the thing this section forbids.
 
 **The first piece of that library arrived early, and it is the shape every later one takes.** The Release
 tab's level picker shows what a level resolves to — `1.1.6 → 1.2.0` — and that arrow is `latest_version` and
@@ -213,7 +218,10 @@ com.botmaker.dashboard
 │   ├── ModuleScan      git per module, then Plan.decide once, into rows
 │   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
 │   ├── ReleaseRun      one release, previewed or cut — the only place here that can push a tag
-│   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes and as two command lines
+│   ├── ReleaseJob      main(): ReleaseRun.go in a child process, every line stamped, a last release-job: line
+│   ├── ReleaseLauncher starts ReleaseJob (setsid), and finds a job again from releases/.running/
+│   ├── ReleaseProgress where a running release is — lanes, tiles, phase — from its output and its log
+│   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes, as two command lines, and back
 │   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
 │   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
@@ -223,7 +231,8 @@ com.botmaker.dashboard
     ├── Themed          the palette on every window's scene root, and the owner on every dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     the logs, newest first, with re-poll = ReleaseStatus.repoll
-    ├── ReleaseTab      flags on the left, the run's whole output on the right, Preview and Execute
+    ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board
+    ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard — draw, never count
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
 ```
@@ -250,9 +259,10 @@ that arrives in a `ui/` class is a rule that will not be tested.
 
 **There are two lists this module deliberately does not keep.** Which modules a checkout has is
 `.gitmodules`' answer (`Umbrella.modules`) — a copy here would be short by exactly one module the day an
-eleventh is added, which is the day it matters. And which modules are *releasable* is answered by whether
-the decide pass names them at all: `botmaker-gallery`, `botmaker-plugin-registry` and this
-repository never appear, and the row says *not released by the release* rather than inventing a category.
+eleventh is added, which is the day it matters. And which modules are *releasable* is the library's
+`Module` enum: the Release tab lists `Order.TAG` before any preview, and `botmaker-gallery`,
+`botmaker-plugin-registry` and this repository are not in it, so the Modules tab says *not released by the
+release* rather than inventing a category.
 
 `src/main/resources/css/dashboard.css` is the whole look: two palettes of `-bm-*` tokens on
 `.root.theme-dark` / `.root.theme-light`, and rules that read only tokens. **A colour literal in a rule is a
@@ -301,9 +311,14 @@ mvn -pl botmaker-dashboard test
 ```
 
 Tests are headless by construction: everything with a rule in it (`Admin.read`,
-`DashboardConfig.looksLikeUmbrella`) is a pure function over JSON or a path, and the JavaFX classes hold no
-rules. Keep it that way — a rule that can only be tested by showing a window is a rule that will not be
-tested.
+`DashboardConfig.looksLikeUmbrella`, `ReleaseProgress.of`) is a pure function over JSON, text or a path, and
+the JavaFX classes hold no rules. Keep it that way — a rule that can only be tested by showing a window is a
+rule that will not be tested.
+
+**Drawing is tested too, since 2026-09-16**, with TestFX over Monocle's Headless platform (Studio's pairing:
+monocle 21.0.2 on JavaFX 25; Surefire sets the properties, `ui/FxHeadless` repeats them for an IDE run). Those
+tests assert what a model *looks like* — node style classes, a banner's words, a click that ticks a row —
+never a rule; the rule they draw was already tested without a window.
 
 ## Code style
 
