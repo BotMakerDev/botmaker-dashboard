@@ -1,5 +1,7 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.Plan;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -8,15 +10,15 @@ import java.util.Optional;
  * {@code release.sh} would decide about that movement, where its pins sit, and whether its changelog is
  * ready.
  *
- * <p>Every field is either a fact of the checkout (git, a file's contents) or the script's own verdict
- * quoted back. Nothing here is computed from a rule this module owns — see {@link ReleasePlan}.
+ * <p>Every field is either a fact of the checkout (git, a file's contents) or the release library's own
+ * verdict quoted back. Nothing here is computed from a rule this module owns — see {@link ModuleScan}.
  */
 public record ModuleRow(
         String name,
         Optional<String> latestTag,
         int ahead,
         boolean dirty,
-        Optional<ReleasePlan.Verdict> plan,
+        Optional<Plan.Decision> plan,
         List<DepsEnv.Pin> pins,
         ChangelogState changelog) {
 
@@ -48,18 +50,27 @@ public record ModuleRow(
     }
 
     /**
-     * What the release would do, in the script's own words.
+     * What the release would do, in the decide pass's own words.
      *
-     * <p>A module the script never named is not "up to date" — it is a module the script does not release at
-     * all, and saying so is the honest answer for {@code botmaker-gallery}, {@code botmaker-plugin-registry}
-     * and this window's own repository.
+     * <p>Composed rather than re-derived: the two skip reasons have different causes ("no changes" and "only
+     * docs") and {@link com.botmaker.cli.release.ReleaseDecision} is where both sentences are written. What
+     * this does is drop the {@code    botmaker-cli: } prefix the pass prints in front of them, because the
+     * module already has a column of its own here.
+     *
+     * <p>A module the pass never named is not "up to date" — it is a module the release does not cut at all,
+     * and saying so is the honest answer for {@code botmaker-gallery}, {@code botmaker-plugin-registry} and
+     * this window's own repository.
      */
     public String planLabel() {
-        return plan.map(ReleasePlan.Verdict::text).orElse("not released by release.sh");
+        return plan
+                .map(decision -> decision.releasing()
+                        ? "releasing v" + decision.version()
+                        : decision.verdict().skipReason())
+                .orElse("not released by the release");
     }
 
     public boolean releasing() {
-        return plan.map(ReleasePlan.Verdict::releasing).orElse(false);
+        return plan.map(Plan.Decision::releasing).orElse(false);
     }
 
     /** True when any pin names something other than its upstream's newest tag. */

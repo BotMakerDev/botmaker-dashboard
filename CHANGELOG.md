@@ -14,6 +14,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The Release tab can cut the release.** It could only describe one before: `ReleaseSpec` appended
+  `--dry-run` to every command line with no way to leave it off, and what the tab handed back was the line
+  to paste into a terminal. Preview and Execute are now one call — `Release.run`, with a `Runner` as the
+  only difference — which is the property a shelling window could not have: the plan on screen was produced
+  by the code that does the work, so it cannot drift from it. The output is streamed as it is produced,
+  because a window that looked frozen during a tag chain is one somebody force-quits halfway through it.
+
+  **Three guards, in the order they apply.** Execute is dead until a preview has run *in this session, with
+  these exact flags, against this checkout* and returned no refusal — armed by comparing `ReleaseSpec`
+  values, not by setting a boolean, so a tick or a keystroke takes the button dead again and putting the
+  flag back puts it back. Then a confirmation that lists every module and version about to be tagged and
+  will not enable its own button until `release` is typed. And a release arms nothing: whatever it leaves
+  behind, the way to get the button back is to preview again against the checkout as it now is.
+
 - **The Catalog tab — what is published**, which the Queue tab cannot answer. Queue lists open pull
   requests, and that is zero most days; this lists every **merged** entry on both data repositories:
   `plugins/<plugin-id>.json` from the registry and `bots/<owner>-<repo>.json` from the gallery, with the
@@ -59,11 +73,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   flow, the admin badge, and the tabs — Modules, Releases, Release, Queue, Catalog — each stating what it
   will hold. Nothing reads a release or a pull request yet.
 - **The Modules tab.** One row per submodule in the checkout: its newest tag and how far HEAD has moved
-  past it, whether the working tree is dirty, **what `./release.sh --all --dry-run` decided about that
-  movement — quoted in the script's own words, never re-derived here** — whether `CHANGELOG.md` has an
+  past it, whether the working tree is dirty, **what the decide pass decided about that movement — in its
+  own words, never re-derived here** — whether `CHANGELOG.md` has an
   `## [Unreleased]` section for a release to stamp, and each `.deps.env` pin with the upstream's newest tag
-  beside it when the two differ. A module the script never names is reported as one it does not release,
-  which is how the gallery, the plugin registry and this repository are told apart from the ten it does.
+  beside it when the two differ. A module the pass never names is reported as one it does not release,
+  which is how the gallery, the plugin registry and this repository are told apart from the eleven it does.
 - **The Releases tab.** The committed `releases/*.md` logs, newest first: the table as the release wrote it,
   the full error text under it, and each verdict coloured by what it means without a word of it being
   rewritten. **Re-poll runs `./release.sh --status <file>`** rather than asking JitPack and Actions directly,
@@ -78,13 +92,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   main artifact, with the contract and plugin-host excluded: it calls a library, it does not become a host.
   A module the release never cuts (`botmaker-gallery`, this repository) says *not released* rather than
   inventing an arrow.
-- **The Release tab — a preview, and no way to execute.** Module checkboxes with a version or bump level
-  each, `--all <level>`, `--force` and `--no-wait-jitpack`, rendering `./release.sh --dry-run`'s whole output:
-  the decided version per module, why each was skipped or forced, the tag order and the gate verdicts, none
-  of it re-rendered here. **`--dry-run` is appended by the code that builds the command and cannot be left
-  off** — the terminal stays the only place a tag is pushed — so what the tab hands back is the exact command
-  line to paste. The module rows are the decide pass's own list, which is why they appear after the first
-  preview rather than before it.
+- **The Release tab's preview.** Module checkboxes with a version or bump level each, `--all <level>`,
+  `--force` and `--no-wait-jitpack`, rendering the run's whole output: the decided version per module, why
+  each was skipped or forced, the tag order and the gate verdicts, none of it re-rendered here. The module
+  rows are the decide pass's own list, which is why they appear after the first preview rather than before
+  it.
 - **The Queue tab.** Every open pull request on `botmaker-plugin-registry` and `botmaker-gallery`: who
   opened it, the one entry file it adds rendered as fields read out of the file itself, and **the gate's own
   check-run conclusion** — `RegistryGate`, run by the registry's CI, never a validation repeated here. A
@@ -97,6 +109,25 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   the account cannot see) is read-only with a reason rather than an error.
 
 ### Changed
+
+- **The decide pass is called, not shelled to and parsed.** `umbrella/ReleasePlan` read module verdicts out
+  of `./release.sh --all --dry-run`'s stdout with a regular expression; it is deleted. `ModuleScan` calls
+  `Plan.decide` and the Release tab calls `Release.run`, both through `com.botmaker.cli.release` — the same
+  library `botmaker release` and the release workflow call.
+
+  **The rule did not change; it got stricter.** *Never reimplement a decision the release owns* was kept
+  before by putting the decisions out of reach, behind a pipe, at the cost of a parser that could mis-read a
+  line the script reworded and a subprocess per scan. It is kept now by there being one implementation that
+  every caller reaches. The typed `Plan.Decision` replaces a `Verdict` parsed from text, so a module's
+  version is a `Version` rather than a captured group.
+
+  One thing the Modules tab now says less: it no longer reports gate verdicts. The gates belong to a release
+  rather than to a scan and they cost Maven; the Release tab runs them on demand.
+
+- **`ReleaseSpec` spells `botmaker release …`, not `./release.sh …`.** The line an operator copies when the
+  window cannot finish has to reach the same code the button does — two implementations is exactly what the
+  fallback used to be. `--execute` is the caller's argument rather than a field, so the preview line and the
+  release line are spelled by one method and differ by that word.
 
 - **The contents API has one caller instead of two.** `Queue` read an entry file at a pull request's head
   and decoded the base64 itself; `Catalog` needs the same bytes on `main`, one ref apart. Both now go

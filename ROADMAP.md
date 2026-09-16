@@ -8,6 +8,63 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — the window cuts the release, and stops parsing stdout to do it
+
+**Done**
+
+- **`umbrella/ReleaseRun`** — one release, previewed or cut, through `com.botmaker.cli.release.Release.run`.
+  It builds a `Runner` and a place to put the lines and decides nothing. A preview and a release are the
+  same call with a different `Runner`, which is the property a shelling window could not have: the plan on
+  screen was produced by the code that will do the work. In-process, because `botmaker-cli`'s main artifact
+  is already on this application's classpath and a subprocess would put the output back behind a pipe.
+  Every failure is a **value** — a `ReleaseRefusal` and any other `RuntimeException` become `error()` — so
+  nothing escapes into a `CompletableFuture` and reaches the operator as `Preview failed: null`.
+
+- **`umbrella/ReleasePlan` is deleted**, with its test. It read module verdicts out of
+  `./release.sh --all --dry-run`'s stdout with a regular expression. `ModuleScan` calls `Plan.decide`;
+  `ModuleRow` holds an `Optional<Plan.Decision>`; `ReleaseTab` reads `Plan.decisions()`. The rule *never
+  reimplement a decision the release owns* did not change — it got stricter. It was kept before by putting
+  the decisions **out of reach**; it is kept now by there being one implementation that every caller
+  reaches.
+
+- **`umbrella/ReleaseSpec` rewritten.** `Map<Module, String>` rather than `Map<String, String>`;
+  `requested()` hands `Plan.decide` its request through the library's own `Requested`, so the rule that an
+  explicit module beats `--all` is not spelled here; `command(boolean execute)` spells `botmaker release …`
+  rather than `./release.sh …`, because the line an operator copies has to reach the same code the button
+  does. **`--dry-run` is gone from this module's vocabulary entirely** — it was appended to every command
+  line with no way to leave it off, and that was the whole of the safety story while the window shelled.
+
+- **`ui/ReleaseTab` — Execute, and the three things guarding it.** Armed by comparing `ReleaseSpec` values
+  against the spec of the last clean preview, not by setting a boolean: a boolean stays true after the
+  operator ticks another module, which is exactly the case worth refusing. A confirmation listing every
+  module and version about to be tagged, whose own button stays disabled until `release` is typed. And a
+  release arms nothing afterwards. Output streams line by line into the pane as the run produces it.
+
+- **`.danger` in `dashboard.css`** — outlined rather than filled, because the button spends most of its
+  life disabled and a filled button at half opacity reads as broken rather than as waiting.
+
+- **Tests**: `ReleaseRunTest` (a directory that is not a checkout is reported rather than thrown; the
+  stream and the kept text are one transcript; a preview writes nothing into the checkout) and
+  `ReleaseSpecTest` rewritten around the new shape — including that two specs are equal exactly when they
+  would release the same thing, which is what arms the button. 74 tests, headless.
+
+**Deferred / next**
+
+- **`release.sh` and `.github/workflows/release.yml` still have their own implementation.** Thinning them
+  to wrappers over `botmaker release … --execute` is the next step and is deliberately not taken in the
+  same pass: while both exist, the port's preview can still be diffed against the script's, which is the
+  check that cannot be run once the script is gone.
+- **The Releases tab still shells** — re-poll runs `./release.sh --status <file>`. `ReleaseStatus.repoll`
+  is in the library and the swap is small; it was left out of this pass to keep one thing changing at a
+  time.
+- **Nothing here has cut a real release yet.** The execute path is exercised by no test — a test that
+  pushed a tag would be a test that cannot be re-run — so the first use is a watched one.
+- **The Modules tab says less than it did**: it no longer reports gate verdicts, because the gates belong
+  to a release rather than to a scan and cost Maven. If that turns out to be missed, the place for them is
+  a button rather than the scan.
+
+---
+
 ## 2026-09-16 — the Catalog tab: what is published, which the queue cannot say
 
 **Done**

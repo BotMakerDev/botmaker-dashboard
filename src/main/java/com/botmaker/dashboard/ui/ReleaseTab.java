@@ -1,8 +1,10 @@
 package com.botmaker.dashboard.ui;
 
 import com.botmaker.cli.release.Level;
+import com.botmaker.cli.release.Module;
+import com.botmaker.cli.release.Plan;
 import com.botmaker.cli.release.Version;
-import com.botmaker.dashboard.umbrella.ReleasePlan;
+import com.botmaker.dashboard.umbrella.ReleaseRun;
 import com.botmaker.dashboard.umbrella.ReleaseSpec;
 import com.botmaker.dashboard.umbrella.VersionTargets;
 import javafx.application.Platform;
@@ -17,9 +19,13 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
@@ -44,30 +50,38 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The Release tab: what {@code release.sh} would do for a given set of flags, and the line to type to make
- * it do it.
+ * The Release tab: what a release would do for a given set of flags, and — since 2026-09-16 — the button
+ * that makes it do it.
  *
- * <p><b>There is no execute button, and its absence is the design rather than an omission.</b> A tag is
- * permanent and no exit code recalls one, so the terminal stays the only place a release is cut until Part C
- * of the plan makes the decision typed code that this window and the script's other two callers share.
- * {@link ReleaseSpec#command()} appends {@code --dry-run} unconditionally, so the rule is enforced by the
- * only class that can build the command rather than remembered at each button.
+ * <p><b>There was no execute button until then, and its arrival is not a relaxation of the rule.</b> The
+ * rule is that the decisions have exactly one implementation; the old shape kept that by shelling to
+ * {@code release.sh} with {@code --dry-run} welded on, which kept the decisions in one place by keeping
+ * them out of reach. Both buttons now call {@link ReleaseRun#go}, which calls
+ * {@code com.botmaker.cli.release.Release} — the same library {@code botmaker release} and the release
+ * workflow call. <b>Preview and Execute differ by one argument</b>, the {@code Runner}, which is exactly
+ * the property that makes a preview worth trusting: the text on screen was produced by the code that will
+ * do the work.
  *
- * <p><b>What it hands back is the command line.</b> The preview underneath is that exact line's own output —
- * the decided version per module, the skips and their reasons, the forcing, the tag order and the gate
- * verdicts, none of which is re-rendered here. A parsed table would show strictly less than the script
- * already prints, and the two would have to be kept in step.
+ * <p><b>What guards it is arming, not a dialog alone.</b> Execute is dead until a preview has run <i>in this
+ * session, with these exact flags</i> and returned no refusal; changing any flag disarms it, because the
+ * plan on screen then describes a release nobody previewed. Then a confirmation that lists every module and
+ * version about to be tagged and will not enable its own button until the word is typed. A tag is permanent
+ * and no exit code recalls one — every guard here is about the gap between what was read and what is run.
+ *
+ * <p><b>The output pane is the run, streamed.</b> Not a parsed table: the decided version per module, the
+ * skips and their reasons, the forcing edges, the tag order, the gate verdicts and — during a real run —
+ * each command as it goes. A table would show strictly less than the library already prints, and the two
+ * would have to be kept in step.
  *
  * <p><b>The one number this tab computes is the one it must not guess.</b> "Would cut" is
- * {@code com.botmaker.cli.release} — {@code release.sh}'s own {@code latest_version} and
- * {@code resolve_version}, ported into {@code botmaker-cli}'s library artifact — applied to that module's
- * newest tag. That is not a weakening of the rule above but the strict form of it: a level is meaningless
- * until it is resolved, and the alternative to calling the owner is either a second implementation or an
- * operator picking {@code minor} without being told what {@code minor} means for that module today.
+ * {@code com.botmaker.cli.release}'s own {@code latest_version} and {@code resolve_version} applied to that
+ * module's newest tag — a level is meaningless until it is resolved, and the alternative to calling the
+ * owner is either a second implementation or an operator picking {@code minor} without being told what
+ * {@code minor} means for that module today.
  *
- * <p><b>The module rows come from the script's own decide pass</b> ({@link ReleasePlan#verdicts()}), which is
- * why they are empty until the first preview runs. This module keeps no list of which modules are releasable
- * — {@code botmaker-gallery}, {@code botmaker-plugin-registry} and this repository are not, and the way to
+ * <p><b>The module rows come from the decide pass itself</b> ({@link Plan#decisions()}), which is why they
+ * are empty until the first preview runs. This module keeps no list of which modules are releasable —
+ * {@code botmaker-gallery}, {@code botmaker-plugin-registry} and this repository are not, and the way to
  * know that is that the pass never names them.
  */
 public final class ReleaseTab extends BorderPane {
@@ -142,6 +156,18 @@ public final class ReleaseTab extends BorderPane {
         }
     }
 
+    /**
+     * What has to be typed before the confirmation's own button works.
+     *
+     * <p>Lowercase and unremarkable on purpose: the barrier is having to read the list and type at all, not
+     * having to shout. Compare the Catalog tab's Unpublish, which asks for the entry id — there the word
+     * names the one thing being removed, and here the one thing is the release itself.
+     */
+    private static final String CONFIRM_WORD = "release";
+
+    /** The confirmation's affirmative, named for what it does rather than "OK". */
+    private static final ButtonType CUT = new ButtonType("Cut the release", ButtonBar.ButtonData.OK_DONE);
+
     private final ObservableList<Row> rows = FXCollections.observableArrayList();
     private final TableView<Row> table = new TableView<>(rows);
 
@@ -152,21 +178,38 @@ public final class ReleaseTab extends BorderPane {
     private final CheckBox noWaitBox = new CheckBox("--no-wait-jitpack");
 
     private final Button preview = new Button("Preview");
+    private final Button execute = new Button("Execute…");
     private final Label status = new Label();
     private final TextField commandLine = new TextField();
     private final TextArea output = new TextArea();
 
     private Path umbrella;
 
+    /**
+     * The flags of the last preview that returned no refusal, or {@code null}.
+     *
+     * <p><b>This is the arming, and it is a value comparison rather than a flag.</b> A boolean would stay
+     * true after the operator ticked another module, which is precisely the case worth refusing: the plan on
+     * screen would then describe a release nobody previewed. {@link ReleaseSpec} is a record, so
+     * {@code equals} answers "the same flags" without anything here deciding what same means.
+     */
+    private ReleaseSpec armed;
+
+    /** The plan that arming was granted for — what the confirmation lists, so it cannot list a newer one. */
+    private Plan armedPlan;
+
     public ReleaseTab(Path umbrella) {
         this.umbrella = umbrella;
 
         status.getStyleClass().add("status-line");
-        preview.setOnAction(e -> preview());
+        preview.setOnAction(e -> run(false));
+        execute.getStyleClass().add("danger");
+        execute.setDisable(true);
+        execute.setOnAction(e -> confirmThenExecute());
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, preview, status, spacer);
+        HBox bar = new HBox(10, preview, execute, status, spacer);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -183,7 +226,7 @@ public final class ReleaseTab extends BorderPane {
 
         say(umbrella == null
                 ? "No umbrella checkout chosen — pick one in the top bar."
-                : "Press Preview. Nothing here can push a tag: every run is --dry-run.");
+                : "Press Preview. Execute stays dead until a preview of these exact flags comes back clean.");
         refreshCommandLine();
     }
 
@@ -192,6 +235,9 @@ public final class ReleaseTab extends BorderPane {
         this.umbrella = umbrella;
         rows.clear();
         output.clear();
+        // Arming is about one checkout as much as about one set of flags: the same flags decide different
+        // versions in a checkout whose tags are somewhere else.
+        disarm();
         say("Press Preview to read " + umbrella + ".");
         refreshCommandLine();
     }
@@ -227,13 +273,14 @@ public final class ReleaseTab extends BorderPane {
         commandLine.setEditable(false);
         commandLine.getStyleClass().add("command-line");
 
-        Label what = new Label("Run this in a terminal to cut it for real — without --dry-run.");
+        Label what = new Label("The same run, from a terminal — add --execute to cut it there instead. "
+                + "Both reach com.botmaker.cli.release; Execute above differs only in its Runner.");
         what.getStyleClass().add("placeholder-body");
         what.setWrapText(true);
 
         output.setEditable(false);
         output.getStyleClass().add("output-text");
-        output.setPromptText("release.sh's own output, whole.");
+        output.setPromptText("The run's own output, whole, as it is produced.");
         VBox.setVgrow(output, Priority.ALWAYS);
 
         VBox box = new VBox(8, commandLine, what, output);
@@ -373,11 +420,25 @@ public final class ReleaseTab extends BorderPane {
         }
     }
 
-    /** What the flags currently spell, shown whether or not anything has been previewed yet. */
+    /**
+     * What the flags currently spell, and what that does to the two buttons.
+     *
+     * <p>Called from every control, which is what makes arming safe: the instant a tick or a keystroke
+     * makes the spec differ from the armed one, Execute goes dead again.
+     */
     private void refreshCommandLine() {
         ReleaseSpec spec = spec();
         commandLine.setText(spec.empty() ? "" : spec.commandLine());
-        preview.setDisable(umbrella == null || spec.empty() || !allSpecsWellFormed());
+        boolean runnable = umbrella != null && !spec.empty() && allSpecsWellFormed();
+        preview.setDisable(!runnable);
+        execute.setDisable(!runnable || !spec.equals(armed));
+    }
+
+    /** Forgets the arming. Every path that changes what a release would do calls it. */
+    private void disarm() {
+        armed = null;
+        armedPlan = null;
+        execute.setDisable(true);
     }
 
     private boolean allSpecsWellFormed() {
@@ -385,10 +446,12 @@ public final class ReleaseTab extends BorderPane {
     }
 
     private ReleaseSpec spec() {
-        Map<String, String> picked = new LinkedHashMap<>();
+        Map<Module, String> picked = new LinkedHashMap<>();
         for (Row row : rows) {
+            // A row the decide pass named is a module the library knows, so byDirectory always answers here
+            // — and where it would not, dropping the row is right: nothing releases a directory with no flag.
             if (row.selectedProperty().get()) {
-                picked.put(row.getModule(), row.spec());
+                Module.byDirectory(row.getModule()).ifPresent(module -> picked.put(module, row.spec()));
             }
         }
         Optional<String> all = allBox.isSelected()
@@ -398,81 +461,160 @@ public final class ReleaseTab extends BorderPane {
     }
 
     /**
-     * Runs the preview off the FX thread.
+     * The confirmation, and then the release.
      *
-     * <p>Minutes, not seconds: the decide pass shells to git in ten repositories and runs the SDK's pointer
-     * test through Maven. The button is disabled meanwhile and the status line says what is running, because
-     * a window that simply froze for that would read as broken.
+     * <p><b>It lists {@link #armedPlan}, not a plan computed now.</b> Listing a fresh one would let the
+     * dialog describe something the operator has not read, which is the entire failure this gate exists to
+     * prevent — and the flags cannot have changed, because that disarms the button that opened it.
+     *
+     * <p>The word has to be typed rather than a button pressed, for the reason Unpublish asks for an entry
+     * id: a dialog that is one click from done is a dialog people dismiss. What it costs is a few seconds;
+     * what it buys is that nobody tags eleven repositories by muscle memory.
      */
-    private void preview() {
+    private void confirmThenExecute() {
+        if (umbrella == null || armed == null || armedPlan == null) {
+            return;
+        }
+        List<String> tags = armedPlan.releasing().entrySet().stream()
+                .map(cut -> "    " + cut.getKey().directory() + "  " + cut.getValue().tag())
+                .toList();
+        if (tags.isEmpty()) {
+            say("The preview decided to release nothing — there is no tag to cut.");
+            return;
+        }
+
+        TextArea list = new TextArea(String.join("\n", tags));
+        list.setEditable(false);
+        list.getStyleClass().add("output-text");
+        list.setPrefRowCount(Math.min(12, tags.size() + 1));
+
+        Label warning = new Label(tags.size() + " tag(s) will be pushed, in tag order, and a pushed tag "
+                + "cannot be edited or recalled. Each module's CI publishes its GitHub Release from the "
+                + "tag, and JitPack caches its build result per tag — a bad one is repaired only by cutting "
+                + "another.\n\nType " + CONFIRM_WORD + " to enable the button.");
+        warning.setWrapText(true);
+
+        TextField typed = new TextField();
+        typed.setPromptText(CONFIRM_WORD);
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Cut this release");
+        dialog.setHeaderText(armed.executeCommandLine());
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL, CUT);
+        VBox body = new VBox(10, list, warning, typed);
+        body.setPadding(new Insets(4));
+        dialog.getDialogPane().setContent(body);
+
+        Node cut = dialog.getDialogPane().lookupButton(CUT);
+        cut.setDisable(true);
+        typed.textProperty().addListener((o, was, is) -> cut.setDisable(!CONFIRM_WORD.equals(is.strip())));
+
+        if (dialog.showAndWait().filter(CUT::equals).isPresent()) {
+            run(true);
+        }
+    }
+
+    /**
+     * Runs it off the FX thread, streaming each line into the pane as it arrives.
+     *
+     * <p>Minutes, not seconds, either way: the decide pass shells to git in eleven repositories, the gates
+     * run Maven, and a real run waits on each JitPack build between tags. Both buttons are disabled
+     * meanwhile and the status line says what is running, because a window that simply froze for that would
+     * read as broken — and during a real release, a window that looked frozen is one somebody force-quits
+     * halfway through a tag chain.
+     */
+    private void run(boolean execute) {
         if (umbrella == null) {
             return;
         }
         Path root = umbrella;
         ReleaseSpec spec = spec();
         preview.setDisable(true);
-        say("Running " + spec.commandLine() + " …");
+        this.execute.setDisable(true);
+        output.clear();
+        say((execute ? "Cutting " : "Running ")
+                + (execute ? spec.executeCommandLine() : spec.commandLine()) + " …");
+
         CompletableFuture
-                .supplyAsync(() -> spec.preview(root))
-                .whenComplete((plan, error) -> Platform.runLater(() -> {
+                .supplyAsync(() -> ReleaseRun.go(root, spec, execute,
+                        line -> Platform.runLater(() -> output.appendText(line + "\n"))))
+                .whenComplete((run, error) -> Platform.runLater(() -> {
                     preview.setDisable(false);
                     if (error != null) {
-                        say("Preview failed: " + error.getMessage());
+                        // Not a refusal — ReleaseRun turns those into a value. This is the thread dying.
+                        disarm();
+                        say((execute ? "The release" : "The preview") + " failed: " + error.getMessage());
                         return;
                     }
-                    show(plan);
+                    show(spec, run);
                 }));
     }
 
     /**
-     * Puts the run's whole output on screen and folds its verdicts back into the rows.
+     * Puts the run's verdicts back into the rows and decides whether Execute may be armed.
      *
-     * <p>A non-zero exit is reported and the verdicts are still shown, because the gates run <i>after</i> the
-     * decide pass: "the plan is complete and a gate then refused it" is the ordinary shape of a dry run over
-     * a constellation that is not release-ready, and blanking the tab would hide the plan the operator asked
+     * <p>A refusal is reported and the plan is still shown, because the gates run <i>after</i> the decide
+     * pass: "the plan is complete and a gate then refused it" is the ordinary shape of a preview over a
+     * constellation that is not release-ready, and blanking the tab would hide the plan the operator asked
      * for along with the reason it was refused.
+     *
+     * <p><b>A release never arms anything.</b> Whatever a real run leaves behind — tags cut, a gate refused
+     * halfway, a branch unpushed — the next thing to do is look, and the way to get the button back is to
+     * preview again against the checkout as it now is.
      */
-    private void show(ReleasePlan plan) {
-        output.setText(plan.raw());
-        mergeRows(plan);
-        refreshCommandLine();
+    private void show(ReleaseSpec spec, ReleaseRun run) {
+        run.plan().ifPresent(this::mergeRows);
+        disarm();
 
-        long releasing = plan.verdicts().values().stream().filter(ReleasePlan.Verdict::releasing).count();
-        if (!plan.decided()) {
-            say("release.sh printed no plan (exit " + plan.exit() + ") — its output is on the right.");
-        } else if (plan.exit() != 0) {
-            say(releasing + " of " + plan.verdicts().size() + " would release · exited " + plan.exit()
-                    + " on a gate after deciding.");
+        if (!run.decided()) {
+            say("The decide pass refused: " + run.error().orElse("no reason given"));
+        } else if (run.refused()) {
+            say(run.refusals().size() + " gate(s) refused — nothing was tagged. Their words are on the "
+                    + "right.");
+        } else if (run.executed()) {
+            say(run.pushesOk()
+                    ? "Released. Re-poll the log from the Releases tab in a few minutes."
+                    : "Released, but a branch was not pushed — see the lines above. Every tag is out.");
         } else {
-            say(releasing + " of " + plan.verdicts().size() + " would release.");
+            Plan plan = run.plan().orElseThrow();
+            armed = spec;
+            armedPlan = plan;
+            say(plan.releasing().size() + " of " + plan.decisions().size()
+                    + " would release · Execute is armed for these flags.");
         }
+        refreshCommandLine();
     }
 
     /**
      * Rebuilds the rows from what the pass named, keeping whatever the operator had already ticked or typed.
      *
      * <p>A module the pass stops naming is dropped rather than kept with a stale verdict — the list is the
-     * script's answer to <i>what is releasable</i>, and holding a row it no longer names would be this module
-     * keeping the list after all.
+     * library's answer to <i>what is releasable</i>, and holding a row it no longer names would be this
+     * module keeping the list after all.
      */
-    private void mergeRows(ReleasePlan plan) {
+    private void mergeRows(Plan plan) {
         Map<String, Row> existing = new LinkedHashMap<>();
         rows.forEach(r -> existing.put(r.getModule(), r));
 
         var rebuilt = FXCollections.<Row>observableArrayList();
-        plan.verdicts().forEach((module, verdict) -> {
-            Row row = existing.get(module);
+        for (Plan.Decision decision : plan.decisions()) {
+            String directory = decision.module().directory();
+            Row row = existing.get(directory);
             if (row == null) {
-                row = new Row(module);
-                // The command line is what this tab hands back, so it has to follow every tick rather than
-                // being rebuilt only when a preview runs. The level and the typed version are followed by
-                // SpecCell, which is where they are changed.
+                row = new Row(directory);
+                // The command line is what this tab hands back, and a tick changes what a release would do
+                // — so it has to follow every tick rather than being rebuilt only when a preview runs. The
+                // level and the typed version are followed by SpecCell, which is where they are changed.
+                // Not a disarm: arming is a value comparison, so ticking a module takes Execute dead and
+                // un-ticking it puts the button back for the plan that was actually read.
                 row.selectedProperty().addListener((o, was, is) -> refreshCommandLine());
                 row.retarget();
             }
-            row.verdict = verdict.text();
+            row.verdict = decision.releasing()
+                    ? "releasing v" + decision.version()
+                    : decision.verdict().skipReason();
             rebuilt.add(row);
-        });
+        }
         rows.setAll(rebuilt);
         loadLatest();
     }

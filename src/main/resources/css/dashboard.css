@@ -80,6 +80,23 @@
     -fx-cursor: default;
 }
 
+/*
+ * The one button in this window that pushes a tag.
+ *
+ * It is marked rather than merely labelled because it is the only irreversible thing here: every other
+ * write opens a pull request somebody can close. Deliberately not red-filled — it spends most of its life
+ * disabled, and a filled button at half opacity reads as broken rather than as waiting.
+ */
+.button.danger {
+    -fx-border-color: -bm-warn;
+    -fx-text-fill: -bm-warn;
+}
+
+.button.danger:hover {
+    -fx-border-color: -bm-warn;
+    -fx-background-color: derive(-bm-warn, -70%);
+}
+
 /* ── the admin badge ─────────────────────────────────────────────────────── */
 
 /*

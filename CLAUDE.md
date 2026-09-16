@@ -23,18 +23,36 @@ happen to hold: the CLI is a plugin host and pins both, this window hosts nothin
 
 ## The rule the whole module hangs on
 
-**Never reimplement a decision `release.sh` owns.** Which modules a release cuts, what version each gets,
-what forces what, the tag order, and every gate — one implementation, and this app is not it. Shell to the
-script and read its output: `--dry-run` for a plan, `--status <file>` for a re-poll.
+**Never reimplement a decision the release owns.** Which modules a release cuts, what version each gets,
+what forces what, the tag order, and every gate — one implementation, and this app is not it.
 
-The reason is the one the script's own header records for `--ci`: a second implementation diverges on the
+The reason is the one `release.sh`'s own header records for `--ci`: a second implementation diverges on the
 first rule added, and the divergence is discovered as a **bad tag**, which cannot be edited. So the moment a
-computation appears here that the script could have answered, that is the bug — not a shortcut.
+computation appears here that the owner could have answered, that is the bug — not a shortcut.
 
-**Part C of the plan replaces the implementation without weakening the rule.** `release.sh` becomes
-`com.botmaker.cli.release`, a library the terminal, `release.yml` and this app all call; this app then swaps
-parsed stdout for typed objects. Until that exists, **this window visualises and does not execute** — no
-tag is pushed from a GUI.
+**Since 2026-09-16 that owner is `com.botmaker.cli.release` and this app calls it.** It shelled to
+`./release.sh --all --dry-run` and read module verdicts back out of its stdout until then — which kept the
+rule by keeping the decisions *out of reach*, behind a pipe and a regular expression, and cost a parser that
+could mis-read a line the script reworded. The library has three callers now (`botmaker release`,
+`.github/workflows/release.yml`, this window) and the rule is the strict form of the same sentence: **one
+implementation, and every caller reaches it.** `umbrella/ReleasePlan` is deleted; `ModuleScan` calls
+`Plan.decide` and `ReleaseTab` calls `Release.run` through `umbrella/ReleaseRun`.
+
+**So a tag *is* pushed from this GUI now, and the paragraph that said otherwise is gone.** What replaced it
+is not a weaker rule but a different guard, and it is worth stating where the old one was:
+
+- **A preview and a release are one call with a different `Runner`.** That is `Release`'s own design and it
+  is the property a shelling window could not have: the plan on screen was produced by the code that will do
+  the work, so it cannot drift from it.
+- **Execute is armed by value, not by a flag.** It is dead until a preview has run *in this session, with
+  these exact flags, against this checkout* and returned no refusal. `ReleaseSpec` is a record, so
+  `equals` answers "the same flags" and a tick or a keystroke takes the button dead again. A boolean would
+  stay true after the operator changed something, which is the one case worth refusing.
+- **Then a confirmation that lists every module and version about to be tagged**, and will not enable its
+  own button until `release` is typed. Same reasoning as the Catalog tab's Unpublish: a dialog one click
+  from done is a dialog people dismiss.
+- **A release never arms anything.** Whatever it leaves behind, the way to get the button back is to preview
+  again against the checkout as it now is.
 
 **The first piece of that library arrived early, and it is the shape every later one takes.** The Release
 tab's level picker shows what a level resolves to — `1.1.6 → 1.2.0` — and that arrow is `latest_version` and
@@ -187,13 +205,13 @@ com.botmaker.dashboard
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
 │   ├── Proc            one external command, output captured, a timeout that is a result
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
-│   ├── ReleasePlan     release.sh --all --dry-run's decide pass, PARSED and never re-derived
 │   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
 │   ├── Changelog       is there an [Unreleased] section for a release to stamp
 │   ├── ModuleRow       one module as a row
-│   ├── ModuleScan      git per module, then release.sh once, into rows
+│   ├── ModuleScan      git per module, then Plan.decide once, into rows
 │   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
-│   ├── ReleaseSpec     the flags a preview runs with — and the only place --dry-run is appended
+│   ├── ReleaseRun      one release, previewed or cut — the only place here that can push a tag
+│   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes and as two command lines
 │   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
 │   └── Links           the three pages a release can be wrong on (Release, JitPack, Actions)
 └── ui/
@@ -202,22 +220,26 @@ com.botmaker.dashboard
     ├── Browse          open a URL, best-effort, never an error dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
-    ├── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
+    ├── ReleaseTab      flags on the left, the run's whole output on the right, Preview and Execute
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
 ```
 
-**There is no execute button and `--dry-run` is not a checkbox.** `ReleaseSpec.command()` appends it
-unconditionally, so the rule that this window visualises and does not execute is enforced by the only class
-that can build a command rather than remembered at each caller. What the Release tab hands back instead is
-the **command line** — the exact thing to paste into a terminal, with that line's own output under it.
+**`--dry-run` is not a checkbox, and it is not a flag this module can spell at all.** `ReleaseSpec` appended
+it to every command line with no way to leave it off until 2026-09-16, which was the whole of the safety
+story while the window shelled. A preview is a `Runner` now, chosen by `ReleaseRun.go`, so the vocabulary
+has no such word — and the guard has moved to the arming and the confirmation above, where it can say what
+it is refusing and why. `ReleaseSpec` still spells two **command lines**, because the fallback for a window
+that cannot finish must reach the same library the button does: `botmaker release …` and the same plus
+`--execute`.
 
 **A third list this module does not keep: the module flags.** `--plugin-toolkit` is
-`botmaker-plugin-toolkit` without the `botmaker-` prefix, for all ten, so `ReleaseSpec.flagFor` derives it.
-The one thing that looks like re-deciding and is not is `wellFormed` — `x.y.z` or `patch|minor|major` is the
-*grammar of an argument*, which the script states in its own refusal; what a level **resolves to** is a bump
-off that module's latest tag, and it stays the owner's — asked of `com.botmaker.cli.release` through
-`VersionTargets`, never worked out here.
+`botmaker-plugin-toolkit` without the `botmaker-` prefix, for all eleven, and `Module.flag()` derives it in
+the library. The one thing that looks like re-deciding and is not is `wellFormed` — `x.y.z` or
+`patch|minor|major` is the *grammar of an argument*, which the library states in its own refusal; what a
+level **resolves to** is a bump off that module's latest tag, and it stays the owner's — asked of
+`com.botmaker.cli.release` through `VersionTargets`, never worked out here. Which module an explicit flag
+beats `--all` for is `Requested`'s, for the same reason.
 
 **`umbrella/` holds no JavaFX and the split is load-bearing**, not tidiness: it is what lets every rule in
 this module be a pure function over text a test can hand it, so CI needs no display (see *Commands*). A rule
@@ -226,8 +248,8 @@ that arrives in a `ui/` class is a rule that will not be tested.
 **There are two lists this module deliberately does not keep.** Which modules a checkout has is
 `.gitmodules`' answer (`Umbrella.modules`) — a copy here would be short by exactly one module the day an
 eleventh is added, which is the day it matters. And which modules are *releasable* is answered by whether
-`release.sh`'s decide pass names them at all: `botmaker-gallery`, `botmaker-plugin-registry` and this
-repository never appear, and the row says *not released by release.sh* rather than inventing a category.
+the decide pass names them at all: `botmaker-gallery`, `botmaker-plugin-registry` and this
+repository never appear, and the row says *not released by the release* rather than inventing a category.
 
 `src/main/resources/css/dashboard.css` is the whole look, one theme, tokens on `.root`.
 

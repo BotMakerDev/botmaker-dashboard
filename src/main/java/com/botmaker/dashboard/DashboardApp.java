@@ -33,13 +33,17 @@ import java.nio.file.Path;
  * {@link com.botmaker.shared.config.CacheDirs}. Everything it shows about submissions comes from the GitHub
  * API through the account the operator signs in with.
  *
- * <p><b>The rule the whole module hangs on: it never reimplements a decision {@code release.sh} owns.</b>
- * Which modules a release would cut, what version each gets, what forces what, the tag order and every gate
- * have exactly one implementation, and a second one in Java would diverge on the first rule added and be
- * discovered by a bad tag — which cannot be edited. So this app shells to the script and reads its output,
- * and the day a computation appears here that the script could have answered, that is the bug. (Part C of
- * the plan replaces the script with a library without weakening the rule: the single owner becomes Java the
- * script's callers share, not Java this window keeps to itself.)
+ * <p><b>The rule the whole module hangs on: it never reimplements a decision the release owns.</b> Which
+ * modules a release would cut, what version each gets, what forces what, the tag order and every gate have
+ * exactly one implementation, and a second one here would diverge on the first rule added and be discovered
+ * by a bad tag — which cannot be edited. The day a computation appears here that the owner could have
+ * answered, that is the bug.
+ *
+ * <p>Until 2026-09-16 that meant shelling to {@code ./release.sh --dry-run} and reading its stdout, which
+ * kept the rule by keeping the decisions out of reach. The owner is {@code com.botmaker.cli.release} now and
+ * this window <b>calls</b> it — as do {@code botmaker release} and the release workflow — so the rule reads
+ * in its strict form: one implementation, and every caller reaches it. That is also why this window can cut
+ * a release at all; see {@code ui/ReleaseTab} for the arming and the confirmation that guard it.
  *
  * <p>The same applies to the queue: a submission's verdict is the registry CI's check run, which runs
  * {@code RegistryGate} out of {@code botmaker-cli}'s main artifact. This window reads that verdict and

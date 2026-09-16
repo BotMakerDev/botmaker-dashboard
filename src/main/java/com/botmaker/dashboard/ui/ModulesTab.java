@@ -90,7 +90,7 @@ public final class ModulesTab extends BorderPane {
         }
         Path root = umbrella;
         refresh.setDisable(true);
-        status.setText("Reading " + root + " and asking release.sh --all --dry-run…");
+        status.setText("Reading " + root + " and running the decide pass…");
         CompletableFuture
                 .supplyAsync(() -> ModuleScan.scan(root))
                 .whenComplete((scan, error) -> Platform.runLater(() -> {
@@ -102,29 +102,28 @@ public final class ModulesTab extends BorderPane {
                     }
                     rows.setAll(scan.rows());
                     status.setText(summary(scan));
-                    showOutput(scan.plan().raw());
+                    showOutput(scan.output());
                 }));
     }
 
     /**
-     * One line about the run as a whole.
+     * One line about the scan as a whole.
      *
-     * <p>A non-zero exit from {@code release.sh} is reported rather than hidden, and the verdicts are still
-     * shown: the gates run <i>after</i> the decide pass, so "the plan is complete and a gate then refused
-     * it" is the ordinary shape of a dry run over a constellation that is not release-ready. Hovering the
-     * line shows the output — this app's whole job is telling somebody what is wrong.
+     * <p>A refusal is reported rather than hidden, and every row is still shown: the git half of the scan is
+     * complete whatever the decide pass said, so a checkout the pass cannot reason about still lists its
+     * tags, its dirty modules and its stale pins. Hovering the line shows what the pass printed — this app's
+     * whole job is telling somebody what is wrong.
+     *
+     * <p>The gates are not run here at all, which is the one thing this tab now says less than it did. They
+     * belong to a release rather than to a scan, they cost Maven, and the Release tab runs them on demand.
      */
     private String summary(ModuleScan.Scan scan) {
         long releasing = scan.rows().stream().filter(ModuleRow::releasing).count();
         String head = scan.rows().size() + " modules · " + releasing + " would release";
-        if (!scan.plan().decided()) {
-            return head + " · release.sh printed no plan (exit " + scan.plan().exit() + ") — hover for its output";
-        }
-        if (scan.plan().exit() != 0) {
-            return head + " · release.sh exited " + scan.plan().exit()
-                    + " on a gate after deciding — hover for its output";
-        }
-        return head;
+        return scan.decided()
+                ? head
+                : head + " · the decide pass refused: " + scan.error().orElse("no reason given")
+                        + " — hover for its output";
     }
 
     private void buildColumns() {

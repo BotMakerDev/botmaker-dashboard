@@ -1,5 +1,10 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.Module;
+import com.botmaker.cli.release.Plan;
+import com.botmaker.cli.release.ReleaseRefusal;
+import com.botmaker.cli.release.Requested;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,9 +21,16 @@ import java.util.Optional;
  *
  * <p>The order of the work is the interesting part. Git is asked first, in every module, because those
  * answers are local, fast and needed twice — once for the module's own tag and again as the <i>upstream</i>
- * tag a sibling's {@code .deps.env} pin is judged against. {@code release.sh} is asked once, for the whole
- * constellation, because its decide pass covers every module in a single run and ten separate runs would be
- * ten times the work for the same answer.
+ * tag a sibling's {@code .deps.env} pin is judged against. The decide pass runs once, for the whole
+ * constellation, because it covers every module in a single call and ten separate calls would be ten times
+ * the work for the same answer.
+ *
+ * <p><b>The decide pass is {@link Plan#decide}, not {@code ./release.sh --all --dry-run}.</b> It was the
+ * script until 2026-09-16, with {@code ReleasePlan} reading module verdicts back out of its stdout — which
+ * kept the rule <i>never reimplement a decision the release owns</i> by keeping the decision out of reach,
+ * behind a pipe and a regular expression. Calling the library keeps the same rule in its strict form: one
+ * implementation, and every caller reaches it. What goes with the script is a parser that could
+ * mis-read a line the script reworded, and a subprocess per scan.
  *
  * <p>Nothing here runs on the FX thread.
  */
@@ -26,8 +38,20 @@ public final class ModuleScan {
 
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(20);
 
-    /** A whole scan: the rows, and the {@code release.sh} run they quote. */
-    public record Scan(List<ModuleRow> rows, ReleasePlan plan) {
+    /**
+     * A whole scan: the rows, the decide pass they quote, and its output as text.
+     *
+     * @param plan   empty when the pass refused before deciding — an unreadable checkout, a missing
+     *               {@code origin}. An empty plan and a plan that decided to release nothing are different
+     *               things and the tab says which
+     * @param output what the pass would have printed, which is what the Modules tab shows on demand
+     * @param error  the refusal's own sentence, when there was one
+     */
+    public record Scan(List<ModuleRow> rows, Optional<Plan> plan, String output, Optional<String> error) {
+
+        public boolean decided() {
+            return plan.isPresent();
+        }
     }
 
     private ModuleScan() {
@@ -50,8 +74,21 @@ public final class ModuleScan {
         Map<String, String> latestTags = new LinkedHashMap<>();
         tags.forEach((module, tag) -> tag.ifPresent(t -> latestTags.put(module, t)));
 
-        // Pass two: the script, once.
-        ReleasePlan plan = ReleasePlan.ask(umbrella);
+        // Pass two: the decide pass, once, for every module at the level a bare flag means.
+        Optional<Plan> plan;
+        String output;
+        Optional<String> error;
+        try {
+            Plan decided = Plan.decide(umbrella, Requested.of(Optional.of(""), Map.of()), false);
+            plan = Optional.of(decided);
+            output = String.join("\n", concat("Release plan:", decided.planLines(),
+                    "Deciding what to release:", decided.decisionLines()));
+            error = Optional.empty();
+        } catch (ReleaseRefusal refused) {
+            plan = Optional.empty();
+            output = "error: " + refused.getMessage();
+            error = Optional.of(refused.getMessage());
+        }
 
         List<ModuleRow> rows = new ArrayList<>();
         for (String module : modules) {
@@ -65,9 +102,33 @@ public final class ModuleScan {
                             : ModuleRow.ChangelogState.NONE)
                     .orElse(ModuleRow.ChangelogState.ABSENT);
             rows.add(new ModuleRow(module, tags.get(module), ahead.get(module), dirty.get(module),
-                    plan.forModule(module), pins, changelog));
+                    decisionFor(plan, module), pins, changelog));
         }
-        return new Scan(List.copyOf(rows), plan);
+        return new Scan(List.copyOf(rows), plan, output, error);
+    }
+
+    /**
+     * What the pass said about one submodule directory, or empty.
+     *
+     * <p>Empty covers two cases the Modules tab keeps apart from each other only by what else it shows:
+     * the pass refused before deciding anything, and the pass ran and never named this directory — which is
+     * how {@code botmaker-gallery}, {@code botmaker-plugin-registry} and this repository are told apart from
+     * the eleven, with no list kept here.
+     */
+    private static Optional<Plan.Decision> decisionFor(Optional<Plan> plan, String directory) {
+        return plan.flatMap(decided -> Module.byDirectory(directory)
+                .flatMap(module -> decided.decisions().stream()
+                        .filter(decision -> decision.module() == module)
+                        .findFirst()));
+    }
+
+    private static List<String> concat(String head, List<String> first, String mid, List<String> second) {
+        List<String> out = new ArrayList<>();
+        out.add(head);
+        out.addAll(first);
+        out.add(mid);
+        out.addAll(second);
+        return out;
     }
 
     /**
