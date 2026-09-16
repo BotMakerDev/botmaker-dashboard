@@ -14,10 +14,29 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The Catalog tab — what is published**, which the Queue tab cannot answer. Queue lists open pull
+  requests, and that is zero most days; this lists every **merged** entry on both data repositories:
+  `plugins/<plugin-id>.json` from the registry and `bots/<owner>-<repo>.json` from the gallery, with the
+  entries carrying the reserved `template` tag shown as templates rather than bots. One row per entry with
+  its identity, name, tags and description; the whole file as fields below, through the same `EntryFields`
+  the Queue tab uses; and a status line counting plugins, bots, templates and — separately — entries that
+  could not be read.
+
+  Three things about it are deliberate. **It reads github.com, not the checked-out submodule**: a merged
+  entry exists on `main`, and the umbrella's recorded pointer trails it every time either repository's CI
+  commits a regenerated index, so a stale catalog would be indistinguishable from a current one. **It reads
+  the entry files and not the generated `index.json`**, because the index is what a job last produced and
+  the files are what the repository holds. And **an entry that will not parse is a row, not a dropped one**
+  — it is on `main`, so somebody merged it, and it is exactly the entry an operator has to see.
+
+  The typed halves are `botmaker-cli`'s own records (`RegistryEntry`, `GalleryEntry`) read through
+  `Registry.mapper()`, which ignores unknown keys — so a field added to the entry shape tomorrow lists
+  today, and still shows up in the field view beside it.
+
 - **The app shell.** One window: the umbrella-checkout picker (remembered under `CacheDirs`, refused unless
   the directory holds both `release.sh` and `.gitmodules`), GitHub sign-in through the shared OAuth device
-  flow, the admin badge, and the four tabs — Modules, Releases, Release, Queue — each stating what it will
-  hold. Nothing reads a release or a pull request yet.
+  flow, the admin badge, and the tabs — Modules, Releases, Release, Queue, Catalog — each stating what it
+  will hold. Nothing reads a release or a pull request yet.
 - **The Modules tab.** One row per submodule in the checkout: its newest tag and how far HEAD has moved
   past it, whether the working tree is dirty, **what `./release.sh --all --dry-run` decided about that
   movement — quoted in the script's own words, never re-derived here** — whether `CHANGELOG.md` has an
@@ -55,3 +74,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **`Admin`** — `permissions.push` on `botmaker-plugin-registry`, read from the GitHub API for the
   signed-in account. Every failure (offline, not signed in, a token whose scope was narrowed, a repository
   the account cannot see) is read-only with a reason rather than an error.
+
+### Changed
+
+- **The contents API has one caller instead of two.** `Queue` read an entry file at a pull request's head
+  and decoded the base64 itself; `Catalog` needs the same bytes on `main`, one ref apart. Both now go
+  through `Contents`, which also owns the "reads work signed out, writes do not" token rule that had been
+  written twice.

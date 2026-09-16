@@ -8,6 +8,58 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — the Catalog tab: what is published, which the queue cannot say
+
+**Done**
+
+- **`github/Catalog`** — every **merged** entry on both data repositories, as one list. `Kind.PLUGIN` reads
+  `plugins/*.json` from `botmaker-plugin-registry` and `Kind.BOT` reads `bots/*.json` from
+  `botmaker-gallery`; a gallery entry carrying `GalleryEntry.TEMPLATE_TAG` reads as a **Template** rather
+  than a Bot. One request per repository for the directory listing, then one per entry for its bytes — the
+  same `2n+2` shape `Queue.open` has, and small by construction.
+- **`ui/CatalogTab`** — the rows, the entry as fields through the existing `EntryFields`, and a status line
+  counting plugins, bots, templates and unreadable entries separately. Fifth tab, after Queue.
+- **`github/Contents`** — the contents API and its base64, extracted from `Queue`. Both readers want the
+  same bytes one ref apart: `Queue` at a pull request's head, because the file does not exist on `main`
+  yet; `Catalog` on `main`, because the point is that it was merged. The token rule ("reads work signed
+  out, writes do not") had been written twice and is now written once.
+- **`CatalogTest`** — twelve cases over the reading, with no network and no JavaFX, which is the module's
+  own rule: everything with a rule in it is a pure function over one entry file's text.
+
+**Why it exists at all.** The Queue tab is what is *waiting* — open pull requests, which is zero most days.
+The operator asking "what can somebody install" got an empty window and no way to tell that from a broken
+one. The registry holds one entry and the gallery five, two of them templates; none of it was visible.
+
+**Three decisions worth not re-litigating.**
+
+1. **It reads github.com, never the checked-out submodule.** The tabs beside it read the umbrella checkout
+   because a release only exists in a working copy. A merged entry exists on `main`, and the umbrella's
+   recorded pointer trails it whenever either repository's CI commits a regenerated index — both pointers
+   were behind on the day this was written, which is how the hazard was noticed rather than guessed. A
+   stale catalog looks exactly like a current one.
+2. **It reads the entry files, not the generated `index.json`.** The index is derived by a job; the files
+   are what the repository holds, and one file per entry is what makes two same-day submissions
+   conflict-free and makes git itself refuse a second claim on an id.
+3. **An entry that will not parse is a row, never a dropped one.** It is on `main`, so somebody merged it
+   and the gate either passed it or never ran — which makes it precisely the entry an operator has to see.
+   It keeps its filename as its identity and its raw text still reaches the field view.
+
+**Nothing here judges an entry.** Everything listed is merged, and what admitted it was `RegistryGate`'s
+check run on the pull request that added it. The typed halves are `botmaker-cli`'s own `RegistryEntry` and
+`GalleryEntry`, read through `Registry.mapper()` (unknown keys ignored), so a field added to the entry shape
+tomorrow lists today instead of reading as a corrupt file.
+
+**Deferred / next**
+
+- **Edit and unpublish a merged entry**, as pull requests rather than pushes to `main`: create a branch,
+  `PUT`/`DELETE` the entry file, open the pull request, and let `RegistryGate` judge the result the way it
+  judges a submission. Gated on `Admin.canWrite` like the Queue's writes. No fork is needed — an operator
+  with `permissions.push` pushes the branch directly, which is the difference from `PluginPublishCommand`.
+- The entry editor should be a **plain text area over the JSON**, not a form built from a field list. A form
+  hides a key this window has never heard of, which is the same reason `EntryFields` reads the file.
+
+---
+
 ## 2026-09-05 — the version/level picker, and the first call into the release library
 
 **Done**

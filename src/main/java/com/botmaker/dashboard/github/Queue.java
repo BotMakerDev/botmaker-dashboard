@@ -5,9 +5,7 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -95,30 +93,17 @@ public final class Queue {
      * The text of the entry file a submission adds, read at the pull request's own head commit.
      *
      * <p>At the head rather than on {@code main} for the obvious reason — the file does not exist on
-     * {@code main} yet, that being the whole point of the submission — and through the contents API rather
-     * than a raw URL so a token still applies and one code path serves both repositories.
+     * {@code main} yet, that being the whole point of the submission. {@link Catalog} asks for the same
+     * bytes on {@code main}, which is the only difference between the two reads, so the request and the
+     * base64 decode are {@link Contents}'.
      */
     public static CompletableFuture<String> entry(GitHubClient client, GitHubAuth auth, Submission submission) {
         String path = submission.entryFile().orElse(null);
         if (path == null) {
             return CompletableFuture.completedFuture(null);
         }
-        String url = GitHubConfig.API_BASE + "/repos/" + submission.repo()
-                + "/contents/" + path + "?ref=" + submission.headSha();
-        return client.get(url, token(auth)).thenApply(Queue::decode);
-    }
-
-    /** The contents API answers base64 with hard-wrapped lines; anything else is a read failure. */
-    private static String decode(JsonNode contents) {
-        if (contents == null || !contents.hasNonNull("content")) {
-            return null;
-        }
-        try {
-            String encoded = contents.path("content").asText("").replaceAll("\\s", "");
-            return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+        return Contents.read(client, auth, submission.repo(), path, submission.headSha())
+                .thenApply(Contents::decode);
     }
 
     /** Approve, as a review with no body — the ordinary "this is fine, merge it". */
@@ -163,7 +148,8 @@ public final class Queue {
         return client.put(url, Map.of("merge_method", "squash", "commit_title", title), token(auth));
     }
 
+    /** {@link Contents}', so "reads work signed out, writes do not" is one line and not two. */
     private static String token(GitHubAuth auth) {
-        return auth.isAuthenticated() ? auth.token() : null;
+        return Contents.token(auth);
     }
 }

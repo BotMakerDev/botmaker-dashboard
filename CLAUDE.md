@@ -6,9 +6,9 @@ together; this file is what is true inside this one.
 
 ## What it is, and the two things it is not
 
-A JavaFX desktop app that reads the **umbrella checkout** and the **GitHub API**, and shows four things:
-what each module's tag and pins look like, what the last releases did, what a release *would* decide, and
-which submissions are waiting on a verdict.
+A JavaFX desktop app that reads the **umbrella checkout** and the **GitHub API**, and shows five things:
+what each module's tag and pins look like, what the last releases did, what a release *would* decide,
+which submissions are waiting on a verdict, and **what is already published**.
 
 **It is not a service.** There is no server, no scheduler and no state of its own beyond one remembered
 path. Everything about releases lives in a working copy — `release.sh`, `.gitmodules`, each submodule's
@@ -97,6 +97,39 @@ subject's lifecycle differs; a shared classifier here would have to be wrong for
 gate. A copy of it here would go stale on the first field added and, worse, would *hide* a key a submission
 carries that this window has never heard of — which is exactly the key a reviewer needs to see.
 
+## The catalog — what shipped, which the queue cannot answer
+
+**The Queue tab lists open pull requests, and that is usually zero.** It is the truthful answer to *what is
+waiting on me* and no answer at all to *what can somebody install*. `Catalog` is the second question: every
+**merged** entry — `plugins/<plugin-id>.json` and `bots/<owner>-<repo>.json` — with the gallery entries
+carrying `GalleryEntry.TEMPLATE_TAG` shown as templates rather than bots.
+
+**It reads github.com, not the checked-out submodule**, and that is the one decision in it. The umbrella has
+both data repositories as submodules, and `ModulesTab`/`ReleasesTab` beside it read the checkout — but they
+do so because a release only exists in a working copy. A merged entry exists on `main`; the umbrella's
+recorded pointer trails it every time either repository's CI commits a regenerated index (both pointers were
+behind on 2026-09-16, which is how this was noticed), and a stale catalog is indistinguishable from a
+current one.
+
+**It reads the entry files and not the generated `index.json`**, for the reason the layout exists: one file
+per entry is what makes two same-day submissions two files that cannot conflict and what makes git itself
+refuse a second claim on an id. The index is derived from them by a job, so reading it shows what the job
+last produced rather than what the repository holds.
+
+**The typed halves are the CLI's records** — `RegistryEntry`, `GalleryEntry`, `Registry.ENTRIES_DIRECTORY`,
+`Registry.INDEX`, `GalleryEntry.TEMPLATE_TAG` — read through `Registry.mapper()`, which disables
+`FAIL_ON_UNKNOWN_PROPERTIES`. Both are pure Jackson records naming no contract type, so they are safe under
+this pom's `<exclusions>`. A field added to the entry shape tomorrow therefore lists today, and still reaches
+the field view, because `EntryFields` reads the raw text beside it.
+
+**An entry that will not parse is a row, never a dropped one.** It is on `main`, so somebody merged it and
+either the gate passed it or never ran; it keeps its filename as its identity, is counted separately in the
+status line, and its bytes still reach `EntryFields`. Burying it in a total is how it stays unnoticed.
+
+**`Contents` is the one HTTP shape both readers share.** `Queue` wants the entry a pull request adds, at
+that pull request's head; `Catalog` wants the entry that is merged, on `main`. One ref apart — so the
+request, the base64 decode and the "reads work signed out" token rule live in one place rather than two.
+
 ## Layout
 
 ```
@@ -106,9 +139,11 @@ com.botmaker.dashboard
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
 │   ├── Admin           permissions.push, and every failure folded into read-only
 │   ├── Queue           the open pull requests on both data repos, and the four writes
+│   ├── Catalog         the MERGED entries on both data repos: plugins, bots, and which are templates
+│   ├── Contents        the contents API and its base64, shared by Queue (at a head) and Catalog (on main)
 │   ├── Submission      one pull request: who, what one file it adds, and what it must not add
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
-│   └── EntryFields     the submitted entry, flattened into rows — read from the file, not a schema
+│   └── EntryFields     an entry, flattened into rows — read from the file, not a schema
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
 │   ├── Proc            one external command, output captured, a timeout that is a result
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
@@ -128,7 +163,8 @@ com.botmaker.dashboard
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
     ├── ReleaseTab      flags on the left, the script's whole output on the right, no execute button
-    └── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
+    ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
+    └── CatalogTab      what is published, counted by kind, with the entry as fields
 ```
 
 **There is no execute button and `--dry-run` is not a checkbox.** `ReleaseSpec.command()` appends it

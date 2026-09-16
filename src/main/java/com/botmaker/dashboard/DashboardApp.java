@@ -2,6 +2,7 @@ package com.botmaker.dashboard;
 
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
+import com.botmaker.dashboard.ui.CatalogTab;
 import com.botmaker.dashboard.ui.ModulesTab;
 import com.botmaker.dashboard.ui.QueueTab;
 import com.botmaker.dashboard.ui.ReleaseTab;
@@ -43,6 +44,9 @@ import java.nio.file.Path;
  * <p>The same applies to the queue: a submission's verdict is the registry CI's check run, which runs
  * {@code RegistryGate} out of {@code botmaker-cli}'s main artifact. This window reads that verdict and
  * validates nothing itself — the check that refuses a pull request must be the one its author already ran.
+ * The Catalog tab is the other half of that: what was already admitted, read from each data repository's
+ * {@code main} rather than from the checked-out submodule, whose pointer trails whenever CI regenerates an
+ * index.
  *
  * <p><b>Admin is not a role this app grants.</b> The write actions are enabled by
  * {@code permissions.push} on the plugin registry, read from the GitHub API for the signed-in account —
@@ -61,8 +65,9 @@ public final class DashboardApp extends Application {
     private ReleasesTab releases;
     private ReleaseTab release;
 
-    /** The one tab that reads GitHub rather than the checkout, and so hears about the admin probe instead. */
+    /** The tabs that read GitHub rather than the checkout, and so hear about the admin probe instead. */
     private QueueTab queue;
+    private CatalogTab catalog;
 
     @Override
     public void start(Stage stage) {
@@ -82,12 +87,16 @@ public final class DashboardApp extends Application {
         releases = new ReleasesTab(remembered);
         release = new ReleaseTab(remembered);
         queue = new QueueTab(client, auth);
+        catalog = new CatalogTab(client, auth);
 
+        // Catalog sits beside Queue because they are the two halves of one question — what shipped, and
+        // what is waiting — and after it because a queue is usually empty while the catalog never is.
         TabPane tabs = new TabPane(
                 new Tab("Modules", modules),
                 new Tab("Releases", releases),
                 new Tab("Release", release),
-                new Tab("Queue", queue));
+                new Tab("Queue", queue),
+                new Tab("Catalog", catalog));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         BorderPane root = new BorderPane();
@@ -127,6 +136,9 @@ public final class DashboardApp extends Application {
             // The queue's write buttons follow the badge exactly — one probe, one answer, no second list.
             queue.setAdmin(verdict);
             queue.reload();
+            // The catalog has no write yet, but it is read with the token when there is one, which lifts
+            // the anonymous rate limit — so a sign-in is a reason to read it again.
+            catalog.reload();
         }));
     }
 
