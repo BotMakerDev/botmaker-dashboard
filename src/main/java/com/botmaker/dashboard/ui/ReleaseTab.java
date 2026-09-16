@@ -508,6 +508,7 @@ public final class ReleaseTab extends BorderPane {
         Node cut = dialog.getDialogPane().lookupButton(CUT);
         cut.setDisable(true);
         typed.textProperty().addListener((o, was, is) -> cut.setDisable(!CONFIRM_WORD.equals(is.strip())));
+        Themed.dialog(dialog, getScene() == null ? null : getScene().getWindow());
 
         if (dialog.showAndWait().filter(CUT::equals).isPresent()) {
             run(true);

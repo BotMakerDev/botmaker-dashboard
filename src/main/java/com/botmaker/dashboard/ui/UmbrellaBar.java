@@ -65,7 +65,7 @@ public final class UmbrellaBar extends HBox {
                     dir + "\n\nis not the umbrella checkout — it has no release.sh and no .gitmodules "
                             + "beside each other. Pick the directory the submodules sit in.");
             alert.setHeaderText("Not the umbrella");
-            alert.initOwner(owner);
+            Themed.dialog(alert, owner);
             alert.showAndWait();
             return;
         }

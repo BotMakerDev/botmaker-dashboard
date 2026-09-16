@@ -11,7 +11,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The one thing this app remembers between runs: where the umbrella checkout is.
+ * What this app remembers between runs: where the umbrella checkout is, and — since 2026-09-16 — which
+ * palette the operator picked, {@code null} meaning "follow the desktop".
+ *
+ * <p>Both keys are written on every save and each setter keeps the other, so choosing a checkout can never
+ * forget a theme and toggling the theme can never forget the checkout.
  *
  * <p>Under {@link CacheDirs}, and <b>not</b> beside the credentials: this is a preference, that is a secret,
  * and the file holding a token is written {@code 0600} and merged rather than overwritten. Keeping them
@@ -21,10 +25,19 @@ import java.util.Optional;
  * <p>Every read degrades to "not configured". A missing file is the first run; an unreadable one is a
  * directory the user can pick again in two clicks. Neither is worth an error dialog on startup.
  */
-public record DashboardConfig(Path umbrella) {
+public record DashboardConfig(Path umbrella, Theme theme) {
 
     private static final Path FILE = CacheDirs.cacheRoot().resolve("dashboard.json");
     private static final String UMBRELLA_KEY = "umbrella";
+    private static final String THEME_KEY = "theme";
+
+    public DashboardConfig withUmbrella(Path root) {
+        return new DashboardConfig(root, theme);
+    }
+
+    public DashboardConfig withTheme(Theme chosen) {
+        return new DashboardConfig(umbrella, chosen);
+    }
 
     /**
      * The remembered umbrella root, empty when nothing has been chosen or the path no longer exists.
@@ -38,24 +51,34 @@ public record DashboardConfig(Path umbrella) {
     }
 
     public static DashboardConfig load() {
+        return load(FILE);
+    }
+
+    public static void save(DashboardConfig config) {
+        save(config, FILE);
+    }
+
+    static DashboardConfig load(Path file) {
         try {
-            if (Files.exists(FILE)) {
-                JsonNode node = new ObjectMapper().readTree(FILE.toFile());
+            if (Files.exists(file)) {
+                JsonNode node = new ObjectMapper().readTree(file.toFile());
                 String path = node.path(UMBRELLA_KEY).asText("");
-                if (!path.isBlank()) return new DashboardConfig(Path.of(path));
+                Theme theme = Theme.fromId(node.path(THEME_KEY).asText(""));
+                return new DashboardConfig(path.isBlank() ? null : Path.of(path), theme);
             }
         } catch (Exception e) {
             System.err.println("Failed to read the dashboard config: " + e.getMessage());
         }
-        return new DashboardConfig(null);
+        return new DashboardConfig(null, null);
     }
 
-    public static void save(DashboardConfig config) {
+    static void save(DashboardConfig config, Path file) {
         try {
-            Files.createDirectories(FILE.getParent());
+            Files.createDirectories(file.getParent());
             Map<String, String> all = new LinkedHashMap<>();
             if (config.umbrella != null) all.put(UMBRELLA_KEY, config.umbrella.toString());
-            new ObjectMapper().writeValue(FILE.toFile(), all);
+            if (config.theme != null) all.put(THEME_KEY, config.theme.id());
+            new ObjectMapper().writeValue(file.toFile(), all);
         } catch (Exception e) {
             System.err.println("Failed to store the dashboard config: " + e.getMessage());
         }

@@ -202,7 +202,7 @@ public final class ReleasesTab extends BorderPane {
     private void withSelected(Function<ReleaseLog.Row, String> url) {
         ReleaseLog.Row row = table.getSelectionModel().getSelectedItem();
         if (row != null) {
-            Browse.open(url.apply(row));
+            Browse.open(url.apply(row), status::setText);
         }
     }
 

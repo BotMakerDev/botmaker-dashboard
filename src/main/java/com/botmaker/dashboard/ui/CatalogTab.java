@@ -85,7 +85,7 @@ public final class CatalogTab extends BorderPane {
         where.getStyleClass().add("status-line");
 
         refresh.setOnAction(e -> reload());
-        openOnGitHub.setOnAction(e -> withSelected(entry -> Browse.open(entry.url())));
+        openOnGitHub.setOnAction(e -> withSelected(entry -> Browse.open(entry.url(), status::setText)));
         edit.setOnAction(e -> withSelected(this::edit));
         unpublish.setOnAction(e -> withSelected(this::unpublish));
 
@@ -247,7 +247,7 @@ public final class CatalogTab extends BorderPane {
         pane.setContent(body);
         pane.getButtonTypes().setAll(new ButtonType("Open pull request", ButtonType.OK.getButtonData()),
                 ButtonType.CANCEL);
-        dialog.initOwner(window());
+        Themed.dialog(dialog, window());
 
         Optional<ButtonType> chose = dialog.showAndWait();
         if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
@@ -302,7 +302,7 @@ public final class CatalogTab extends BorderPane {
         pane.lookupButton(open).setDisable(true);
         typed.textProperty().addListener((obs, was, now) ->
                 pane.lookupButton(open).setDisable(!entry.id().equals(now.trim())));
-        dialog.initOwner(window());
+        Themed.dialog(dialog, window());
 
         Optional<ButtonType> chose = dialog.showAndWait();
         if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
@@ -343,10 +343,10 @@ public final class CatalogTab extends BorderPane {
         alert.setContentText("Branch " + proposal.branch()
                 + ".\nNothing is published or unpublished until it is merged.");
         alert.getButtonTypes().setAll(openIt, ButtonType.CLOSE);
-        alert.initOwner(window());
+        Themed.dialog(alert, window());
         alert.showAndWait()
                 .filter(b -> b == openIt)
-                .ifPresent(b -> Browse.open(proposal.url()));
+                .ifPresent(b -> Browse.open(proposal.url(), status::setText));
     }
 
     private void setWritesDisabled(boolean disabled) {
@@ -370,7 +370,7 @@ public final class CatalogTab extends BorderPane {
         alert.setHeaderText("GitHub refused it");
         alert.getDialogPane().setContent(text);
         alert.getButtonTypes().setAll(ButtonType.OK);
-        alert.initOwner(window());
+        Themed.dialog(alert, window());
         alert.showAndWait();
     }
 

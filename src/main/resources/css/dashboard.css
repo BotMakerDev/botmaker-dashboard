@@ -1,31 +1,79 @@
 /*
- * The whole look of the dashboard, in one file.
+ * The whole look of the dashboard, in one file: two palettes of tokens, then rules that read only tokens.
  *
  * It does NOT reuse botmaker-studio's stylesheet, and that is the same rule as the account bar: Studio is
  * an application, its themes are switched at runtime by BlockTheme, and its tokens are named for a block
- * canvas this window does not have. A copy of four colours is cheaper than a dependency on an app.
+ * canvas this window does not have. A copy of a dozen colours is cheaper than a dependency on an app.
  *
- * One theme, deliberately. A dark/light switch is a preference to persist, a listener to install and two
- * palettes to keep honest, for a window one person opens to read a release. If it grows one, take Studio's
- * approach — tokens redefined on the root, never per-control colours.
+ * Two themes since 2026-09-16, done Studio's way: tokens redefined on the root, never per-control colours.
+ * ui/Themed puts "theme-dark" or "theme-light" on the scene root of EVERY window — the main one, each
+ * dialog, each context menu, tooltip and combo-box popup — because each of those is a separate scene and a
+ * token defined on the main root does not reach it. That gap was the black-on-white dialog.
+ *
+ * The rule for anything added below: a colour is a -bm-* token, never a literal. A literal is right in one
+ * theme by construction and wrong in the other.
  */
 
-.root {
+/* ── tokens ──────────────────────────────────────────────────────────────── */
+
+.root,
+.root.theme-dark {
     -bm-bg: #1e1f22;
     -bm-bg-raised: #2b2d30;
+    -bm-bg-input: #25272a;
     -bm-line: #3c3f43;
     -bm-text: #dfe1e5;
     -bm-text-dim: #9da0a8;
     -bm-accent: #4c8dff;
+    -bm-on-accent: #ffffff;
+    -bm-selection: #2e4a7a;
     -bm-ok: #59a869;
     -bm-warn: #d9a343;
+    -bm-danger: #e5534b;
 
-    -fx-background-color: -bm-bg;
+    /* Modena derives every control it paints from these three; pointing them at the tokens is what makes
+       the controls this file never names (a spinner, a scroll bar's track) follow the theme too. */
+    -fx-base: -bm-bg-raised;
+    -fx-background: -bm-bg;
+    -fx-control-inner-background: -bm-bg-input;
+    -fx-accent: -bm-accent;
+    -fx-focus-color: -bm-accent;
+    -fx-faint-focus-color: transparent;
+    -fx-selection-bar: -bm-selection;
+    -fx-selection-bar-non-focused: -bm-selection;
+    -fx-text-background-color: -bm-text;
+    -fx-text-inner-color: -bm-text;
+    -fx-prompt-text-fill: -bm-text-dim;
+
     -fx-font-family: "Inter", "Segoe UI", "Cantarell", sans-serif;
     -fx-font-size: 13px;
 }
 
-.label {
+.root.theme-light {
+    -bm-bg: #f5f6f8;
+    -bm-bg-raised: #ffffff;
+    -bm-bg-input: #ffffff;
+    -bm-line: #d3d7de;
+    -bm-text: #1f2328;
+    -bm-text-dim: #5c636e;
+    -bm-accent: #2f6fdb;
+    -bm-on-accent: #ffffff;
+    -bm-selection: #cfe0fb;
+    -bm-ok: #2e8540;
+    -bm-warn: #a86400;
+    -bm-danger: #cf222e;
+}
+
+/* The main window's background. Not on .root: a popup's scene root is a .root too, and painting it would
+   put a square behind a rounded context menu. */
+.app-root {
+    -fx-background-color: -bm-bg;
+}
+
+.label,
+.check-box,
+.radio-button,
+.hyperlink {
     -fx-text-fill: -bm-text;
 }
 
@@ -61,7 +109,15 @@
     -fx-text-fill: -bm-text-dim;
 }
 
-.button {
+.theme-toggle {
+    -fx-font-size: 14px;
+    -fx-padding: 2 8 2 8;
+}
+
+/* ── buttons ─────────────────────────────────────────────────────────────── */
+
+.button,
+.toggle-button {
     -fx-background-color: -bm-bg;
     -fx-text-fill: -bm-text;
     -fx-border-color: -bm-line;
@@ -71,11 +127,17 @@
     -fx-cursor: hand;
 }
 
-.button:hover {
+.button:hover,
+.toggle-button:hover {
     -fx-border-color: -bm-accent;
 }
 
-.button:disabled {
+.button:default {
+    -fx-border-color: -bm-accent;
+}
+
+.button:disabled,
+.toggle-button:disabled {
     -fx-opacity: 0.5;
     -fx-cursor: default;
 }
@@ -94,7 +156,129 @@
 
 .button.danger:hover {
     -fx-border-color: -bm-warn;
-    -fx-background-color: derive(-bm-warn, -70%);
+    -fx-background-color: -bm-bg-raised;
+}
+
+/* ── text inputs ─────────────────────────────────────────────────────────── */
+
+.text-field,
+.text-area,
+.combo-box {
+    -fx-background-color: -bm-line, -bm-bg-input;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4, 3;
+    -fx-text-fill: -bm-text;
+    -fx-highlight-fill: -bm-selection;
+    -fx-highlight-text-fill: -bm-text;
+}
+
+.text-field:focused,
+.text-area:focused,
+.combo-box:focused {
+    -fx-background-color: -bm-accent, -bm-bg-input;
+}
+
+.text-area .content {
+    -fx-background-color: -bm-bg-input;
+}
+
+.text-area .scroll-pane,
+.text-area .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: -bm-text;
+    -fx-background-color: transparent;
+}
+
+.combo-box .arrow {
+    -fx-background-color: -bm-text-dim;
+}
+
+.check-box .box {
+    -fx-background-color: -bm-line, -bm-bg-input;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+}
+
+.check-box:selected .box {
+    -fx-background-color: -bm-accent, -bm-accent;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: -bm-on-accent;
+}
+
+/* ── popups: context menus, combo lists, tooltips ────────────────────────── */
+
+.context-menu,
+.combo-box-popup .list-view {
+    -fx-background-color: -bm-line, -bm-bg-raised;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4;
+}
+
+.menu-item .label {
+    -fx-text-fill: -bm-text;
+}
+
+.menu-item:focused {
+    -fx-background-color: -bm-selection;
+}
+
+.menu-item:focused .label {
+    -fx-text-fill: -bm-text;
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-font-family: inherit;
+    -fx-text-fill: -bm-text;
+}
+
+.combo-box-popup .list-view .list-cell:filled:hover,
+.combo-box-popup .list-view .list-cell:selected {
+    -fx-background-color: -bm-selection;
+}
+
+.tooltip {
+    -fx-background-color: -bm-bg-raised;
+    -fx-text-fill: -bm-text;
+    -fx-border-color: -bm-line;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-font-size: 12px;
+}
+
+/* ── scroll panes and bars ───────────────────────────────────────────────── */
+
+.scroll-pane,
+.scroll-pane > .viewport {
+    -fx-background-color: -bm-bg;
+}
+
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: -bm-line;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 2;
+}
+
+.scroll-bar .increment-arrow,
+.scroll-bar .decrement-arrow {
+    -fx-background-color: -bm-text-dim;
+}
+
+.corner {
+    -fx-background-color: transparent;
 }
 
 /* ── the admin badge ─────────────────────────────────────────────────────── */
@@ -183,6 +367,10 @@
     -fx-alignment: center-left;
 }
 
+.table-view .placeholder .label {
+    -fx-text-fill: -bm-text-dim;
+}
+
 .table-view .table-row-cell {
     -fx-background-color: -bm-bg;
     -fx-border-color: transparent transparent -bm-line transparent;
@@ -190,7 +378,7 @@
 }
 
 .table-view .table-row-cell:selected {
-    -fx-background-color: derive(-bm-accent, -60%);
+    -fx-background-color: -bm-selection;
 }
 
 .table-view .table-cell {
@@ -199,19 +387,23 @@
 }
 
 /*
- * Three cell states, and none of them is a verdict of this app's own: "releasing" is what release.sh
+ * Cell states, and none of them is a verdict of this app's own: "releasing" is what the decide pass
  * decided, "stale" is a pin that is not its upstream's newest tag, and "dim" is everything that is merely
- * true. Nothing here is red — a module with nothing to release is the normal state, not a fault.
+ * true. Each is also spelled under .table-view .table-cell, because that rule has two classes and a bare
+ * .cell--ok has one — so inside a table the state colour silently lost to the plain text colour.
  */
-.cell--releasing {
+.cell--releasing,
+.table-view .table-cell.cell--releasing {
     -fx-text-fill: -bm-ok;
 }
 
-.cell--stale {
+.cell--stale,
+.table-view .table-cell.cell--stale {
     -fx-text-fill: -bm-warn;
 }
 
-.cell--dim {
+.cell--dim,
+.table-view .table-cell.cell--dim {
     -fx-text-fill: -bm-text-dim;
 }
 
@@ -220,15 +412,18 @@
  * green: a module that is not a Maven artifact was never asked the JitPack question, which is not the same
  * as having passed it.
  */
-.cell--ok {
+.cell--ok,
+.table-view .table-cell.cell--ok {
     -fx-text-fill: -bm-ok;
 }
 
-.cell--pending {
+.cell--pending,
+.table-view .table-cell.cell--pending {
     -fx-text-fill: -bm-text-dim;
 }
 
-.cell--broken {
+.cell--broken,
+.table-view .table-cell.cell--broken {
     -fx-text-fill: -bm-warn;
 }
 
@@ -244,6 +439,7 @@
     -fx-text-fill: -bm-text-dim;
     -fx-background-radius: 0;
     -fx-border-color: -bm-line;
+    -fx-border-radius: 0;
     -fx-border-width: 1 1 1 0;
     -fx-padding: 3 9 3 9;
 }
@@ -254,7 +450,7 @@
 
 .segmented .segment:selected {
     -fx-background-color: -bm-accent;
-    -fx-text-fill: white;
+    -fx-text-fill: -bm-on-accent;
 }
 
 /* Only the outer edges are rounded, so the four read as one strip. */
@@ -319,7 +515,7 @@
     -fx-padding: 0 1 0 1;
 }
 
-/* ── the Release tab: the flags on the left, the script's own words on the right ─── */
+/* ── the Release tab: the flags on the left, the run's own words on the right ─── */
 
 .flag-box {
     -fx-background-color: -bm-bg-raised;
@@ -327,10 +523,8 @@
     -fx-padding: 10;
 }
 
-/*
- * The command line is the tab's deliverable — the window cannot cut a release, so what it hands back is the
- * exact line to paste. Monospace and selectable; read-only rather than disabled, so it can still be copied.
- */
+/* The exact line this tab will run. Monospace and selectable; read-only rather than disabled, so it can
+   still be copied. */
 .command-line {
     -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
     -fx-background-color: -bm-bg-raised;
@@ -340,11 +534,15 @@
     -fx-background-radius: 4;
 }
 
+/* The release's output. The text colour is spelled out: without it Modena derived a dark fill from its own
+   defaults, and the plan read black on this dark background. */
 .output-text {
     -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
     -fx-font-size: 11px;
+    -fx-text-fill: -bm-text;
 }
 
+.output-text,
 .output-text .content {
     -fx-background-color: -bm-bg-raised;
 }
@@ -361,14 +559,30 @@
     -fx-font-weight: bold;
 }
 
+.placeholder-body {
+    -fx-text-fill: -bm-text-dim;
+}
+
 /* ── dialogs ─────────────────────────────────────────────────────────────── */
 
 .dialog-pane {
     -fx-background-color: -bm-bg-raised;
 }
 
+.dialog-pane > .header-panel {
+    -fx-background-color: -bm-bg;
+    -fx-border-color: transparent transparent -bm-line transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.dialog-pane > .header-panel .label,
+.dialog-pane > .content.label,
 .dialog-pane .label {
     -fx-text-fill: -bm-text;
+}
+
+.dialog-pane > .button-bar > .container {
+    -fx-background-color: -bm-bg-raised;
 }
 
 .device-code {

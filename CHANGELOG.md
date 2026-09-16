@@ -12,7 +12,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening a link no longer freezes and then kills the window.** Links opened through `java.awt.Desktop` on
+  the JavaFX thread, and on Linux that hangs the application. It ended a release being cut from the Release
+  tab after four tags. Links now open through the platform opener on a background thread. If nothing opens,
+  the tab's status line shows the URL.
+- **Dialogs are readable.** Every dialog, context menu, tooltip and combo list now gets the stylesheet, not
+  Modena's black on white. The Release tab's output no longer renders dark text on a dark background, and
+  verdict colours in tables now apply.
+
 ### Added
+
+- **A light theme**, and a ☀/☾ toggle in the top bar. The choice is remembered. With no choice, the window
+  follows the desktop's colour scheme.
 
 - **The Release tab can cut the release.** It could only describe one before: `ReleaseSpec` appended
   `--dry-run` to every command line with no way to leave it off, and what the tab handed back was the line

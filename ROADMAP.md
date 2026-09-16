@@ -8,6 +8,37 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-16 — round 2, phase 1: the crash, readability, and a light theme
+
+The first real `--all minor` cut from the Release tab stopped after four tags. The window died during an
+Unpublish, and the release was running in the same JVM. Plan: `~/.claude/plans/am-i-ready-for-jolly-wirth.md`.
+
+**Done**
+- **`ui/Browse` no longer touches AWT.** It ran `Desktop.getDesktop().browse` on the FX thread; on Linux that
+  initialises AWT inside a JavaFX app, which froze the window and then killed it. It now runs
+  `Os.openCommand` (`xdg-open`/`open`/`rundll32`) on a background thread, falls back to
+  `HostServices.showDocument` on the FX thread, and on failure hands the URL to the tab's status line.
+  The platform opener comes first because `HostServices` on Linux guesses from a fixed browser list and
+  fails silently, so it could never report that nothing opened.
+- **Light and dark.** `dashboard.css` holds two token palettes; every rule reads tokens only. Modena's
+  `-fx-base`/`-fx-background`/`-fx-control-inner-background` point at the tokens, so controls the file never
+  names follow too. A ☀/☾ toggle in the top bar, remembered as `theme` in `dashboard.json`; `null` follows
+  `Platform.getPreferences().getColorScheme()`. `Theme` is a closed enum with a total `fromId`.
+- **`ui/Themed`.** Listens to `Window.getWindows()` and gives each new window the stylesheet and the theme
+  class on its scene root. `Themed.dialog(dialog, owner)` is the call site's one line, and sets the owner
+  that `ReleaseTab`'s confirmation never had.
+- **Readability fixes:** `.output-text` had no text fill, so the preview rendered dark on dark; text areas,
+  text fields, combo boxes, check boxes, context menus, tooltips, scroll bars and the dialog header had no
+  rules at all. The `cell--*` state colours never applied inside tables, because
+  `.table-view .table-cell` has two classes and `.cell--ok` has one. Each is now spelled under both.
+- `DashboardConfig` keeps both keys on every save (`withUmbrella`, `withTheme`) and has path-taking
+  `load`/`save` overloads for tests.
+
+**Deferred / next** — phases 2–6 of the plan: the live release log and the CI gate in the library, Execute as
+a child process with progress widgets, the Releases tab from tags alone, links, and the Changelog tab.
+
+---
+
 ## 2026-09-16 — the window cuts the release, and stops parsing stdout to do it
 
 **Done**

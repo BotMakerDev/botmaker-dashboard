@@ -82,7 +82,7 @@ public final class QueueTab extends BorderPane {
         verdict.getStyleClass().add("status-line");
 
         refresh.setOnAction(e -> reload());
-        openOnGitHub.setOnAction(e -> withSelected(s -> Browse.open(s.url())));
+        openOnGitHub.setOnAction(e -> withSelected(s -> Browse.open(s.url(), status::setText)));
         approve.setOnAction(e -> act("Approved", Queue::approve));
         merge.setOnAction(e -> act("Merged", Queue::merge));
         requestChanges.setOnAction(e -> requestChanges());
@@ -209,7 +209,7 @@ public final class QueueTab extends BorderPane {
         dialog.setTitle("Request changes");
         dialog.setHeaderText("What does " + submission.label() + " need?");
         dialog.setContentText("Comment:");
-        dialog.initOwner(getScene() == null ? null : getScene().getWindow());
+        Themed.dialog(dialog, getScene() == null ? null : getScene().getWindow());
         dialog.showAndWait()
                 .filter(comment -> !comment.isBlank())
                 .ifPresent(comment -> act("Requested changes on",
@@ -261,7 +261,7 @@ public final class QueueTab extends BorderPane {
         alert.setHeaderText("GitHub refused it");
         alert.getDialogPane().setContent(text);
         alert.getButtonTypes().setAll(ButtonType.OK);
-        alert.initOwner(getScene() == null ? null : getScene().getWindow());
+        Themed.dialog(alert, getScene() == null ? null : getScene().getWindow());
         alert.showAndWait();
     }
 

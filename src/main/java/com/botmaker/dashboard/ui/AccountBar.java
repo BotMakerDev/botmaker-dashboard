@@ -122,7 +122,7 @@ public final class AccountBar extends HBox {
         alert.setHeaderText("Waiting for GitHub…");
         alert.getDialogPane().setContent(new VBox(8, where, userCode));
         alert.getButtonTypes().setAll(ButtonType.CANCEL);
-        alert.initOwner(owner);
+        Themed.dialog(alert, owner);
         alert.show();
 
         // Best-effort: the code is on screen either way, so a headless or restricted desktop costs nothing.
@@ -135,7 +135,7 @@ public final class AccountBar extends HBox {
                 ? error.getCause() : error;
         Alert alert = new Alert(Alert.AlertType.ERROR, cause.getMessage());
         alert.setHeaderText("Sign-in failed");
-        alert.initOwner(owner);
+        Themed.dialog(alert, owner);
         alert.showAndWait();
     }
 }

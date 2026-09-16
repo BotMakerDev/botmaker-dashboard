@@ -6,7 +6,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -32,5 +34,34 @@ class DashboardConfigTest {
     @Test
     void nullIsNotTheUmbrella() {
         assertFalse(DashboardConfig.looksLikeUmbrella(null));
+    }
+
+    @Test
+    void theThemeAndTheCheckoutSurviveEachOthersSaves(@TempDir Path dir) {
+        Path file = dir.resolve("dashboard.json");
+        DashboardConfig.save(new DashboardConfig(dir, null).withTheme(Theme.LIGHT), file);
+        DashboardConfig read = DashboardConfig.load(file);
+        assertEquals(dir, read.umbrella());
+        assertEquals(Theme.LIGHT, read.theme());
+
+        // Choosing another checkout keeps the palette — the bug a one-key save would have had.
+        DashboardConfig.save(read.withUmbrella(dir.resolve("other")), file);
+        assertEquals(Theme.LIGHT, DashboardConfig.load(file).theme());
+    }
+
+    @Test
+    void anUnknownThemeMeansFollowTheDesktop(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("dashboard.json");
+        Files.writeString(file, "{\"theme\":\"sepia\"}");
+        DashboardConfig read = DashboardConfig.load(file);
+        assertNull(read.theme());
+        assertNull(read.umbrella());
+    }
+
+    @Test
+    void aMissingFileIsTheFirstRun(@TempDir Path dir) {
+        DashboardConfig read = DashboardConfig.load(dir.resolve("absent.json"));
+        assertNull(read.theme());
+        assertNull(read.umbrella());
     }
 }

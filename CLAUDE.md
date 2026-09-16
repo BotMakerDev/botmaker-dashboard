@@ -219,7 +219,8 @@ com.botmaker.dashboard
 └── ui/
     ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
-    ├── Browse          open a URL, best-effort, never an error dialog
+    ├── Browse          open a URL off the FX thread (platform opener, then HostServices) — never AWT
+    ├── Themed          the palette on every window's scene root, and the owner on every dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     the logs, newest first, with re-poll = ReleaseStatus.repoll
     ├── ReleaseTab      flags on the left, the run's whole output on the right, Preview and Execute
@@ -253,7 +254,17 @@ eleventh is added, which is the day it matters. And which modules are *releasabl
 the decide pass names them at all: `botmaker-gallery`, `botmaker-plugin-registry` and this
 repository never appear, and the row says *not released by the release* rather than inventing a category.
 
-`src/main/resources/css/dashboard.css` is the whole look, one theme, tokens on `.root`.
+`src/main/resources/css/dashboard.css` is the whole look: two palettes of `-bm-*` tokens on
+`.root.theme-dark` / `.root.theme-light`, and rules that read only tokens. **A colour literal in a rule is a
+bug** — it is right in one theme by construction. **Every `Dialog`/`Alert` goes through
+`Themed.dialog(dialog, owner)`**, and `Themed.install` themes every other `Window` as it appears (context
+menus, tooltips, combo popups): each is its own scene, and a stylesheet on the main scene reaches none of
+them, which is how dialogs rendered Modena's black on white until 2026-09-16. The choice is remembered in
+`DashboardConfig.theme`; `null` follows the desktop's `ColorScheme`.
+
+**Never call `java.awt.Desktop` from this module.** On Linux, initialising AWT inside a running JavaFX
+application froze and then killed the window — during an Unpublish, while a release was being cut in the
+same JVM. `ui/Browse` is the one way to open a URL.
 
 ## Why some things are duplicated from Studio, and one thing is not
 

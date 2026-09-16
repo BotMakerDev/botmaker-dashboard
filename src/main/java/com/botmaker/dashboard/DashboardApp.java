@@ -2,18 +2,22 @@ package com.botmaker.dashboard;
 
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.ui.AccountBar;
+import com.botmaker.dashboard.ui.Browse;
 import com.botmaker.dashboard.ui.CatalogTab;
 import com.botmaker.dashboard.ui.ModulesTab;
 import com.botmaker.dashboard.ui.QueueTab;
 import com.botmaker.dashboard.ui.ReleaseTab;
 import com.botmaker.dashboard.ui.ReleasesTab;
+import com.botmaker.dashboard.ui.Themed;
 import com.botmaker.dashboard.ui.UmbrellaBar;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.BorderPane;
@@ -75,15 +79,31 @@ public final class DashboardApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        Path remembered = DashboardConfig.load().remembered().orElse(null);
+        DashboardConfig config = DashboardConfig.load();
+        Path remembered = config.remembered().orElse(null);
+        // Both before the first window exists: the theme listener themes windows as they appear, and a
+        // link clicked in the first second must not find the browser unplugged.
+        Browse.install(getHostServices());
+        Themed.install(Themed.resolve(config.theme()));
+
         UmbrellaBar umbrellaBar = new UmbrellaBar(stage, remembered, this::umbrellaChosen);
         AccountBar accountBar = new AccountBar(stage, auth, client, this::refreshAdmin);
 
         adminBadge.getStyleClass().add("badge");
 
+        Button themeToggle = new Button();
+        themeToggle.getStyleClass().add("theme-toggle");
+        showTheme(themeToggle);
+        themeToggle.setOnAction(e -> {
+            Theme next = Themed.current().other();
+            Themed.set(next);
+            DashboardConfig.save(DashboardConfig.load().withTheme(next));
+            showTheme(themeToggle);
+        });
+
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox top = new HBox(10, umbrellaBar, spacer, adminBadge, accountBar);
+        HBox top = new HBox(10, umbrellaBar, spacer, adminBadge, accountBar, themeToggle);
         top.getStyleClass().add("top-bar");
         top.setPadding(new Insets(8, 12, 8, 12));
 
@@ -108,8 +128,8 @@ public final class DashboardApp extends Application {
         root.setCenter(tabs);
 
         Scene scene = new Scene(root, 1100, 720);
-        scene.getStylesheets().add(
-                DashboardApp.class.getResource("/css/dashboard.css").toExternalForm());
+        root.getStyleClass().add("app-root");
+        Themed.scene(scene);
 
         stage.setTitle("BotMaker Dashboard");
         stage.setScene(scene);
@@ -119,10 +139,17 @@ public final class DashboardApp extends Application {
     }
 
     private void umbrellaChosen(Path root) {
-        DashboardConfig.save(new DashboardConfig(root));
+        DashboardConfig.save(DashboardConfig.load().withUmbrella(root));
         modules.setUmbrella(root);
         releases.setUmbrella(root);
         release.setUmbrella(root);
+    }
+
+    /** The toggle names the palette it switches <i>to</i>, which is the only thing a click would change. */
+    private static void showTheme(Button toggle) {
+        boolean dark = Themed.current() == Theme.DARK;
+        toggle.setText(dark ? "☀" : "☾");
+        toggle.setTooltip(new Tooltip(dark ? "Switch to the light theme" : "Switch to the dark theme"));
     }
 
     /**
