@@ -1,8 +1,11 @@
 package com.botmaker.dashboard.umbrella;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,5 +98,24 @@ class ReleaseLogTest {
 
         assertFalse(log.broken());
         assertTrue(log.problems().isEmpty());
+    }
+
+    /**
+     * A re-poll of a log that is not there stops with a reason, and does not throw.
+     *
+     * <p>The real poll resolves ten artifacts and calls {@code gh} ten times, so it is a manual test. This
+     * is the half that runs in the window's JVM and would otherwise reach the operator wrapped in a
+     * {@code CompletionException} — the same promise {@link ReleaseRunTest} makes for a preview.
+     */
+    @Test
+    void aRePollOfAMissingLogIsReportedRatherThanThrown(@TempDir Path umbrella) {
+        List<String> streamed = new ArrayList<>();
+
+        ReleaseLog.Repoll polled = ReleaseLog.repoll(umbrella, umbrella.resolve("releases/2026-01-01-0000.md"),
+                streamed::add);
+
+        assertFalse(polled.ok());
+        assertTrue(polled.error().isPresent(), "the reason is the value, never an exception");
+        assertTrue(streamed.stream().anyMatch(line -> line.startsWith("error: ")), streamed.toString());
     }
 }

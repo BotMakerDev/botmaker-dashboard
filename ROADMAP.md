@@ -48,15 +48,33 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
   `ReleaseSpecTest` rewritten around the new shape — including that two specs are equal exactly when they
   would release the same thing, which is what arms the button. 74 tests, headless.
 
+**Done, later the same day — the script became a wrapper, which took this window's last subprocess with it**
+
+- **`release.sh` is ~230 lines** (was 2,214) over `botmaker release`, and `.github/workflows/release.yml`
+  still calls it — for `--ci` alone, which prepares a runner and is genuinely bash. The parity diff was
+  re-run first, as `--all --sdk 1.2.0` over the real eleven-repository tree, because it is the check that
+  cannot be run once both sides are the same code; it agreed on every decision and every write.
+
+- **`ReleaseLog.repoll` calls `ReleaseStatus.repoll`** instead of shelling `./release.sh --status <file>`,
+  and returns a `Repoll` value the way `ReleaseRun` returns one. This was the deferred item below and the
+  wrapper forced it: shelling would now build a jar to run the code already on this classpath. The lines
+  stream into the status label as each module is polled — it is minutes long, so it says what it is doing.
+
+- **`Proc` runs one program now: `git`.** Its javadoc says so, because "every question is answered by git
+  or by `release.sh`" was the old shape of the rule and a subprocess is no longer how the release is asked.
+
+- **`ReleaseLogTest`**: a re-poll of a log that is not there is reported, not thrown. 75 tests.
+
 **Deferred / next**
 
-- **`release.sh` and `.github/workflows/release.yml` still have their own implementation.** Thinning them
-  to wrappers over `botmaker release … --execute` is the next step and is deliberately not taken in the
-  same pass: while both exist, the port's preview can still be diffed against the script's, which is the
-  check that cannot be run once the script is gone.
-- **The Releases tab still shells** — re-poll runs `./release.sh --status <file>`. `ReleaseStatus.repoll`
-  is in the library and the swap is small; it was left out of this pass to keep one thing changing at a
-  time.
+- ~~**`release.sh` and `.github/workflows/release.yml` still have their own implementation.**~~ **Done the
+  same day.** The parity diff was re-run first, as `--all --sdk 1.2.0` over the real tree, because it is the
+  check that cannot be run once the script is a wrapper; it agreed on every decision and every write. The
+  script is ~230 lines and keeps only what is not a decision — the spelling, `--ci`'s runner preparation,
+  the `BOTMAKER_RELEASE_TOKEN` precondition, and *no `--dry-run` means `--execute`*.
+- ~~**The Releases tab still shells**~~ **Done the same day, and forced by the line above**: with the script
+  a wrapper, shelling `--status` would build a jar to run the code already on this classpath. Re-poll calls
+  `ReleaseStatus.repoll` and streams its lines. `Proc` runs one program now — `git`.
 - **Nothing here has cut a real release yet.** The execute path is exercised by no test — a test that
   pushed a tag would be a test that cannot be re-run — so the first use is a watched one.
 - **The Modules tab says less than it did**: it no longer reports gate verdicts, because the gates belong
@@ -249,7 +267,8 @@ Queue tab, with the gate's verdict against it.
   is the exact failure this log was added to catch.
 - **Re-poll is `./release.sh --status <file>`.** A JitPack HEAD from here would be four lines and would
   answer a different question than the release asked; see `CLAUDE.md`. The file is rewritten in place, so a
-  re-poll is a reviewable diff, and committing it stays the operator's call.
+  re-poll is a reviewable diff, and committing it stays the operator's call. *(2026-09-16: it calls
+  `ReleaseStatus.repoll` directly. Same question, same owner, no subprocess.)*
 - `umbrella/Links` + `ui/Browse` (extracted from `AccountBar`, which had the only copy): the GitHub Release,
   the JitPack build and the Actions runs for a tag, on a row's context menu.
 

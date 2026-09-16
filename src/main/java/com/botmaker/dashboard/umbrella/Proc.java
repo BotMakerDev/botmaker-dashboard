@@ -11,13 +11,15 @@ import java.util.concurrent.TimeUnit;
 /**
  * One external command, run to completion, with its output captured.
  *
- * <p>This is the whole of this module's execution model, and it is deliberately small: every question about
- * the release constellation is answered by {@code git} or by {@code release.sh}, never by code here. See
- * {@code CLAUDE.md} — <i>never reimplement a decision {@code release.sh} owns</i>.
+ * <p>This is the whole of this module's execution model, and since 2026-09-16 it runs <b>one program</b>:
+ * {@code git}. The release used to be the other one — every plan and every re-poll went through
+ * {@code ./release.sh} and came back as text — and it is called as a library now, so what is left here is
+ * the tree's own state, which git is the owner of. See {@code CLAUDE.md} — <i>never reimplement a decision
+ * the release owns</i>; a subprocess was one way of keeping that rule and a direct call is the stricter one.
  *
  * <p>Two properties matter and both are about failing usefully. <b>stderr is merged into stdout</b>, because
- * the interesting half of a failed {@code release.sh} run is on stderr and a window that showed only stdout
- * would report a gate refusal as an empty plan. And <b>a timeout is a result, not an exception</b>: the
+ * the interesting half of a failed run is on stderr and a window that showed only stdout would report a
+ * refusal as an empty answer. And <b>a timeout is a result, not an exception</b>: the
  * process is destroyed and the exit code is {@link #TIMED_OUT}, so a hung {@code git} on a network remote
  * degrades to one row saying so rather than to a frozen window.
  *
@@ -28,7 +30,7 @@ public record Proc(int exit, String out) {
     /** The exit code reported when the command outlived its timeout. Not a code any command can return. */
     public static final int TIMED_OUT = -1;
 
-    /** Whether the command exited 0. A non-zero exit is ordinary here — {@code release.sh} exits 1 on a gate. */
+    /** Whether the command exited 0. A non-zero exit is ordinary here — {@code git tag} in a fresh repo. */
     public boolean ok() {
         return exit == 0;
     }

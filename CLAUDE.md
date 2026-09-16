@@ -63,11 +63,13 @@ means for that module today. **The test to apply to the next one is the same**: 
 have to *decide* something? Then it calls the library. Is it merely presentation? Then it stays here.
 
 **The re-poll button is the worked example.** Asking JitPack for a `.pom` with a HEAD request would be four
-lines here and would answer a *different question* than the release asked: `resolve_clean_room` runs a real
+lines here and would answer a *different question* than the release asked: `CleanRoom` runs a real
 `dependency:resolve` into a throwaway repository, which is the only thing that catches a published pom
 naming a dependency nobody can resolve — the `0.0.0-SNAPSHOT` bug that shipped in every SDK up to v1.0.24.
-A cheaper check here would turn a broken row green. So re-poll runs `./release.sh --status <file>` and
-re-reads the file the script rewrote.
+A cheaper check here would turn a broken row green. So re-poll calls `ReleaseStatus.repoll` and re-reads the
+file it rewrote. It shelled to `./release.sh --status <file>` until 2026-09-16, which kept the same property
+by keeping the readers out of reach; the script is a wrapper now, so shelling would build a jar to run the
+code already on this classpath.
 
 The same rule covers the queue. A submission's verdict is **the registry CI's check run**, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact. Read that verdict; validate nothing here. *The check
@@ -219,7 +221,7 @@ com.botmaker.dashboard
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
     ├── Browse          open a URL, best-effort, never an error dialog
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
-    ├── ReleasesTab     the logs, newest first, with re-poll = ./release.sh --status <file>
+    ├── ReleasesTab     the logs, newest first, with re-poll = ReleaseStatus.repoll
     ├── ReleaseTab      flags on the left, the run's whole output on the right, Preview and Execute
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite

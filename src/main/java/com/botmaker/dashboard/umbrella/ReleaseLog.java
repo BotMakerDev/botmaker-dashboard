@@ -1,14 +1,19 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.ReleaseRefusal;
+import com.botmaker.cli.release.ReleaseStatus;
+import com.botmaker.cli.release.Runner;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -20,10 +25,11 @@ import java.util.stream.Stream;
  * writes this table, in the same commit as the submodule pointers, with the full error text under it.
  *
  * <p><b>This class reads the file and never recomputes a cell.</b> What "ok" means is
- * {@code resolve_clean_room}'s answer and what a workflow's verdict is is {@code poll_actions}', and the
- * re-poll button runs {@code ./release.sh --status <file>} for exactly that reason — the two readers cannot
- * be allowed to disagree about the word. {@link Health} classifies the script's own words for colour, which
- * is presentation; the words themselves are shown unchanged.
+ * {@link com.botmaker.cli.release.CleanRoom}'s answer and what a workflow's verdict is is
+ * {@link com.botmaker.cli.release.Actions}', and the re-poll button calls
+ * {@link ReleaseStatus#repoll} for exactly that reason — the two readers cannot be allowed to disagree
+ * about the word. {@link Health} classifies the release's own words for colour, which is presentation; the
+ * words themselves are shown unchanged.
  *
  * @param file    where it was read from
  * @param stamp   the {@code # Release <stamp>} heading — the log's identity, and what {@code --status} reads back
@@ -130,19 +136,49 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
         }
     }
 
+    /** What a re-poll did, as a value — the same shape, and the same reason, as {@link ReleaseRun}. */
+    public record Repoll(boolean ok, String output, Optional<String> error) {
+    }
+
     /**
-     * Re-polls a log: {@code ./release.sh --status <file>}, which rewrites the file in place.
+     * Re-polls a log: {@link ReleaseStatus#repoll}, which rewrites the file in place.
      *
-     * <p>Deliberately the script rather than a JitPack HEAD and a {@code gh} call from here. The release
-     * itself decided "ok" with {@code resolve_clean_room} — a real {@code dependency:resolve} into a
+     * <p><b>The release's own readers, not an easier question asked from here.</b> The release decided
+     * "ok" with {@link com.botmaker.cli.release.CleanRoom} — a real {@code dependency:resolve} into a
      * throwaway repository, because a {@code dependency:tree} warns on an unresolvable transitive pom and
-     * exits 0 — and a re-poll that asked an easier question would quietly upgrade a broken row to green.
+     * exits 0 — and Actions through {@link com.botmaker.cli.release.Actions}. A re-poll that asked a
+     * cheaper question would quietly upgrade a broken row to green.
      *
-     * <p>It rewrites the file from scratch and is idempotent, so the result is a reviewable diff. Never on
-     * the FX thread: it resolves every module's artifacts and calls {@code gh} once per module.
+     * <p>It shelled to {@code ./release.sh --status <file>} until 2026-09-16, which kept that property by
+     * keeping the readers out of reach; the script is a wrapper now, so shelling would build a jar to run
+     * the code already on this classpath. The rule is the one the whole module hangs on and it did not
+     * change — this calls the owner rather than reimplementing it.
+     *
+     * <p>Never on the FX thread: it resolves every module's artifacts and calls {@code gh} once per module.
+     * Minutes, not seconds. The runner is real because {@code --status} exists to rewrite the file; what it
+     * writes is a reviewable diff in the working copy, and committing it stays the operator's call.
      */
-    public static Proc repoll(Path umbrella, Path file) {
-        return Proc.run(umbrella, Duration.ofMinutes(10), "./release.sh", "--status", file.toString());
+    public static Repoll repoll(Path umbrella, Path file, Consumer<String> line) {
+        StringBuilder whole = new StringBuilder();
+        Consumer<String> sink = text -> {
+            whole.append(text).append('\n');
+            line.accept(text);
+        };
+        try {
+            ReleaseStatus.repoll(new Runner(false, sink), umbrella, Optional.of(file));
+            return new Repoll(true, whole.toString(), Optional.empty());
+        } catch (ReleaseRefusal refused) {
+            sink.accept("error: " + refused.getMessage());
+            return new Repoll(false, whole.toString(), Optional.of(refused.getMessage()));
+        } catch (RuntimeException e) {
+            // A poll reaches the network and the file system, so anything can arrive here. It runs inside
+            // the window's JVM: an exception that escapes lands in a CompletableFuture and reaches the
+            // operator wrapped, as "Re-poll failed: null".
+            String message = e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ": " + e.getMessage());
+            sink.accept("error: " + message);
+            return new Repoll(false, whole.toString(), Optional.of(message));
+        }
     }
 
     // ---- parsing ----------------------------------------------------------------------------------

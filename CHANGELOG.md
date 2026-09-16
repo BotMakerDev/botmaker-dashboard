@@ -80,8 +80,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   which is how the gallery, the plugin registry and this repository are told apart from the eleven it does.
 - **The Releases tab.** The committed `releases/*.md` logs, newest first: the table as the release wrote it,
   the full error text under it, and each verdict coloured by what it means without a word of it being
-  rewritten. **Re-poll runs `./release.sh --status <file>`** rather than asking JitPack and Actions directly,
-  so "ok" keeps meaning what `resolve_clean_room` decided it means; the log is rewritten in place, as a
+  rewritten. **Re-poll calls the release's own `--status`** rather than asking JitPack and Actions directly,
+  so "ok" keeps meaning what a clean-room resolve decided it means; the log is rewritten in place, as a
   reviewable diff the operator commits. Right-click a row to open its GitHub Release, its JitPack build or
   the workflow runs for its tag.
 - **A level picker instead of a text box, and it says what the level would cut.** Each module row carries
@@ -128,6 +128,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   window cannot finish has to reach the same code the button does — two implementations is exactly what the
   fallback used to be. `--execute` is the caller's argument rather than a field, so the preview line and the
   release line are spelled by one method and differ by that word.
+
+- **Re-poll calls `ReleaseStatus.repoll` instead of shelling to `./release.sh --status <file>`.** It is the
+  last subprocess this window ran that was not `git`, and it had to go the day the script became a wrapper:
+  shelling would have built a jar to run the code already on this classpath. What it asks is unchanged —
+  JitPack through the release's own clean-room resolve, Actions through the release's own poll — because
+  that was never about *how* the answer was fetched, only about whose answer it is. The lines stream into
+  the status label as each module is polled, and a failure is a value, not an exception.
 
 - **The contents API has one caller instead of two.** `Queue` read an entry file at a pull request's head
   and decoded the base64 itself; `Catalog` needs the same bytes on `main`, one ref apart. Both now go

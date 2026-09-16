@@ -33,11 +33,11 @@ import java.util.function.Function;
 /**
  * The Releases tab: the committed {@code releases/*.md} logs, newest first, and a re-poll.
  *
- * <p>The log is the record and this tab is a reader of it. It parses nothing that {@code release.sh} did not
- * write and asks GitHub nothing directly — <b>re-poll shells to {@code ./release.sh --status <file>}</b>,
- * which rewrites the file in place through the very same {@code resolve_clean_room} the release used. An
- * easier check here (a HEAD on the {@code .pom}) would answer a different question and could turn a broken
- * row green: a published pom naming a dependency nobody can resolve passes a HEAD and fails a real build.
+ * <p>The log is the record and this tab is a reader of it. It parses nothing the release did not write and
+ * asks GitHub nothing directly — <b>re-poll calls {@code ReleaseStatus.repoll}</b>, which rewrites the file
+ * in place through the very same clean-room resolve the release used. An easier check here (a HEAD on the
+ * {@code .pom}) would answer a different question and could turn a broken row green: a published pom naming
+ * a dependency nobody can resolve passes a HEAD and fails a real build.
  *
  * <p>Because {@code --status} rewrites the file, a re-poll is a <b>reviewable diff</b> in the umbrella
  * working copy, and committing it is the operator's call. The tab says so rather than committing anything.
@@ -153,10 +153,11 @@ public final class ReleasesTab extends BorderPane {
     }
 
     /**
-     * Runs {@code ./release.sh --status <file>} and re-reads the file it rewrote.
+     * Calls {@link ReleaseLog#repoll} and re-reads the file it rewrote.
      *
      * <p>Off the FX thread and slow by nature: it resolves every module's artifacts into a throwaway local
-     * repository and calls {@code gh} once per module. Minutes, not seconds.
+     * repository and calls {@code gh} once per module. Minutes, not seconds — which is why the line says
+     * what it is doing rather than only that it is busy.
      */
     private void repoll() {
         if (current == null || umbrella == null) {
@@ -165,19 +166,20 @@ public final class ReleasesTab extends BorderPane {
         Path file = current.file();
         Path root = umbrella;
         repoll.setDisable(true);
-        status.setText("./release.sh --status " + file.getFileName() + " — resolving artifacts and polling Actions…");
+        status.setText("Re-polling " + file.getFileName() + " — resolving artifacts and polling Actions…");
         CompletableFuture
-                .supplyAsync(() -> ReleaseLog.repoll(root, file))
-                .whenComplete((proc, error) -> Platform.runLater(() -> {
+                .supplyAsync(() -> ReleaseLog.repoll(root, file,
+                        line -> Platform.runLater(() -> status.setText(line.strip()))))
+                .whenComplete((polled, error) -> Platform.runLater(() -> {
                     repoll.setDisable(false);
                     if (error != null) {
                         status.setText("Re-poll failed: " + error.getMessage());
                         return;
                     }
                     show(file);
-                    status.setText(proc.ok()
+                    status.setText(polled.ok()
                             ? "Re-polled. The log was rewritten in place — commit it as a diff."
-                            : "release.sh --status exited " + proc.exit() + ": " + proc.firstLine());
+                            : "Re-poll stopped: " + polled.error().orElse("no reason given"));
                 }));
     }
 
