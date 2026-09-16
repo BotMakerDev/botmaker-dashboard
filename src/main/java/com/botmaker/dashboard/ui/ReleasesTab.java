@@ -29,6 +29,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -128,6 +130,17 @@ public final class ReleasesTab extends BorderPane {
     private final Button refresh = new Button("Refresh verdicts");
     private final Button deep = new Button("Deep check");
     private final Button writeBack = new Button("Write back to the log");
+
+    /**
+     * Each release's dot colour, keyed by its start — the one thing the list cell reads.
+     *
+     * <p><b>Held rather than computed in the cell.</b> {@code ReleaseProgress.past} rebuilds every lane of a
+     * release from its log and the cache, and a {@code ListCell} runs on every scroll, every resize and every
+     * {@code refresh()} — so a poll that redrew the list after each answered tag recomputed the whole visible
+     * history each time, and the dots flickered while it did. Now a dot changes when its release's health
+     * actually changes, and the list is refreshed only then.
+     */
+    private final Map<Instant, String> health = new HashMap<>();
 
     /** One thread for every poll: a history's worth of {@code gh} calls at once is a rate limit, not speed. */
     private final ExecutorService polls = Executors.newSingleThreadExecutor(task -> {
@@ -238,6 +251,8 @@ public final class ReleasesTab extends BorderPane {
     private void setReleases(List<ReleaseHistory.Release> found) {
         Instant selected = Optional.ofNullable(list.getSelectionModel().getSelectedItem())
                 .map(ReleaseHistory.Release::start).orElse(null);
+        // A relist may have moved a tag from one group to another, so every held dot is a guess now.
+        health.clear();
         releases.setAll(found);
         int index = 0;
         for (int i = 0; i < found.size(); i++) {
@@ -276,7 +291,25 @@ public final class ReleasesTab extends BorderPane {
                 + (release.moduleCount() > release.tags().size()
                 ? ", " + (release.moduleCount() - release.tags().size()) + " module(s) the log names never tagged"
                 : ""));
-        list.refresh();
+    }
+
+    /**
+     * The dot for one release, computed once and kept.
+     *
+     * <p>{@code Instant.now()} only decides how old a cached verdict is said to be, which the dot does not
+     * show — so a value held across a few minutes says the same thing a fresh one would.
+     */
+    private String healthOf(ReleaseHistory.Release release) {
+        return health.computeIfAbsent(release.start(),
+                key -> ReleaseProgress.past(release, cache, Instant.now()).health());
+    }
+
+    /** Recomputes one release's dot, and repaints the list only when that dot actually changed. */
+    private void healthChanged(ReleaseHistory.Release release) {
+        String was = health.remove(release.start());
+        if (!Objects.equals(was, healthOf(release))) {
+            list.refresh();
+        }
     }
 
     /**
@@ -330,9 +363,11 @@ public final class ReleasesTab extends BorderPane {
         Platform.runLater(() -> {
             if (Objects.equals(list.getSelectionModel().getSelectedItem(), release)) {
                 draw(release);
-            } else {
-                list.refresh();
             }
+            // The board above redraws on every answered tag, because that is the thing being watched. The
+            // list does not: one release's dot is all that can have changed, and repainting the history for
+            // each of ten tags is what made the dots flicker.
+            healthChanged(release);
         });
     }
 
@@ -427,7 +462,7 @@ public final class ReleasesTab extends BorderPane {
                     + (item.moduleCount() == 1 ? "" : "s") + (item.log().isEmpty() ? " · no log" : ""));
             dot.getStyleClass().removeAll("health-dot--ok", "health-dot--broken", "health-dot--pending");
             if (cache != null) {
-                dot.getStyleClass().add("health-dot--" + ReleaseProgress.past(item, cache, Instant.now()).health());
+                dot.getStyleClass().add("health-dot--" + healthOf(item));
             }
             setGraphic(dot);
         }

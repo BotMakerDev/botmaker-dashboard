@@ -111,6 +111,30 @@ class ReleasesTabTest extends FxHeadless {
     }
 
     @Test
+    void eachReleaseKeepsOneDotRatherThanOnePerRepaint() throws Exception {
+        open();
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> actionsPolls.get() == 4);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        // One dot per row, each carrying exactly one state class: a cell recomputing its own health on
+        // every repaint is what made them flicker while a poll answered one tag at a time.
+        List<javafx.scene.Node> dots = List.copyOf(lookup(".health-dot").queryAll());
+        assertEquals(2, dots.size());
+        for (javafx.scene.Node dot : dots) {
+            assertEquals(1, dot.getStyleClass().stream().filter(c -> c.startsWith("health-dot--")).count(),
+                    dot.getStyleClass().toString());
+        }
+        assertTrue(dots.getFirst().getStyleClass().contains("health-dot--broken"),
+                "the half-cut release failed on Actions");
+
+        // Repainting the list does not change what a dot says.
+        interact(() -> tab.list().refresh());
+        WaitForAsyncUtils.waitForFxEvents();
+        assertTrue(lookup(".health-dot").queryAll().stream()
+                .anyMatch(dot -> dot.getStyleClass().contains("health-dot--broken")));
+    }
+
+    @Test
     void aCachedSettledVerdictIsNotAskedAgain() throws Exception {
         open();
         WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> actionsPolls.get() == 4);
