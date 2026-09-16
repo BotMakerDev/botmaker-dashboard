@@ -1,5 +1,6 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.Module;
 import com.botmaker.shared.github.GitHubConfig;
 
 import java.util.ArrayList;
@@ -100,8 +101,10 @@ public final class Links {
         List<Link> links = new ArrayList<>(List.of(
                 new Link("GitHub", repo(module)),
                 new Link("Actions", actions(module)),
-                new Link("JitPack", jitpackPage(module)),
                 new Link("Releases", releases(module))));
+        if (onJitpack(module)) {
+            links.add(2, new Link("JitPack", jitpackPage(module)));
+        }
         latestTag.filter(tag -> ahead > 0)
                 .ifPresent(tag -> links.add(new Link("Changes since " + tag, compare(module, tag, "main"))));
         return List.copyOf(links);
@@ -110,16 +113,33 @@ public final class Links {
     /**
      * The pages for a repository somebody else owns, named as {@code owner/name}.
      *
-     * <p>JitPack is offered for bots too. A bot is not a library, but JitPack serves any repository, and the
-     * page is where a template somebody forks and depends on would be built — a link that shows nothing is a
-     * cheaper mistake than a missing one.
+     * <p><b>JitPack only when the thing is resolved as an artifact.</b> A plugin is: its entry carries a
+     * Maven coordinate and a host resolves it. A bot is not — JitPack would serve a page for it, since it
+     * serves any repository, and that page says nothing about a bot nobody resolves. A link to a page that
+     * cannot answer anything is worse than one button fewer.
      */
-    public static List<Link> forRepository(String slug) {
-        return List.of(
+    public static List<Link> forRepository(String slug, boolean onJitpack) {
+        List<Link> links = new ArrayList<>(List.of(
                 new Link("GitHub", GITHUB + slug),
                 new Link("Actions", actionsOn(slug)),
-                new Link("JitPack", jitpackPageOf(slug)),
-                new Link("Releases", releasesOf(slug)));
+                new Link("Releases", releasesOf(slug))));
+        if (onJitpack) {
+            links.add(2, new Link("JitPack", jitpackPageOf(slug)));
+        }
+        return List.copyOf(links);
+    }
+
+    /**
+     * Whether a module of this checkout is resolved from JitPack at all.
+     *
+     * <p>The release library's own answer ({@code ReleaseLog.onJitpack}), not a list kept here: the pilot is
+     * an APK, Studio is packaged per OS by its own CI, and the gallery, the registry and this window are not
+     * released at all. A button offering a JitPack page for any of them opens a page about nothing.
+     */
+    private static boolean onJitpack(String module) {
+        return Module.byDirectory(module)
+                .map(com.botmaker.cli.release.ReleaseLog::onJitpack)
+                .orElse(false);
     }
 
     /**

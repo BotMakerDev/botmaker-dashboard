@@ -5,6 +5,7 @@ import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Order;
 import com.botmaker.cli.release.Plan;
 import com.botmaker.cli.release.Version;
+import com.botmaker.dashboard.ui.widgets.CopyButton;
 import com.botmaker.dashboard.ui.widgets.LiveBadge;
 import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
@@ -815,7 +816,12 @@ public final class ReleaseTab extends BorderPane {
         banner.getChildren().clear();
         Label heading = new Label(title);
         heading.getStyleClass().add("refusal-title");
-        banner.getChildren().add(heading);
+        // A refusal is a column of Labels, so there is nothing to select: the one way out of the window
+        // was retyping it. The whole banner goes on the clipboard, title included.
+        HBox headingRow = new HBox(10, heading,
+                new CopyButton("Copy", () -> title + "\n\n" + String.join("\n\n", lines)));
+        headingRow.setAlignment(Pos.CENTER_LEFT);
+        banner.getChildren().add(headingRow);
         for (String line : lines) {
             Label label = new Label(line);
             label.getStyleClass().add("refusal-line");

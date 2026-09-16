@@ -157,11 +157,14 @@ class CatalogTest {
                 sdk.links().stream().map(l -> l.label()).toList());
         assertEquals("https://github.com/LiQiyeDev/botmaker-sdk", sdk.links().get(0).url());
         assertEquals(sdk.url(), sdk.links().get(4).url());
+        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-sdk", sdk.links().get(2).url());
 
+        // A bot gets no JitPack link: nobody resolves a bot as an artifact, so that page answers nothing.
         Catalog.Entry gamebot = bot("""
                 {"name": "g", "owner": "LiQiyeDev", "repo": "botmaker-gamebot", "tags": ["template"]}
                 """);
-        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-gamebot", gamebot.links().get(2).url());
+        assertEquals(List.of("GitHub", "Actions", "Releases", "Entry file"),
+                gamebot.links().stream().map(l -> l.label()).toList());
     }
 
     @Test

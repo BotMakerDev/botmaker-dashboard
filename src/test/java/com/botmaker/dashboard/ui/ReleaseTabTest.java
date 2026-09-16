@@ -136,10 +136,24 @@ class ReleaseTabTest extends FxHeadless {
         previewAndWait();
 
         assertTrue(tab.banner().isVisible());
-        List<String> words = tab.banner().getChildren().stream().map(n -> ((Label) n).getText()).toList();
+        // The first child is the title row: the heading plus the button that copies the whole banner,
+        // since a column of Labels is the one thing in this window nobody can select.
+        List<String> words = tab.banner().getChildren().stream()
+                .map(n -> n instanceof Label label
+                        ? label.getText()
+                        : ((Label) ((javafx.scene.layout.HBox) n).getChildren().getFirst()).getText())
+                .toList();
         assertEquals("2 gate(s) refused — Execute stays dead", words.getFirst());
         assertEquals(refusals, words.subList(1, words.size()));
         assertTrue(tab.executeButton().isDisabled());
+
+        clickOn("Copy");
+        // The clipboard is the FX thread's, read as well as written.
+        java.util.concurrent.atomic.AtomicReference<String> copied = new java.util.concurrent.atomic
+                .AtomicReference<>();
+        interact(() -> copied.set(javafx.scene.input.Clipboard.getSystemClipboard().getString()));
+        assertEquals("2 gate(s) refused — Execute stays dead\n\n" + String.join("\n\n", refusals),
+                copied.get());
 
         // The next preview clears it.
         refusals = List.of();

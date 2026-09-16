@@ -446,6 +446,18 @@
     -fx-cursor: hand;
 }
 
+/* Small, quiet, and beside the thing it copies — never competing with Execute or Deep check. */
+.copy-button {
+    -fx-font-size: 11px;
+    -fx-padding: 1 8 1 8;
+    -fx-text-fill: -bm-text-dim;
+}
+
+.copy-button:hover {
+    -fx-text-fill: -bm-text;
+    -fx-border-color: -bm-accent;
+}
+
 .link-button:hover {
     -fx-background-color: -bm-bg-raised;
     -fx-border-color: transparent;

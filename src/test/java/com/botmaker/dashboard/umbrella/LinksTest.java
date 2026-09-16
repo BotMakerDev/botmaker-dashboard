@@ -22,6 +22,27 @@ class LinksTest {
     }
 
     @Test
+    void jitpackIsOfferedOnlyWhereSomethingIsResolvedFromIt() {
+        // The release library's own answer: the pilot is an APK, Studio is packaged per OS by its own CI,
+        // and this window is not released at all. A JitPack button for any of them opens a page about
+        // nothing.
+        assertEquals(List.of("GitHub", "Actions", "JitPack", "Releases"),
+                labels(Links.forModule("botmaker-sdk")));
+        assertEquals(List.of("GitHub", "Actions", "Releases"), labels(Links.forModule("botmaker-studio")));
+        assertEquals(List.of("GitHub", "Actions", "Releases"), labels(Links.forModule("botmaker-pilot")));
+        assertEquals(List.of("GitHub", "Actions", "Releases"), labels(Links.forModule("botmaker-dashboard")));
+
+        assertEquals(List.of("GitHub", "Actions", "JitPack", "Releases"),
+                labels(Links.forRepository("someone/plugin", true)));
+        assertEquals(List.of("GitHub", "Actions", "Releases"),
+                labels(Links.forRepository("someone/bot", false)));
+    }
+
+    private static List<String> labels(List<Links.Link> links) {
+        return links.stream().map(Links.Link::label).toList();
+    }
+
+    @Test
     void aModuleLinksItsRepositoryAndOffersAComparisonOnlyPastItsTag() {
         assertEquals(List.of(
                         new Links.Link("GitHub", "https://github.com/LiQiyeDev/botmaker-sdk"),
@@ -34,7 +55,7 @@ class LinksTest {
                 Links.forModule("botmaker-sdk", Optional.of("v1.1.6"), 3));
 
         assertEquals(4, Links.forModule("botmaker-sdk", Optional.of("v1.1.6"), 0).size());
-        assertEquals(4, Links.forModule("botmaker-dashboard", Optional.empty(), 12).size());
+        assertEquals(3, Links.forModule("botmaker-dashboard", Optional.empty(), 12).size());
     }
 
     @Test
@@ -47,6 +68,7 @@ class LinksTest {
         assertEquals(Optional.empty(), Links.slug(""));
         assertEquals(Optional.empty(), Links.slug(null));
 
-        assertEquals("https://jitpack.io/#someone/plugin", Links.forRepository("someone/plugin").get(2).url());
+        assertEquals("https://jitpack.io/#someone/plugin",
+                Links.forRepository("someone/plugin", true).get(2).url());
     }
 }

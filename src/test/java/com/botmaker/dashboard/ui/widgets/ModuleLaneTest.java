@@ -73,6 +73,15 @@ class ModuleLaneTest extends FxHeadless {
         assertTrue(lane.errorText().getText().contains("pushing v0.1.0 failed"));
         assertFalse(lane.pulsing());
 
+        // The error is what gets pasted into an issue, and a scrolling read-only TextArea is the one place
+        // it cannot be selected out of — so it is copied with its module and tag above it.
+        clickOn("Copy error");
+        java.util.concurrent.atomic.AtomicReference<String> copied = new java.util.concurrent.atomic
+                .AtomicReference<>();
+        interact(() -> copied.set(javafx.scene.input.Clipboard.getSystemClipboard().getString()));
+        assertTrue(copied.get().startsWith("botmaker-plugin-host v0.1.0 — "), copied.get());
+        assertTrue(copied.get().contains("pushing v0.1.0 failed"), copied.get());
+
         clickOn("Open run");
         clickOn("Open JitPack build");
         clickOn(lane.chip());

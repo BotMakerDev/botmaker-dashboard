@@ -130,7 +130,10 @@ public final class ModuleLane extends VBox {
                 open.accept(Links.jitpack(lane.module(), lane.tag()));
             }
         });
-        details.getChildren().addAll(errorText, new HBox(8, openRun, openJitpack));
+        // The error is the thing an operator pastes into an issue or a terminal, and a read-only TextArea
+        // that scrolls is the one place it cannot be selected out of comfortably.
+        CopyButton copy = new CopyButton("Copy error", () -> lane == null ? "" : copyText());
+        details.getChildren().addAll(errorText, new HBox(8, openRun, openJitpack, copy));
         details.getStyleClass().add("lane-details");
         showDetails(false);
 
@@ -178,6 +181,16 @@ public final class ModuleLane extends VBox {
                 : String.join("\n\n", errors));
         showDetails(lane.failed());
         restartPulse();
+    }
+
+    /**
+     * What *Copy error* puts on the clipboard: the module, its tag, its stage, then the error text.
+     *
+     * <p>The heading matters as much as the text — an error pasted somewhere else has to say which module
+     * and which tag it belongs to, and the lane says that on screen where the clipboard could not.
+     */
+    private String copyText() {
+        return lane.module() + " " + lane.tag() + " — " + lane.stage() + "\n\n" + errorText.getText();
     }
 
     /** Whether the running node may pulse. The owner turns it off while the lane cannot be seen. */

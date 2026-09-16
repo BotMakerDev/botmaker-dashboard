@@ -104,7 +104,11 @@ public final class Catalog {
          * {@code owner/name} — offers only the entry file, rather than a link guessed from its id.
          */
         public List<Links.Link> links() {
-            List<Links.Link> links = new ArrayList<>(repo.isEmpty() ? List.of() : Links.forRepository(repo));
+            // JitPack for a plugin, which a host resolves as a Maven artifact; never for a bot, which
+            // nobody resolves — that page would answer nothing.
+            List<Links.Link> links = new ArrayList<>(repo.isEmpty()
+                    ? List.of()
+                    : Links.forRepository(repo, kind == Kind.PLUGIN));
             links.add(new Links.Link("Entry file", url()));
             return List.copyOf(links);
         }
