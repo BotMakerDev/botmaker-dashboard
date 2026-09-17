@@ -126,6 +126,24 @@ least-used account is tried first and the rest in order after it, so a rate limi
 `claude` **exits 0 on a usage limit** and prints the sentence, which is why the output is checked for one:
 the exit code alone would write that sentence into the changelog as release notes.
 
+**Draft all is the one exception to "fills the editor and saves nothing", and it earns it** (2026-09-17).
+`umbrella/ChangelogDrafts` writes and **commits** a section for every module that has none, because its
+purpose is to lift `ChangelogGate` for a whole constellation and a draft in a text area lifts nothing. Two
+rules, decided by the commits since the module's newest tag: **none** means the module is being re-released
+for its pins only, so the section is one line saying so plus the previous section's body carried forward —
+no model, because a model would be asked to invent; **some** means Claude drafts from them. The drafter is a
+parameter (`ChangelogDrafts.Drafter`), so the copy-or-draft rule is tested over a real repository with a
+lambda. Each section goes through `ChangelogEdit.save` — one file, one commit, nothing pushed — and a dirty
+`CHANGELOG.md` is a failure for that module, never a commit that carries somebody's edit. The button asks
+first and names the modules; it is visible to the maintainer even without Claude, since the copies still
+happen and the report says what was left.
+
+**The Release tab's Preview calls the same thing first.** `Backend.autoDraft` runs `ChangelogDrafts` over
+the modules the flags would cut (`ReleaseSpec.requested()`, minus the exempt ones) before `ReleaseRun.go`,
+because the decide pass reads the *committed* changelog. A module it could not write is a refusal of the
+preview by name — `preview refused: … need a changelog and none could be written` — and Execute stays dead.
+The default `autoDraft` does nothing, which is what a test backend over a fixture wants.
+
 ## Admin — GitHub answers it, and there is no second list
 
 `Admin.probe` reads `permissions.push` from `GET /repos/LiQiyeDev/botmaker-plugin-registry` for the
@@ -293,6 +311,7 @@ com.botmaker.dashboard
 │   ├── VerdictCache    releases-cache.json under CacheDirs; settled verdicts are not asked again
 │   ├── CiStatus        what CI says about main — CiGate's verdict rendered, never a second read of gh
 │   ├── ChangelogEdit   read and rewrite one [Unreleased] section, and commit that one file — no push
+│   ├── ChangelogDrafts every module with no section: copied forward or drafted, each committed; Drafter is a seam
 │   ├── CswapAccounts   cswap list as slots and 5h usage — a slot, never an address
 │   ├── ClaudeDraft     the prompt, the argv and the rotation; it fills the editor and saves nothing
 │   └── Links           a tag's three pages (Release, JitPack, Actions), and a repository's four

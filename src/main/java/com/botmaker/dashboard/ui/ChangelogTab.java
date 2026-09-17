@@ -2,6 +2,7 @@ package com.botmaker.dashboard.ui;
 
 import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Tags;
+import com.botmaker.dashboard.umbrella.ChangelogDrafts;
 import com.botmaker.dashboard.umbrella.ChangelogEdit;
 import com.botmaker.dashboard.umbrella.ClaudeDraft;
 import com.botmaker.shared.github.GitHubAuth;
@@ -12,12 +13,15 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -49,6 +53,12 @@ import java.util.concurrent.ExecutorService;
  * rather than disabled for everybody else, because a disabled button is a promise this window cannot keep for
  * somebody else's account. What it produces is text in a text area, read and edited before it is committed
  * like anything typed here.
+ *
+ * <p><b>Draft all is the exception, and it says so.</b> It writes and <em>commits</em> a section for every
+ * module that has none, because its purpose is to lift the release gate for a whole constellation at once —
+ * a draft left in a text area lifts nothing. A module with no commits since its tag gets the copy rule and
+ * no model ({@link ChangelogDrafts}); the rest are drafted. It is offered to the maintainer even when Claude
+ * is not on this machine, because the copies still happen and the report says which modules were left.
  */
 public final class ChangelogTab extends BorderPane {
 
@@ -66,6 +76,7 @@ public final class ChangelogTab extends BorderPane {
     private final Button reload = new Button("Reload");
     private final Button save = new Button("Save and commit");
     private final Button draft = new Button("Draft with Claude");
+    private final Button draftAll = new Button("Draft all…");
 
     /**
      * One thread, because both things it runs are exclusive: a draft takes minutes and a save commits.
@@ -106,13 +117,16 @@ public final class ChangelogTab extends BorderPane {
         reload.setOnAction(e -> open(selected));
         save.setOnAction(e -> save());
         draft.setOnAction(e -> draftWithClaude());
+        draftAll.setOnAction(e -> draftAll());
+        draftAll.setTooltip(new Tooltip("Write and commit an [Unreleased] section for every module that has "
+                + "none: copied forward where nothing changed since the tag, drafted with Claude otherwise."));
         save.setDisable(true);
         draft.setDisable(true);
         showDraftButton(false);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, reload, save, draft, spacer, status);
+        HBox bar = new HBox(10, reload, save, draft, draftAll, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -287,16 +301,93 @@ public final class ChangelogTab extends BorderPane {
                 }));
     }
 
+    /**
+     * Writes and commits a section for every module that has none — see {@link ChangelogDrafts}.
+     *
+     * <p>The one action on this tab that commits without the editor in between, which is why it asks first
+     * and names the modules it is about to touch. The drafter is {@link ClaudeDraft} when it is available
+     * and a refusal otherwise, so the copies land either way and the report names what was left.
+     */
+    private void draftAll() {
+        if (umbrella == null) {
+            return;
+        }
+        Path root = umbrella;
+        List<String> all = List.copyOf(modules);
+        setBusy(true, "Looking for modules with no [Unreleased] section …");
+        CompletableFuture.supplyAsync(() -> ChangelogDrafts.needing(root, all), work)
+                .whenComplete((needing, error) -> Platform.runLater(() -> {
+                    if (error != null) {
+                        setBusy(false, "Could not read the changelogs: " + error.getMessage());
+                        return;
+                    }
+                    if (needing.isEmpty()) {
+                        setBusy(false, "Every module already has an [Unreleased] section.");
+                        return;
+                    }
+                    if (!confirmDraftAll(needing)) {
+                        setBusy(false, "Nothing written.");
+                        return;
+                    }
+                    runDraftAll(root, needing);
+                }));
+    }
+
+    private boolean confirmDraftAll(List<String> needing) {
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION);
+        ask.setTitle("Draft all");
+        ask.setHeaderText("Write and commit an [Unreleased] section in " + needing.size() + " module(s)?");
+        ask.setContentText(String.join("\n", needing) + "\n\nA module with no commits since its tag gets its "
+                + "previous section carried forward; the rest are drafted with Claude"
+                + (ClaudeDraft.available() ? "." : " — which is not on this machine, so those are skipped.")
+                + "\nEach section is committed in its module. Nothing is pushed.");
+        return ask.showAndWait().filter(button -> button == ButtonType.OK).isPresent();
+    }
+
+    private void runDraftAll(Path root, List<String> needing) {
+        ChangelogDrafts.Drafter drafter = ClaudeDraft.available()
+                ? ClaudeDraft::draft
+                : (where, request, progress) -> new ClaudeDraft.Result("", "",
+                        "Claude is not on this machine");
+        setBusy(true, "Writing " + needing.size() + " section(s) …");
+        CompletableFuture
+                .supplyAsync(() -> ChangelogDrafts.draftAll(root, needing, drafter,
+                        line -> Platform.runLater(() -> status.setText(line))), work)
+                .whenComplete((results, error) -> Platform.runLater(() -> {
+                    if (error != null) {
+                        setBusy(false, "Draft all failed: " + error.getMessage());
+                        return;
+                    }
+                    setBusy(false, summary(results));
+                    open(selected);
+                }));
+    }
+
+    /** One line: how many were drafted, copied and left, naming the ones left and why. */
+    static String summary(List<ChangelogDrafts.Result> results) {
+        long drafted = results.stream().filter(r -> r.outcome() == ChangelogDrafts.Outcome.DRAFTED).count();
+        long copied = results.stream().filter(r -> r.outcome() == ChangelogDrafts.Outcome.COPIED).count();
+        List<String> failed = results.stream().filter(r -> !r.written())
+                .map(r -> r.module() + " (" + r.message() + ")").toList();
+        StringBuilder line = new StringBuilder();
+        line.append(drafted).append(" drafted, ").append(copied).append(" copied forward");
+        if (!failed.isEmpty()) {
+            line.append(", ").append(failed.size()).append(" left: ").append(String.join("; ", failed));
+        }
+        line.append(". Committed in each module; nothing is pushed.");
+        return line.toString();
+    }
+
     /** Everything above the first {@code ## } heading: what the module says about itself. */
     private static String preamble(String text) {
-        int first = text.indexOf("\n## ");
-        return first < 0 ? text : text.substring(0, first);
+        return ChangelogDrafts.preamble(text);
     }
 
     private void setBusy(boolean busy, String sentence) {
         reload.setDisable(busy);
         save.setDisable(busy || opened == null || !opened.exists() || opened.dirty());
         draft.setDisable(busy || opened == null || !opened.exists());
+        draftAll.setDisable(busy || umbrella == null);
         editor.setDisable(busy);
         status.setText(sentence);
     }
@@ -309,9 +400,7 @@ public final class ChangelogTab extends BorderPane {
      * because a checkout says who cloned it and nothing about who is at the keyboard.
      */
     private void askWhetherOwner(GitHubClient client, GitHubAuth auth) {
-        if (!ClaudeDraft.available()) {
-            return;
-        }
+        // Asked even when Claude is absent: Draft all still copies sections forward for the maintainer.
         auth.login(client).whenComplete((login, error) -> Platform.runLater(() -> {
             owner = error == null && login != null
                     && login.equalsIgnoreCase(GitHubConfig.REGISTRY_OWNER);
@@ -325,8 +414,15 @@ public final class ChangelogTab extends BorderPane {
         askWhetherOwner(client, auth);
     }
 
-    private void showDraftButton(boolean show) {
-        draft.setVisible(show);
-        draft.setManaged(show);
+    /**
+     * Draft with Claude needs the maintainer <em>and</em> the programs; Draft all needs only the maintainer,
+     * because the copy rule needs no model.
+     */
+    private void showDraftButton(boolean isOwner) {
+        boolean single = isOwner && ClaudeDraft.available();
+        draft.setVisible(single);
+        draft.setManaged(single);
+        draftAll.setVisible(isOwner);
+        draftAll.setManaged(isOwner);
     }
 }

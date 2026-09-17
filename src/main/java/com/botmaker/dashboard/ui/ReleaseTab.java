@@ -8,6 +8,8 @@ import com.botmaker.cli.release.Version;
 import com.botmaker.dashboard.ui.widgets.CopyButton;
 import com.botmaker.dashboard.ui.widgets.LiveBadge;
 import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
+import com.botmaker.dashboard.umbrella.ChangelogDrafts;
+import com.botmaker.dashboard.umbrella.ClaudeDraft;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
 import com.botmaker.dashboard.umbrella.ReleaseProgress;
 import com.botmaker.dashboard.umbrella.ReleaseRun;
@@ -105,6 +107,16 @@ public final class ReleaseTab extends BorderPane {
     interface Backend {
         ReleaseRun preview(Path umbrella, ReleaseSpec spec, Consumer<String> line);
 
+        /**
+         * Writes and commits an {@code [Unreleased]} section for each of {@code modules} that has none, and
+         * answers what happened to each — see {@link ChangelogDrafts}. Nothing by default, which is what a
+         * test backend wants: a preview over a fixture is not a preview that commits into it.
+         */
+        default List<ChangelogDrafts.Result> autoDraft(Path umbrella, List<String> modules,
+                                                       Consumer<String> line) {
+            return List.of();
+        }
+
         Optional<Version> latest(Path umbrella, String module);
 
         ReleaseLauncher.Launched launch(Path umbrella, ReleaseSpec spec) throws IOException;
@@ -115,6 +127,22 @@ public final class ReleaseTab extends BorderPane {
             @Override
             public ReleaseRun preview(Path umbrella, ReleaseSpec spec, Consumer<String> line) {
                 return ReleaseRun.go(umbrella, spec, false, line);
+            }
+
+            @Override
+            public List<ChangelogDrafts.Result> autoDraft(Path umbrella, List<String> modules,
+                                                          Consumer<String> line) {
+                List<String> needing = ChangelogDrafts.needing(umbrella, modules);
+                if (needing.isEmpty()) {
+                    return List.of();
+                }
+                // Without Claude the copies still land and the drafted ones are reported as left, which
+                // is what turns into the refusal below.
+                ChangelogDrafts.Drafter drafter = ClaudeDraft.available()
+                        ? ClaudeDraft::draft
+                        : (where, request, progress) -> new ClaudeDraft.Result("", "",
+                                "Claude is not on this machine");
+                return ChangelogDrafts.draftAll(umbrella, needing, drafter, line);
             }
 
             @Override
@@ -753,10 +781,28 @@ public final class ReleaseTab extends BorderPane {
         hideBanner();
         say("Running " + spec.commandLine() + " …");
 
+        // The changelogs first, then the plan: the decide pass reads the committed changelog, so a module
+        // being cut with no [Unreleased] section is drafted (or copied forward) and committed before the
+        // library is asked — and a module that could not be is a refusal *here*, with its name, rather than
+        // the gate's generic one three minutes later.
+        List<String> cut = spec.requested().keySet().stream()
+                .filter(Module::hasChangelog).map(Module::directory).toList();
+        Consumer<String> line = text -> Platform.runLater(() -> output.appendText(text + "\n"));
         CompletableFuture
-                .supplyAsync(() -> backend.preview(root, spec,
-                        line -> Platform.runLater(() -> output.appendText(line + "\n"))))
-                .whenComplete((run, error) -> Platform.runLater(() -> {
+                .supplyAsync(() -> {
+                    List<ChangelogDrafts.Result> drafted = backend.autoDraft(root, cut, line);
+                    for (ChangelogDrafts.Result result : drafted) {
+                        line.accept("changelog · " + result.module() + ": " + result.outcome().name()
+                                .toLowerCase() + " — " + result.message());
+                    }
+                    List<String> left = drafted.stream().filter(r -> !r.written())
+                            .map(r -> r.module() + " — " + r.message()).toList();
+                    if (!left.isEmpty()) {
+                        return new Previewed(null, left);
+                    }
+                    return new Previewed(backend.preview(root, spec, line), List.of());
+                })
+                .whenComplete((previewed, error) -> Platform.runLater(() -> {
                     previewing = false;
                     if (error != null) {
                         // Not a refusal — ReleaseRun turns those into a value. This is the thread dying.
@@ -765,8 +811,20 @@ public final class ReleaseTab extends BorderPane {
                         refreshCommandLine();
                         return;
                     }
-                    show(spec, run);
+                    if (previewed.run() == null) {
+                        disarm();
+                        say("preview refused: " + previewed.left().size() + " module(s) need a changelog "
+                                + "and none could be written — Execute stays dead.");
+                        showBanner("Preview refused — a changelog could not be written", previewed.left());
+                        refreshCommandLine();
+                        return;
+                    }
+                    show(spec, previewed.run());
                 }));
+    }
+
+    /** A preview, or the modules whose changelog stopped it from running. */
+    private record Previewed(ReleaseRun run, List<String> left) {
     }
 
     /**

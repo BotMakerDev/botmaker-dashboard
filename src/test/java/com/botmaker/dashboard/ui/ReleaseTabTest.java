@@ -1,5 +1,6 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Plan;
 import com.botmaker.cli.release.Version;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
@@ -98,7 +99,8 @@ class ReleaseTabTest extends FxHeadless {
     void everyModuleHasARowBeforeAnyPreview() {
         open();
 
-        assertEquals(11, tab.rows().size());
+        // Thirteen since 2026-09-17: botmaker-remote and botmaker-remote-server joined the release chain.
+        assertEquals(Module.values().length, tab.rows().size());
         assertEquals("botmaker-pilot", tab.rows().getFirst().getModule(), "tag order: the pilot first");
         assertEquals("botmaker-studio", tab.rows().getLast().getModule(), "and Studio last");
         assertTrue(tab.executeButton().isDisabled());
@@ -111,6 +113,10 @@ class ReleaseTabTest extends FxHeadless {
         assertFalse(tab.executeButton().isDisabled(), "a clean preview of these flags arms Execute");
         assertFalse(row("botmaker-sdk").selectedProperty().get());
 
+        // Thirteen rows since 2026-09-17 and the SDK is the twelfth: a cell scrolled out of the 720px table
+        // is never built, so it is scrolled into view before its segment is looked up.
+        interact(() -> tab.table().scrollTo(row("botmaker-sdk")));
+        WaitForAsyncUtils.waitForFxEvents();
         clickOn(segment("botmaker-sdk", "minor"));
 
         assertTrue(row("botmaker-sdk").selectedProperty().get(), "choosing a level asks for the row");

@@ -14,6 +14,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Draft all… on the Changelog tab.** One press writes and commits an `[Unreleased]` section in every
+  module that has none. A module with no commits since its newest tag — one being re-released only because
+  an upstream moved — gets one line saying so and its previous section carried forward, with no model
+  asked; the rest are drafted with Claude. It asks first, names the modules, and reports how many were
+  drafted, copied and left. Offered to the maintainer even when Claude is not on this machine, because the
+  copies still happen.
+- **A preview on the Release tab writes the changelogs it needs.** Before the plan is computed, every
+  module the flags would cut and whose changelog would make the gate refuse is drafted or copied forward
+  and committed, and the output says which. A module that could not be — Claude absent, every account
+  refusing, a dirty `CHANGELOG.md` — is a refusal of the preview, by name, rather than the gate's generic
+  one three minutes later. Execute stays dead either way.
 - **Gallery tiers in the Catalog tab.** A Tier column shows each bot as Vetted (with the release) or
   Community; double-click it to open the bot's repository. **Vet…** proposes a `vetted/` record pinning a
   release (the newest, by default), and **Revoke vetting…** proposes deleting it. Both open a pull request
