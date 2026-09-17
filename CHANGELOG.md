@@ -10,7 +10,7 @@ ships to anyone but its author.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [0.0.1] — 2026-09-17
 
 ### Added
 
