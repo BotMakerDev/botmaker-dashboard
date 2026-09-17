@@ -282,6 +282,7 @@ selected row only.
 ```
 com.botmaker.dashboard
 ├── DashboardApp        the window: top bar + four tabs. The JavaFX entry point.
+├── Launcher            the shaded jar's and the app-image's main class (does not extend Application)
 ├── DashboardConfig     the one remembered preference (the umbrella path) + looksLikeUmbrella
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
 │   ├── Admin           permissions.push, and every failure folded into read-only
@@ -314,9 +315,10 @@ com.botmaker.dashboard
 │   ├── ChangelogDrafts every module with no section: copied forward or drafted, each committed; Drafter is a seam
 │   ├── CswapAccounts   cswap list as slots and 5h usage — a slot, never an address
 │   ├── ClaudeDraft     the prompt, the argv and the rotation; it fills the editor and saves nothing
+│   ├── BuiltWith       the cli this build was packaged with (baked .deps.env) against the checkout's
 │   └── Links           a tag's three pages (Release, JitPack, Actions), and a repository's four
 └── ui/
-    ├── UmbrellaBar     the checkout in use, and the picker that refuses a wrong directory
+    ├── UmbrellaBar     the checkout in use, the picker that refuses a wrong directory, the stale-cli notice
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
     ├── Browse          open a URL off the FX thread (platform opener, then HostServices) — never AWT
     ├── Themed          the palette on every window's scene root, and the owner on every dialog
@@ -385,22 +387,39 @@ submission — those have one owner each (`release.sh` today, `com.botmaker.cli.
 `RegistryGate` for the gate). The line to hold: *duplicate presentation freely, never logic that can be
 wrong.*
 
-## Not published, and what that omits on purpose
+## Released as a Linux package, and what that still omits on purpose (2026-09-17)
 
-No tag, no JitPack build, no GitHub Release, no `.deps.env`, **no flatten**. Nothing resolves this module
-as a dependency, so there is no published pom for a `-D` to be missing from. `pom.xml` says so where the
-flatten would go.
+**An installable app, Studio's shape, Linux only.** `Module.DASHBOARD` is the last flag in the release
+(`--dashboard`), tagged last: on a `v*` tag `ci.yml`'s `package` job checks out the four upstreams at the
+refs in `.deps.env`, installs them at `0.0.0-SNAPSHOT`, runs `mvn -Pdist package` (shaded jar → jpackage
+app-image → rpm + deb) and the `release` job publishes both installers through JReleaser with the changelog
+section as body (`tools/changelog-section.sh`, the same extractor the gate reads). No Windows leg, no
+AppImage, no dnf/apt repository, no signing.
 
-**If it is ever published, add both in the same commit.** A published pom carrying
-`botmaker-shared:0.0.0-SNAPSHOT` is exactly the bug that shipped in every SDK up to v1.0.24 — see the
-umbrella's *JitPack coordinate model*.
+**`--cli` forces `--dashboard`, and the notice in the top bar is the other half of the same fact.** The
+Release tab calls `com.botmaker.cli.release` in-process, so an installed dashboard decides by the cli it was
+*built* with. The release never cuts a cli without a dashboard; a checkout can still be *ahead* of the
+installed build, and `umbrella/BuiltWith` says so: the `dist` profile bakes `.deps.env` into the jar as
+`META-INF/botmaker/.deps.env`, and `UmbrellaBar` compares its `CLI_TAG` with `git describe --tags` in the
+checkout's `botmaker-cli` — *built with cli vX, checkout at vY — preview may follow older rules*. A
+development run has no baked file and shows nothing: there the cli on the classpath *is* the checkout's.
+
+**`.deps.env` pins four**: shared, the cli, and the cli's own two pins (contract, loader), because
+installing the cli from source resolves them. The first file, written by hand before the first release, pins
+`main` for the two unreleased ones; the release overwrites it with exact refs.
+
+**Still no JitPack, still no flatten.** Nothing resolves this module as a dependency, so there is no
+published pom for a `-D` to be missing from. `pom.xml` says so where the flatten would go.
 
 ## Commands
 
 ```bash
-mvn -pl botmaker-dashboard -am install    # from the umbrella root; -am builds shared first
+mvn -pl botmaker-dashboard -am install    # from the umbrella root; -am builds shared and the cli first
 mvn -pl botmaker-dashboard javafx:run
 mvn -pl botmaker-dashboard test
+JAVA_HOME=~/.jdks/<an upstream JDK> mvn -pl botmaker-dashboard -Pdist package -DskipTests -Dapp.version=0.0.1
+                                          # target/dist: the app-image, the rpm and the deb (Linux; needs
+                                          # rpmbuild + fakeroot; Fedora's patched JDK refuses jlink)
 ```
 
 Tests are headless by construction: everything with a rule in it (`Admin.read`,

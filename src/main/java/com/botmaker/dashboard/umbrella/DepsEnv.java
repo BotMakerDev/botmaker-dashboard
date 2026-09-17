@@ -31,7 +31,9 @@ public final class DepsEnv {
             "SDK_TAG", "botmaker-sdk",
             "STUDIO_API_TAG", "botmaker-studio-api",
             "PLUGIN_HOST_TAG", "botmaker-plugin-host",
-            "PLUGIN_TOOLKIT_TAG", "botmaker-plugin-toolkit");
+            "PLUGIN_TOOLKIT_TAG", "botmaker-plugin-toolkit",
+            // This module's own pin (2026-09-17): the release library it calls in-process.
+            "CLI_TAG", "botmaker-cli");
 
     private DepsEnv() {
     }

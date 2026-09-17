@@ -6,20 +6,21 @@
 
     <!--
       groupId matches the JitPack coordinate like every other module here, and unlike every other module
-      that is a convention rather than a requirement: THIS ONE IS NOT PUBLISHED. It is an application, not
+      that is a convention rather than a requirement: THIS ONE IS NOT ON JITPACK. It is an application, not
       a library — nothing resolves it, JitPack never builds it, and there is no tag whose name would
       override the version below.
 
-      Two consequences follow from that and both are deliberate omissions rather than oversights:
+      Since 2026-09-17 it IS released, as Studio is: a `v*` tag runs the `package` job in ci.yml, which
+      builds a Linux rpm + deb through the `dist` profile below and publishes them as a GitHub Release.
+      Two consequences, one omission kept and one added:
 
-        * NO flatten-maven-plugin. Flatten exists to bake a property-driven BotMaker upstream into the pom a
-          CONSUMER downloads. This module has such a property (botmaker.shared.version) and no consumer, so
-          there is no published pom for a -D to be missing from.
-        * NO .deps.env. Same reason: that file records which upstream tags a released tag was cut with, and
-          is read by a jitpack.yml or by Studio's package job. Neither exists here.
-
-      If this module ever IS published, add both in the same commit — a published pom carrying
-      botmaker-shared:0.0.0-SNAPSHOT is the exact bug that shipped in every SDK up to v1.0.24.
+        * STILL NO flatten-maven-plugin. Flatten exists to bake a property-driven BotMaker upstream into
+          the pom a CONSUMER downloads. This module has such properties (botmaker.shared.version,
+          botmaker.cli.version) and no consumer, so there is no published pom for a -D to be missing from.
+        * A .deps.env, like Studio's: the `package` job checks the four upstreams out at the refs it names
+          and `mvn install`s them at 0.0.0-SNAPSHOT — the value the properties below default to — so the
+          release build resolves them from source. The `dist` profile also bakes that file into the jar
+          (META-INF/botmaker/.deps.env), which is how the installed app knows which cli it carries.
     -->
     <groupId>com.github.LiQiyeDev</groupId>
     <artifactId>botmaker-dashboard</artifactId>
@@ -43,6 +44,9 @@
              leaves in ~/.m2. There is no released-tag injection because there is no published build. -->
         <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
         <botmaker.cli.version>0.0.0-SNAPSHOT</botmaker.cli.version>
+        <!-- Numeric-only version for jpackage (it rejects -SNAPSHOT). The package job passes the tag's
+             number as -Dapp.version; a local `-Pdist package` gets this placeholder. -->
+        <app.version>1.0.0</app.version>
     </properties>
 
     <repositories>
@@ -191,10 +195,236 @@
                 <configuration>
                     <mainClass>com.botmaker.dashboard.DashboardApp</mainClass>
                     <options>
-                        <option>--enable-native-access=ALL-UNNAMED</option>
+                        <option>--enable-native-access=ALL-UNNAMED,javafx.graphics</option>
                     </options>
                 </configuration>
             </plugin>
+
+            <!-- One executable jar, which is what jpackage wraps: Studio's shape. The main class is the
+                 Launcher (it does not extend Application, so `java -jar` works with JavaFX on the
+                 classpath). No native filters: this module ships no OpenCV, OCR or JNA. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.botmaker.dashboard.Launcher</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Version>${app.version}</Implementation-Version>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+          `dist` profile: the Linux installers, via jpackage — Studio's profile with everything Studio
+          needs and this window does not taken out (no Windows leg, no javac/JDI modules, no icon set, no
+          spec override). Run on Linux only; jpackage builds for the OS it runs on.
+
+            mvn -Pdist package -Dapp.version=1.2.3
+            -> target/dist/BotMaker Dashboard/   (the app-image)
+            -> target/dist/*.rpm, *.deb
+
+          Build it with an upstream JDK (Temurin, ~/.jdks): jlink from Fedora's patched java-25-openjdk
+          refuses with "java.security has been modified" — see the note in botmaker-studio/pom.xml.
+        -->
+        <profile>
+            <id>dist</id>
+            <build>
+                <plugins>
+                    <!-- jpackage refuses to overwrite an existing app-image. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <version>3.4.0</version>
+                        <executions>
+                            <execution>
+                                <id>clean-dist</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>clean</goal></goals>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.build.directory}/dist</directory>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <!-- The module's .deps.env, into the jar: the installed app reads CLI_TAG out
+                                 of it to say when the checkout's botmaker-cli has moved past the cli this
+                                 build calls (umbrella/BuiltWith). Only under -Pdist, so a development run —
+                                 whose cli IS the checkout's — has no resource and says nothing. -->
+                            <execution>
+                                <id>bake-deps-env</id>
+                                <phase>generate-resources</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.outputDirectory}/META-INF/botmaker</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.basedir}</directory>
+                                            <includes>
+                                                <include>.deps.env</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                            <!-- Only the shaded jar goes into jpackage's input directory. -->
+                            <execution>
+                                <id>stage-jpackage-input</id>
+                                <phase>package</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/jpackage-input</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>${project.build.finalName}.jar</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <version>1.6.5</version>
+                        <executions>
+                            <execution>
+                                <id>build-app-image</id>
+                                <phase>package</phase>
+                                <goals><goal>jpackage</goal></goals>
+                                <configuration>
+                                    <type>APP_IMAGE</type>
+                                    <name>BotMaker Dashboard</name>
+                                    <appVersion>${app.version}</appVersion>
+                                    <vendor>LiQiyeDev</vendor>
+                                    <input>${project.build.directory}/jpackage-input</input>
+                                    <mainJar>${project.build.finalName}.jar</mainJar>
+                                    <mainClass>com.botmaker.dashboard.Launcher</mainClass>
+                                    <javaOptions>
+                                        <javaOption>--enable-native-access=ALL-UNNAMED,javafx.graphics</javaOption>
+                                    </javaOptions>
+                                    <!-- jlink from the run-time image (no <modulePaths>: JDK 25 ships no
+                                         jmods — see Studio's pom). The root list is what a JavaFX window
+                                         plus an HTTP client plus a git subprocess needs; the release child
+                                         (ReleaseLauncher) is `java -cp` from this same runtime, so
+                                         bin/java must survive — never add strip-native-commands. -->
+                                    <addModules>
+                                        <addModule>java.base</addModule>
+                                        <addModule>java.desktop</addModule>
+                                        <addModule>java.management</addModule>
+                                        <addModule>java.net.http</addModule>
+                                        <addModule>java.prefs</addModule>
+                                        <addModule>java.scripting</addModule>
+                                        <addModule>java.sql</addModule>
+                                        <addModule>jdk.unsupported</addModule>
+                                        <addModule>jdk.zipfs</addModule>
+                                        <addModule>jdk.charsets</addModule>
+                                        <addModule>jdk.crypto.ec</addModule>
+                                        <addModule>jdk.localedata</addModule>
+                                        <addModule>jdk.accessibility</addModule>
+                                    </addModules>
+                                    <jLinkOptions>
+                                        <jLinkOption>--strip-debug</jLinkOption>
+                                        <jLinkOption>--no-man-pages</jLinkOption>
+                                        <jLinkOption>--no-header-files</jLinkOption>
+                                        <jLinkOption>--compress=zip-0</jLinkOption>
+                                    </jLinkOptions>
+                                    <destination>${project.build.directory}/dist</destination>
+                                </configuration>
+                            </execution>
+
+                            <!-- The two installers take the app-image above as input, so the runtime is
+                                 linked once. Everything baked into the app-image must not be repeated here.
+                                 The GUI stack is declared by hand for the reason Studio's pom gives: nothing
+                                 in the package's own ELF payload links GTK, so autodetect finds nothing. -->
+                            <execution>
+                                <id>build-deb</id>
+                                <phase>package</phase>
+                                <goals><goal>jpackage</goal></goals>
+                                <configuration>
+                                    <type>DEB</type>
+                                    <name>BotMaker Dashboard</name>
+                                    <linuxPackageName>botmaker-dashboard</linuxPackageName>
+                                    <appVersion>${app.version}</appVersion>
+                                    <vendor>LiQiyeDev</vendor>
+                                    <appImage>${project.build.directory}/dist/BotMaker Dashboard</appImage>
+                                    <destination>${project.build.directory}/dist</destination>
+                                    <additionalOptions>
+                                        <option>--linux-package-deps</option>
+                                        <option>libgtk-3-0t64 | libgtk-3-0, libx11-6, libxtst6, libxi6, libxxf86vm1, libgl1, libfontconfig1, git</option>
+                                    </additionalOptions>
+                                    <linuxShortcut>true</linuxShortcut>
+                                    <linuxMenuGroup>Development</linuxMenuGroup>
+                                    <linuxAppCategory>Development</linuxAppCategory>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>build-rpm</id>
+                                <phase>package</phase>
+                                <goals><goal>jpackage</goal></goals>
+                                <configuration>
+                                    <type>RPM</type>
+                                    <name>BotMaker Dashboard</name>
+                                    <linuxPackageName>botmaker-dashboard</linuxPackageName>
+                                    <appVersion>${app.version}</appVersion>
+                                    <vendor>LiQiyeDev</vendor>
+                                    <appImage>${project.build.directory}/dist/BotMaker Dashboard</appImage>
+                                    <destination>${project.build.directory}/dist</destination>
+                                    <!-- Soname capabilities, as Studio's rpm: built on ubuntu-latest, whose
+                                         rpm has no ELF dependency generator, so Requires: is exactly this. -->
+                                    <additionalOptions>
+                                        <option>--linux-package-deps</option>
+                                        <option>libgtk-3.so.0()(64bit), libX11.so.6()(64bit), libXtst.so.6()(64bit), libXi.so.6()(64bit), libXxf86vm.so.1()(64bit), libGL.so.1()(64bit), libfontconfig.so.1()(64bit), git</option>
+                                    </additionalOptions>
+                                    <linuxShortcut>true</linuxShortcut>
+                                    <linuxMenuGroup>Development</linuxMenuGroup>
+                                    <linuxAppCategory>Development</linuxAppCategory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

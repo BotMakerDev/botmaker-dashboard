@@ -14,6 +14,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Installable, on Linux.** A `v*` tag now builds an rpm and a deb (jpackage, through the `dist`
+  profile) and publishes them as a GitHub Release with this section as its body. The umbrella release cuts
+  the tag (`--dashboard`, last in the chain), and `.deps.env` records the shared, cli, contract and loader
+  refs the package was built from. `--cli` forces `--dashboard`: the Release tab calls the cli's release
+  library in-process, so an installed dashboard decides by the cli it was built with.
+- **A stale-cli notice in the top bar.** An installed build compares the cli it was packaged with (baked
+  into the jar) against the checkout's `botmaker-cli`, and says *built with cli vX, checkout at vY — preview
+  may follow older rules* when they differ. A development run shows nothing.
+- **CI builds the cli from source.** The `build` job had installed `botmaker-shared` only since the
+  `botmaker-cli` dependency arrived on 2026-09-05, and had been red since; it now installs the contract,
+  the loader, shared and the cli.
+
 - **Draft all… on the Changelog tab.** One press writes and commits an `[Unreleased]` section in every
   module that has none. A module with no commits since its newest tag — one being re-released only because
   an upstream moved — gets one line saying so and its previous section carried forward, with no model

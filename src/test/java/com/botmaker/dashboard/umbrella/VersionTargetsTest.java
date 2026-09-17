@@ -45,10 +45,11 @@ class VersionTargetsTest {
 
     @Test
     void aDirectoryTheReleaseNeverCutsHasNoArrowAtAll() {
-        // The data repositories and this one have no flag and no tag arithmetic. They are not an error —
-        // the Modules tab lists them, and the answer there is that a release does not name them.
+        // The data repositories have no flag and no tag arithmetic. They are not an error — the Modules
+        // tab lists them, and the answer there is that a release does not name them. This module was on
+        // that list until 2026-09-17; it is a Linux package with a flag now.
         assertFalse(VersionTargets.releasable("botmaker-gallery"));
-        assertFalse(VersionTargets.releasable("botmaker-dashboard"));
+        assertTrue(VersionTargets.releasable("botmaker-dashboard"));
         assertTrue(VersionTargets.releasable("botmaker-plugin-toolkit"));
         assertEquals("not released", VersionTargets.forLevel("botmaker-gallery", Level.PATCH, V116));
         assertEquals("not released", VersionTargets.forExact("botmaker-gallery", "1.0.0", V116));

@@ -1,0 +1,57 @@
+# JReleaser — what ONE release of this repository looks like. Studio's file, for this module.
+#
+# The split with the umbrella's release library is the whole design: `com.botmaker.cli.release` knows the
+# CONSTELLATION (which repositories changed, at what versions, in what order, and which upstream ref each
+# pins); this file knows what a release IS — the tag's release, its notes, and the assets on it.
+#
+# WHERE THIS RUNS: this repository's own CI, on a version tag — .github/workflows/ci.yml, the `release`
+# job. NOT from the umbrella working copy: JReleaser's JGit cannot open a submodule.
+#
+# THE VERSION ARRIVES AS JRELEASER_PROJECT_VERSION, set by the workflow from the tag that triggered it.
+#
+# WHAT THIS DOES NOT DO: build the packages. The `package` job does, with jpackage, on Linux.
+
+project:
+  name: botmaker-dashboard
+  description: The BotMaker operator's window — module pins, release history, the Release tab, the queue.
+  longDescription: |
+    A JavaFX window onto the BotMaker umbrella checkout: what each module's latest tag is and whether it has
+    drifted, what the last releases did, what a release would decide before it is cut — and the button that
+    cuts it, through the same release library `botmaker release` and the release workflow call — plus the
+    queue of plugin and bot submissions waiting on a verdict.
+  authors:
+    - LiQiyeDev
+  license: CC0-1.0
+  copyright: LiQiyeDev
+  inceptionYear: '2026'
+  links:
+    homepage: https://github.com/LiQiyeDev/botmaker-dashboard
+  languages:
+    java:
+      groupId: com.botmaker
+      artifactId: botmaker-dashboard
+      version: '25'
+
+release:
+  github:
+    owner: LiQiyeDev
+    name: botmaker-dashboard
+    tagName: 'v{{projectVersion}}'
+    releaseName: 'v{{projectVersion}}'
+    # The umbrella release created and pushed the tag, and that push is what started this workflow.
+    skipTag: true
+    overwrite: false
+    update:
+      enabled: false
+    prerelease:
+      pattern: .*-.*
+    # The workflow writes release-notes.md with tools/changelog-section.sh — the SAME script the umbrella's
+    # ChangelogGate reads to refuse a release whose changelog does not describe it.
+    changelog:
+      external: release-notes.md
+
+# The two installers, built by the `package` job and downloaded into artifacts/ by the `release` job.
+files:
+  globs:
+    - pattern: artifacts/*.deb
+    - pattern: artifacts/*.rpm

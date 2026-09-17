@@ -99,10 +99,11 @@ class ReleaseTabTest extends FxHeadless {
     void everyModuleHasARowBeforeAnyPreview() {
         open();
 
-        // Thirteen since 2026-09-17: botmaker-remote and botmaker-remote-server joined the release chain.
+        // Fourteen since 2026-09-17: botmaker-remote, botmaker-remote-server and this module joined the
+        // release chain.
         assertEquals(Module.values().length, tab.rows().size());
         assertEquals("botmaker-pilot", tab.rows().getFirst().getModule(), "tag order: the pilot first");
-        assertEquals("botmaker-studio", tab.rows().getLast().getModule(), "and Studio last");
+        assertEquals("botmaker-dashboard", tab.rows().getLast().getModule(), "and the dashboard last");
         assertTrue(tab.executeButton().isDisabled());
     }
 

@@ -101,6 +101,12 @@
     -fx-font-family: inherit;
 }
 
+/* An installed build whose cli the checkout has moved past: a fact to read before trusting a preview. */
+.cli-notice {
+    -fx-text-fill: -bm-warn;
+    -fx-font-size: 12px;
+}
+
 .account-bar {
     -fx-alignment: center-right;
 }

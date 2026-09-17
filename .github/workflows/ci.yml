@@ -1,23 +1,53 @@
 name: CI
 
-# One job, and no release job — this module is not published. There is no tag to react to, no JitPack build
-# to warm and no GitHub Release to cut, so the workflow's whole purpose is "does it still compile and do its
-# rules still hold".
+# One workflow, three jobs distinguished by trigger — Studio's shape, Linux only:
 #
-# botmaker-shared is built FROM SOURCE rather than resolved: this repo's pom pins
-# ${botmaker.shared.version} to 0.0.0-SNAPSHOT — the version the umbrella reactor and a local `mvn install`
-# produce — so there is no published artifact under that coordinate to download.
+#   build    — every push and PR except version tags: compiles and tests. The gate.
+#   package  — version tags (and a manual dispatch dry run): the Linux app-image, rpm and deb.
+#   release  — version tags only: publishes them as a GitHub Release, through JReleaser (jreleaser.yml).
+#
+# Until 2026-09-17 there was one job and no release: this module was not published. It is an installable
+# app now, tagged by the umbrella release (`--dashboard`, forced by `--cli`), because the Release tab calls
+# the cli's release library IN-PROCESS — an installed dashboard decides by the cli it was built with, so a
+# cli release owes a dashboard release.
+#
+# FOUR upstreams are built FROM SOURCE in both jobs: this pom pins botmaker-shared and botmaker-cli at
+# 0.0.0-SNAPSHOT — the version the umbrella reactor and a local `mvn install` produce — so there is no
+# published artifact under those coordinates to download; and installing the cli from source needs ITS two
+# pins, botmaker-studio-api and botmaker-plugin-host, installed first (this pom excludes them from the cli
+# dependency, but the cli's own build resolves them). `build` checks out their main branches (it is a gate:
+# it should notice an upstream break early). `package` checks out the exact refs recorded in .deps.env, so
+# a release is reproducible.
+#
+# Tests run in `build` (they are headless: TestFX over Monocle) and are skipped in `package`, where a red
+# suite is not something to discover while packaging an artifact.
 
 on:
   push:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out botmaker-studio-api
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-studio-api
+          path: .deps/botmaker-studio-api
+
+      - name: Check out botmaker-plugin-host
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-plugin-host
+          path: .deps/botmaker-plugin-host
 
       - name: Check out botmaker-shared
         uses: actions/checkout@v4
@@ -25,17 +55,180 @@ jobs:
           repository: LiQiyeDev/botmaker-shared
           path: .deps/botmaker-shared
 
+      - name: Check out botmaker-cli
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-cli
+          path: .deps/botmaker-cli
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
 
-      - name: Install botmaker-shared (0.0.0-SNAPSHOT)
-        run: mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
+      # Contract and loader first: the cli compiles against both.
+      - name: Install the four upstreams (0.0.0-SNAPSHOT)
+        run: |
+          source .github/mvn-retry.sh
+          mvn_retry mvn -B -q -f .deps/botmaker-studio-api/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-cli/pom.xml install -DskipTests
 
-      # No display on the runner, and none is needed: every rule in this module is a pure function over
-      # JSON or a path, and the JavaFX classes hold none. If a test ever needs a window, that is the signal
-      # to move the rule out of the window, not to install a virtual framebuffer.
       - name: Build and test
         run: mvn -B verify
+
+  package:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # jpackage's RPM build shells out to rpmbuild (not on ubuntu-latest); its DEB build needs fakeroot.
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot
+
+      # xz -2 threaded rather than rpmbuild's xz -9 single-threaded: Studio's measurement, same trade.
+      - name: Speed up RPM payload compression
+        run: printf '%%_binary_payload w2T.xzdio\n' > ~/.rpmmacros
+
+      - name: Resolve version label
+        id: ver
+        run: |
+          ref="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "label=${ref}" >> "$GITHUB_OUTPUT"
+            num="${ref#v}"; num="${num%%-*}"
+          else
+            echo "label=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            num="1.0.0"
+          fi
+          echo "appversion=${num}" >> "$GITHUB_OUTPUT"
+
+      # The four upstream refs this release is built against, pinned in a committed file the umbrella
+      # release writes into the dashboard's release commit. The same file is baked into the jar by the
+      # `dist` profile, which is how the installed app knows which cli it carries.
+      - name: Read pinned upstream refs
+        id: deps
+        run: |
+          set -a; . ./.deps.env; set +a
+          for v in SHARED_TAG STUDIO_API_TAG PLUGIN_HOST_TAG CLI_TAG; do
+            [ -n "${!v}" ] || { echo "::error::$v is empty in .deps.env"; exit 1; }
+          done
+          {
+            echo "shared=${SHARED_TAG}"
+            echo "studioapi=${STUDIO_API_TAG}"
+            echo "pluginhost=${PLUGIN_HOST_TAG}"
+            echo "cli=${CLI_TAG}"
+          } >> "$GITHUB_OUTPUT"
+          echo "building against shared=${SHARED_TAG} studio-api=${STUDIO_API_TAG} plugin-host=${PLUGIN_HOST_TAG} cli=${CLI_TAG}"
+
+      - name: Check out botmaker-studio-api
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-studio-api
+          ref: ${{ steps.deps.outputs.studioapi }}
+          path: .deps/botmaker-studio-api
+
+      - name: Check out botmaker-plugin-host
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-plugin-host
+          ref: ${{ steps.deps.outputs.pluginhost }}
+          path: .deps/botmaker-plugin-host
+
+      - name: Check out botmaker-shared
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-shared
+          ref: ${{ steps.deps.outputs.shared }}
+          path: .deps/botmaker-shared
+
+      - name: Check out botmaker-cli
+        uses: actions/checkout@v4
+        with:
+          repository: LiQiyeDev/botmaker-cli
+          ref: ${{ steps.deps.outputs.cli }}
+          path: .deps/botmaker-cli
+
+      # Lands all four at 0.0.0-SNAPSHOT, which this pom's properties already default to, so the build
+      # below needs no -Dbotmaker.*.version and resolves nothing from JitPack. Retried: Central rate-limits
+      # the runners (see .github/mvn-retry.sh).
+      - name: Install the four upstreams (0.0.0-SNAPSHOT)
+        run: |
+          source .github/mvn-retry.sh
+          mvn_retry mvn -B -q -f .deps/botmaker-studio-api/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-cli/pom.xml install -DskipTests
+
+      # One `-Pdist package` produces the app-image and both installers into target/dist. -Dapp.version
+      # bakes the tag's number into jpackage's --app-version and the jar manifest.
+      - name: Build app-image and installers
+        run: mvn -B -Pdist package -DskipTests -Dapp.version=${{ steps.ver.outputs.appversion }}
+
+      - name: Collect installers
+        run: |
+          base="BotMaker-Dashboard-${{ steps.ver.outputs.label }}-linux-x64"
+          for f in target/dist/*.deb target/dist/*.rpm; do
+            [ -e "$f" ] || continue
+            cp "$f" "${base}.${f##*.}"
+          done
+          ls -l "${base}".*
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BotMaker-Dashboard-linux-x64
+          path: |
+            BotMaker-Dashboard-*-linux-x64.deb
+            BotMaker-Dashboard-*-linux-x64.rpm
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      # For tools/changelog-section.sh and CHANGELOG.md; fetch-depth 0 because JReleaser wants the history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # The same extractor the umbrella's ChangelogGate reads: a release whose notes come from a different
+      # rule than the one that gated it can pass the gate and then publish something else. A failure here
+      # means the tag was cut by hand, past the gate; the notes degrade to commit subjects.
+      - name: Read this release's changelog section
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! tools/changelog-section.sh "$version" > release-notes.md; then
+            echo "::warning::CHANGELOG.md has no section for $version — falling back to commit subjects"
+            git log --pretty='- %s' "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo HEAD)..HEAD" \
+              > release-notes.md
+          fi
+          echo "JRELEASER_PROJECT_VERSION=$version" >> "$GITHUB_ENV"
+          cat release-notes.md
+
+      - name: Publish GitHub Release
+        uses: jreleaser/release-action@v2
+        with:
+          version: 1.25.0
+          arguments: full-release
+        env:
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
