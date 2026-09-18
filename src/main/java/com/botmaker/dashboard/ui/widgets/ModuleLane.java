@@ -87,6 +87,10 @@ public final class ModuleLane extends VBox {
             Region ring = new Region();
             ring.getStyleClass().add("step-ring");
             ring.setMouseTransparent(true);
+            // Unmanaged and sized to the node's outer box: a managed child is laid out inside the node's
+            // 2px border, which drew the ring as a second, smaller circle and pulsed it from there.
+            ring.setManaged(false);
+            ring.resizeRelocate(0, 0, 18, 18);
             Label mark = new Label();
             mark.getStyleClass().add("step-mark");
             StackPane node = new StackPane(ring, mark);

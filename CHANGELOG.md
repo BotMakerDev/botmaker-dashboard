@@ -10,6 +10,13 @@ ships to anyone but its author.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A running step's ring lies on its circle.** The pulsing ring was laid out inside the node's 2px border,
+  so a running node drew a second, smaller circle and pulsed from there instead of from the outline.
+
 ## [0.0.2] — 2026-09-18
 
 No source changes since v0.0.1; re-released for updated upstream pins.
