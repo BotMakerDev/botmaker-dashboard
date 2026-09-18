@@ -3,6 +3,27 @@
 The maintainer's window onto the BotMaker release constellation, and onto the queue of plugin and bot
 submissions waiting on a verdict.
 
+## Install
+
+Fedora / RHEL, from this repository's dnf repository on GitHub Pages:
+
+```bash
+sudo curl -fsSL -o /etc/yum.repos.d/botmaker-dashboard.repo \
+  https://liqiyedev.github.io/botmaker-dashboard/botmaker-dashboard.repo
+sudo dnf install botmaker-dashboard
+```
+
+Later versions arrive with `sudo dnf upgrade`. Debian / Ubuntu: the
+[repository page](https://liqiyedev.github.io/botmaker-dashboard/) prints the apt line. x86-64 only; each
+version's rpm and deb are also on the Releases page.
+
+**The repository is signed only once the three signing secrets are set on this repository** (or on its
+organization) with the umbrella's `tools/signing-secret.sh`. Until then it is published unsigned, the
+`.repo` turns `gpgcheck` off, and the repository page says so rather than implying a check nobody
+performed. The key is the one `botmaker-cli`'s repository publishes.
+
+## From a checkout
+
 ```bash
 # from the umbrella root
 mvn -pl botmaker-dashboard -am install     # or just: mvn install
@@ -33,7 +54,8 @@ cannot be edited.
 no role table: the power already exists on github.com, and a second list of who holds it is a list that goes
 wrong. This window reveals a power GitHub enforces regardless — it never grants one.
 
-## Not published
+## Not a library
 
-No JitPack build, no tag, no `.deps.env`, no flatten. It is an application: nothing resolves it as a
-dependency. Its one BotMaker dependency is `botmaker-shared`, for `com.botmaker.shared.github`.
+No JitPack build and no flatten: it is an application, and nothing resolves it as a dependency. It is
+tagged by the umbrella release (`--dashboard`), which builds the rpm and deb, the GitHub Release and the
+dnf/apt repository above.

@@ -3,14 +3,19 @@
 What each version of `botmaker-dashboard` changes, in a few bullets. `ROADMAP.md` is the detailed
 engineering log; this is the short answer.
 
-**This module is not released.** It has no tag, no JitPack build and no GitHub Release, so nothing here is
-published as release notes and `release.sh` does not gate it. The file exists because a module without one
-is a module whose history lives only in commit messages — and because that changes the day the dashboard
-ships to anyone but its author.
+**Released since 2026-09-17** (`--dashboard`): the top section becomes the GitHub Release notes, and
+`release.sh` refuses a version with no section here.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
+
+### Added
+
+- **Installs and updates with dnf.** Each release now also publishes a dnf and apt repository on GitHub
+  Pages, so `sudo dnf install botmaker-dashboard` works and later versions come with `dnf upgrade`. When the
+  signing secrets are set, the rpm is signed with the key `botmaker-cli`'s repository publishes and the
+  index is signed too. Without them, the repository is published unsigned and says so.
 
 ### Fixed
 

@@ -5,6 +5,10 @@ name: CI
 #   build    — every push and PR except version tags: compiles and tests. The gate.
 #   package  — version tags (and a manual dispatch dry run): the Linux app-image, rpm and deb.
 #   release  — version tags only: publishes them as a GitHub Release, through JReleaser (jreleaser.yml).
+#   pages    — version tags only: the dnf + apt repository on GitHub Pages (.github/scripts/build-repo.sh).
+#
+# Signing comes from GPG_KEY_ID, GPG_PRIVATE_KEY (base64) and GPG_PASSPHRASE — the umbrella's
+# tools/signing-secret.sh sets them. Without them the rpm is unsigned and the repository says so.
 #
 # Until 2026-09-17 there was one job and no release: this module was not published. It is an installable
 # app now, tagged by the umbrella release (`--dashboard`, forced by `--cli`), because the Release tab calls
@@ -82,6 +86,9 @@ jobs:
   package:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Job-level so a step's `if:` can read it; a step's own env is not in scope for its condition.
+    env:
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -186,6 +193,29 @@ jobs:
           done
           ls -l "${base}".*
 
+      # jpackage signs nothing (nfpm, in remote-server, signs through NFPM_RPM_KEY_FILE), so the rpm is signed
+      # here: dnf's gpgcheck=1 verifies the package's own header, which the repository index cannot stand in
+      # for. The passphrase goes to gpg through a file in RUNNER_TEMP, deleted in this step — never through
+      # argv. The deb is left unsigned under a signed index, which is apt's model.
+      - name: Sign the rpm
+        if: env.GPG_KEY_ID != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --reload gpg-agent || true
+          printf '%s' "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+          pass="${RUNNER_TEMP}/gpg-pass"
+          ( umask 077; printf '%s' "$GPG_PASSPHRASE" > "$pass" )
+          trap 'rm -f "$pass"' EXIT
+          rpmsign --addsign \
+            --define "_gpg_name ${GPG_KEY_ID}" \
+            --define "_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback --passphrase-file ${pass}" \
+            BotMaker-Dashboard-*-linux-x64.rpm
+          rpm -qp --qf 'signature: %{RSAHEADER:pgpsig}\n' BotMaker-Dashboard-*-linux-x64.rpm
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -232,3 +262,64 @@ jobs:
           arguments: full-release
         env:
           JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The dnf + apt repository on GitHub Pages, from this release's packages. botmaker-remote-server's job with
+  # the names changed; .github/scripts/build-repo.sh says what differs. Needs Pages enabled with "GitHub
+  # Actions" as the source (Settings ▸ Pages) — without it deploy-pages fails and nothing else does.
+  pages:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    # Job-level permissions replace the workflow's. deploy-pages needs id-token for its OIDC handshake.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # One deployment at a time; queue rather than cancel, so a newer tag never leaves an older one live.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    env:
+      GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+    steps:
+      # Only for .github/scripts/build-repo.sh — nothing here is built from source.
+      - uses: actions/checkout@v7
+
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          name: BotMaker-Dashboard-linux-x64
+          path: artifacts
+
+      - name: Install repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c apt-utils
+
+      - name: Import signing key
+        if: env.GPG_KEY_ID != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --reload gpg-agent || true
+          echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+          echo "BOTMAKER_SIGN=1" >> "$GITHUB_ENV"
+
+      - name: Build dnf + apt repositories
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: bash .github/scripts/build-repo.sh artifacts site "${GITHUB_REF_NAME}"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
