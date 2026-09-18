@@ -25,7 +25,7 @@ project:
   copyright: LiQiyeDev
   inceptionYear: '2026'
   links:
-    homepage: https://github.com/LiQiyeDev/botmaker-dashboard
+    homepage: https://github.com/BotMakerDev/botmaker-dashboard
   languages:
     java:
       groupId: com.botmaker
@@ -34,7 +34,7 @@ project:
 
 release:
   github:
-    owner: LiQiyeDev
+    owner: BotMakerDev
     name: botmaker-dashboard
     tagName: 'v{{projectVersion}}'
     releaseName: 'v{{projectVersion}}'
