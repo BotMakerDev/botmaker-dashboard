@@ -8,6 +8,22 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.0.3; re-released for updated upstream pins.
+
+### Added
+
+- **Installs and updates with dnf.** Each release now also publishes a dnf and apt repository on GitHub
+  Pages, so `sudo dnf install botmaker-dashboard` works and later versions come with `dnf upgrade`. When the
+  signing secrets are set, the rpm is signed with the key `botmaker-cli`'s repository publishes and the
+  index is signed too. Without them, the repository is published unsigned and says so.
+
+### Fixed
+
+- **A running step's ring lies on its circle.** The pulsing ring was laid out inside the node's 2px border,
+  so a running node drew a second, smaller circle and pulsed from there instead of from the outline.
+
 ## [0.0.3] — 2026-09-18
 
 ### Added
