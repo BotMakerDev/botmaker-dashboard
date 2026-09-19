@@ -8,6 +8,23 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.0.5; re-released for updated upstream pins.
+
+### Added
+
+- **A finished release shows the time it actually took**, not the gap between its tags. The release log's
+  new `## Timing` section is read for each lane and for the elapsed tile; a log written before the section
+  existed still falls back to the gaps, which counted one module's JitPack wait as the next module's time.
+
+### Changed
+
+- **The package page looks like the rest of the project, and its commands copy.** The stylesheet and the
+  copy button come from `botmakerdev.github.io/assets/`, the organization's front page, rather than from a
+  `<style>` block repeated in four repositories, and the page links to that front page — where one command
+  installs every BotMaker tool at once. The published repository is untouched.
+
 ## [0.0.5] — 2026-09-19
 
 ### Added
