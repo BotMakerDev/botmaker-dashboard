@@ -23,7 +23,7 @@ SITE="${2:?usage: build-repo.sh <artifacts-dir> <site-dir> <tag>}"
 TAG="${3:?usage: build-repo.sh <artifacts-dir> <site-dir> <tag>}"
 
 PACKAGE=botmaker-dashboard
-REPO_SLUG="${GITHUB_REPOSITORY:-LiQiyeDev/botmaker-dashboard}"
+REPO_SLUG="${GITHUB_REPOSITORY:-BotMakerDev/botmaker-dashboard}"
 # Pages serves <owner>.github.io/<repo>, lowercased.
 PAGES_URL="${PAGES_URL:-https://$(echo "${REPO_SLUG%%/*}" | tr '[:upper:]' '[:lower:]').github.io/${REPO_SLUG##*/}}"
 
@@ -100,7 +100,7 @@ sudo curl -fsSL -o /etc/apt/keyrings/botmaker.asc ${PAGES_URL}/botmaker.asc
 "
   TRUST_NOTE="<p>Signed: <code>dnf</code> verifies the package's own header and this index, and
 <code>apt</code> verifies <code>InRelease</code>. The key is the one
-<a href=\"https://liqiyedev.github.io/botmaker-cli/\">botmaker-cli's repository</a> publishes.</p>"
+<a href=\"https://botmakerdev.github.io/botmaker-cli/\">botmaker-cli's repository</a> publishes.</p>"
 else
   rpm_gpg=$'gpgcheck=0\nrepo_gpgcheck=0'
   apt_opts="[trusted=yes] "

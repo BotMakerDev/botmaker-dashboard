@@ -396,14 +396,19 @@ public final class ChangelogTab extends BorderPane {
      * Whether the drafter is offered at all.
      *
      * <p>Two conditions, and both have to hold: the programs exist on this machine, and the signed-in
-     * account is the repository owner. The second is asked of GitHub rather than assumed from the checkout,
+     * account is the maintainer. The second is asked of GitHub rather than assumed from the checkout,
      * because a checkout says who cloned it and nothing about who is at the keyboard.
+     *
+     * <p>It compares against {@link GitHubConfig#MAINTAINER} rather than the repository owner, which has been
+     * an organization since 2026-09-18: a login can never equal one, so the owner comparison would hide the
+     * button from everybody. This gates what is <em>offered</em>; what may actually be written is
+     * {@code Admin.probe}'s {@code permissions.push}.
      */
     private void askWhetherOwner(GitHubClient client, GitHubAuth auth) {
         // Asked even when Claude is absent: Draft all still copies sections forward for the maintainer.
         auth.login(client).whenComplete((login, error) -> Platform.runLater(() -> {
             owner = error == null && login != null
-                    && login.equalsIgnoreCase(GitHubConfig.REGISTRY_OWNER);
+                    && login.equalsIgnoreCase(GitHubConfig.MAINTAINER);
             showDraftButton(owner);
         }));
     }

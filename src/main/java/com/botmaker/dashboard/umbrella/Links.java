@@ -48,7 +48,10 @@ public final class Links {
      * and caches the result, so a failed build is permanent and only a new tag repairs it.
      */
     public static String jitpack(String module, String tag) {
-        return "https://jitpack.io/#" + OWNER + "/" + module + "/" + tag;
+        // The COORDINATE owner, not the repository's: the artifacts are published as
+        // com.github.LiQiyeDev:<module> and the repositories moved to BotMakerDev without them (see
+        // CleanRoom.COORDINATE_OWNER), so this page is the one holding the builds a consumer resolves.
+        return jitpackPageOf(coordinateSlugOf(module)) + "/" + tag;
     }
 
     /**
@@ -78,7 +81,10 @@ public final class Links {
 
     /** The JitPack project page: every tag it has built, and whether each build passed. */
     public static String jitpackPage(String module) {
-        return jitpackPageOf(slugOf(module));
+        // Keyed on the COORDINATE owner, like every other JitPack link here: one of our modules is published
+        // as com.github.LiQiyeDev:<module> and its repository lives under BotMakerDev. A repository somebody
+        // else owns (forRepository) is its own slug either way.
+        return jitpackPageOf(coordinateSlugOf(module));
     }
 
     /** What changed between two refs — a tag and {@code main}, usually. */
@@ -175,6 +181,11 @@ public final class Links {
 
     private static String slugOf(String module) {
         return OWNER + "/" + module;
+    }
+
+    /** {@link #slugOf} for JitPack, whose artifacts kept the owner the repositories left (2026-09-18). */
+    private static String coordinateSlugOf(String module) {
+        return com.botmaker.cli.release.CleanRoom.COORDINATE_OWNER + "/" + module;
     }
 
     private static String actionsOn(String slug) {

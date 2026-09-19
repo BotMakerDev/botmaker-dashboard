@@ -27,7 +27,7 @@ class LinkBarTest extends FxHeadless {
         clickOn("JitPack");
         clickOn("Releases");
         assertEquals(List.of("https://jitpack.io/#LiQiyeDev/botmaker-sdk",
-                "https://github.com/LiQiyeDev/botmaker-sdk/releases"), opened);
+                "https://github.com/BotMakerDev/botmaker-sdk/releases"), opened);
     }
 
     @Test
@@ -52,6 +52,6 @@ class LinkBarTest extends FxHeadless {
                 menu.getItems().stream().map(javafx.scene.control.MenuItem::getText).toList());
 
         interact(() -> menu.getItems().get(4).fire());
-        assertEquals(List.of("https://github.com/LiQiyeDev/botmaker-sdk/compare/v1.1.6...main"), opened);
+        assertEquals(List.of("https://github.com/BotMakerDev/botmaker-sdk/compare/v1.1.6...main"), opened);
     }
 }

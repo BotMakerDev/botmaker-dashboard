@@ -11,13 +11,16 @@ class LinksTest {
 
     @Test
     void namesTheThreePlacesAReleaseCanBeWrong() {
-        assertEquals("https://github.com/LiQiyeDev/botmaker-cli/releases/tag/v0.0.8",
+        assertEquals("https://github.com/BotMakerDev/botmaker-cli/releases/tag/v0.0.8",
                 Links.release("botmaker-cli", "v0.0.8"));
+        // The JitPack page keeps the OLD owner, and that is not an oversight: the repositories moved to the
+        // organization on 2026-09-18 and the Maven coordinates deliberately did not, so the builds a consumer
+        // resolves are still com.github.LiQiyeDev:<module>.
         assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-cli/v0.0.8",
                 Links.jitpack("botmaker-cli", "v0.0.8"));
         // branch, not tag: a tag-triggered run records the tag in headBranch, which is the same filter
         // poll_actions uses.
-        assertEquals("https://github.com/LiQiyeDev/botmaker-cli/actions?query=branch%3Av0.0.8",
+        assertEquals("https://github.com/BotMakerDev/botmaker-cli/actions?query=branch%3Av0.0.8",
                 Links.actions("botmaker-cli", "v0.0.8"));
     }
 
@@ -45,13 +48,13 @@ class LinksTest {
     @Test
     void aModuleLinksItsRepositoryAndOffersAComparisonOnlyPastItsTag() {
         assertEquals(List.of(
-                        new Links.Link("GitHub", "https://github.com/LiQiyeDev/botmaker-sdk"),
+                        new Links.Link("GitHub", "https://github.com/BotMakerDev/botmaker-sdk"),
                         new Links.Link("Actions",
-                                "https://github.com/LiQiyeDev/botmaker-sdk/actions?query=branch%3Amain"),
+                                "https://github.com/BotMakerDev/botmaker-sdk/actions?query=branch%3Amain"),
                         new Links.Link("JitPack", "https://jitpack.io/#LiQiyeDev/botmaker-sdk"),
-                        new Links.Link("Releases", "https://github.com/LiQiyeDev/botmaker-sdk/releases"),
+                        new Links.Link("Releases", "https://github.com/BotMakerDev/botmaker-sdk/releases"),
                         new Links.Link("Changes since v1.1.6",
-                                "https://github.com/LiQiyeDev/botmaker-sdk/compare/v1.1.6...main")),
+                                "https://github.com/BotMakerDev/botmaker-sdk/compare/v1.1.6...main")),
                 Links.forModule("botmaker-sdk", Optional.of("v1.1.6"), 3));
 
         assertEquals(4, Links.forModule("botmaker-sdk", Optional.of("v1.1.6"), 0).size());
