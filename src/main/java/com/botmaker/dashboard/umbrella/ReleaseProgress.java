@@ -363,7 +363,8 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
                 stage = "tagged";
             }
             rows.add(new ReleaseLog.Row(tag.module(), tag.tag().replaceFirst("^v", ""), tag.tag(),
-                    logged.map(ReleaseLog.Row::changelog).orElse(""), jitpack, actions, stage));
+                    logged.map(ReleaseLog.Row::changelog).orElse(""), jitpack, actions, stage,
+                    logged.map(ReleaseLog.Row::elapsed).orElse("")));
 
             for (String kind : List.of("jitpack", "actions")) {
                 String cached = kind.equals("jitpack") ? entry.jitpackError() : entry.actionsError();
@@ -398,10 +399,17 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         for (ReleaseLog.Row row : rows) {
             String key = row.module() + "@" + row.tag();
             Lane lane = lane(row, synthetic, Segment.NONE, false, now);
+            // What the release measured beats the gap between tags. The gap is a proxy — it counts the wait
+            // for the previous module's JitPack build as this one's time — and it is all a log written
+            // before 2026-09-19 can offer.
+            Optional<Duration> took = ReleaseLog.duration(row.elapsed())
+                    .or(() -> Optional.ofNullable(gaps.get(key)));
             lanes.add(new Lane(lane.module(), lane.tag(), ages.getOrDefault(key, row.stage()), lane.steps(),
-                    lane.errors(), Optional.ofNullable(gaps.get(key))));
+                    lane.errors(), took));
         }
-        return new ReleaseProgress(Phase.PAST, List.copyOf(lanes), release.start(), release.span());
+        Duration span = log.map(ReleaseLog::timing).flatMap(t -> ReleaseLog.duration(t.total()))
+                .orElseGet(release::span);
+        return new ReleaseProgress(Phase.PAST, List.copyOf(lanes), release.start(), span);
     }
 
     public Tiles tiles() {

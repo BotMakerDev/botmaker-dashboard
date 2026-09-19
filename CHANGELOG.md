@@ -8,6 +8,14 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **A finished release shows the time it actually took**, not the gap between its tags. The release log's
+  new `## Timing` section is read for each lane and for the elapsed tile; a log written before the section
+  existed still falls back to the gaps, which counted one module's JitPack wait as the next module's time.
+
 ## [0.0.4] — 2026-09-19
 
 ### Changed

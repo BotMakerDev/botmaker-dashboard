@@ -35,8 +35,20 @@ import java.util.stream.Stream;
  * @param stamp   the {@code # Release <stamp>} heading — the log's identity, and what {@code --status} reads back
  * @param rows    the table, in the order the release tagged
  * @param problems the {@code ## Errors} blocks, whole
+ * @param timing  the {@code ## Timing} section, empty for a release cut before it was recorded
  */
-public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> problems) {
+public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> problems, Timing timing) {
+
+    /** The two durations a release records about itself rather than about a module. */
+    public record Timing(String verifyPass, String total) {
+
+        public static final Timing NONE = new Timing("", "");
+    }
+
+    /** The four-argument shape every caller had before the timings were recorded. */
+    public ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> problems) {
+        this(file, stamp, rows, problems, Timing.NONE);
+    }
 
     /** How a verdict should read at a glance. It colours the script's word; it never replaces it. */
     public enum Health {
@@ -80,9 +92,20 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
      * One module's row: {@code | module | version | tag | stage | changelog | jitpack | actions |}.
      *
      * @param stage how far the release got with this module; empty for a log older than the column
+     * @param elapsed what the {@code ## Timing} section says this module's turn took, or empty
      */
     public record Row(String module, String version, String tag,
-                      String changelog, String jitpack, String actions, String stage) {
+                      String changelog, String jitpack, String actions, String stage, String elapsed) {
+
+        /** The seven-argument shape from before the timings; a row nobody timed. */
+        public Row(String module, String version, String tag,
+                   String changelog, String jitpack, String actions, String stage) {
+            this(module, version, tag, changelog, jitpack, actions, stage, "");
+        }
+
+        public Row withElapsed(String took) {
+            return new Row(module, version, tag, changelog, jitpack, actions, stage, took);
+        }
 
         public Health jitpackHealth() {
             return Health.of(jitpack);
@@ -98,6 +121,26 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
                     ? Health.BROKEN
                     : Health.OK;
         }
+    }
+
+    /**
+     * A {@code ## Timing} cell back as a duration — {@code 41s}, {@code 3m41s}, {@code 1h04m}.
+     *
+     * <p>The release writes it with {@code com.botmaker.cli.release.ReleaseLog.elapsed}; this reads that one
+     * spelling and answers empty for anything else, including the empty cell of a release nobody timed.
+     */
+    public static Optional<java.time.Duration> duration(String cell) {
+        java.util.regex.Matcher match = java.util.regex.Pattern
+                .compile("^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$").matcher(cell.strip());
+        if (cell.isBlank() || !match.matches()) {
+            return Optional.empty();
+        }
+        long seconds = part(match.group(1)) * 3600 + part(match.group(2)) * 60 + part(match.group(3));
+        return Optional.of(java.time.Duration.ofSeconds(seconds));
+    }
+
+    private static long part(String digits) {
+        return digits == null ? 0 : Long.parseLong(digits);
     }
 
     /** One {@code **module — kind**} block from {@code ## Errors}, with the fenced text inside it. */
@@ -201,6 +244,9 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
         String problemModule = null;
         String problemKind = null;
         StringBuilder problemText = null;
+        // The timing table's rows are two cells wide, so row() already declines them; this reads them.
+        java.util.Map<String, String> timings = new java.util.HashMap<>();
+        boolean inTiming = false;
 
         for (String line : lines) {
             if (problemText != null) {                       // inside a fenced error block
@@ -214,6 +260,17 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
             }
             if (stamp.isEmpty() && line.startsWith("# Release ")) {
                 stamp = line.substring("# Release ".length()).strip();
+                continue;
+            }
+            if (line.startsWith("## ")) {
+                inTiming = line.strip().equals("## Timing");
+                continue;
+            }
+            if (inTiming && line.startsWith("| ") && !line.startsWith("| step |")) {
+                String[] cells = line.split("\\|");
+                if (cells.length > 2) {
+                    timings.put(cells[1].strip(), cells[2].strip());
+                }
                 continue;
             }
             if (line.startsWith("**") && line.contains(" — ") && line.endsWith("**")) {
@@ -232,7 +289,10 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
                 rows.add(row);
             }
         }
-        return new ReleaseLog(file, stamp, List.copyOf(rows), List.copyOf(problems));
+        List<Row> timed = rows.stream()
+                .map(row -> row.withElapsed(timings.getOrDefault(row.module(), ""))).toList();
+        return new ReleaseLog(file, stamp, timed, List.copyOf(problems),
+                new Timing(timings.getOrDefault("verify pass", ""), timings.getOrDefault("total", "")));
     }
 
     /**

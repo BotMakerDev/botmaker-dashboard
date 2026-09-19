@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,6 +66,43 @@ class ReleaseLogTest {
         assertEquals("pending", log.rows().get(0).jitpack());
         assertEquals("FAILED", log.rows().get(1).stage());
         assertEquals("", parsed().rows().get(0).stage());
+    }
+
+    @Test
+    void theTimingSectionIsReadAndIsNotMistakenForTheTable() {
+        ReleaseLog log = ReleaseLog.parse(Path.of("releases/2026-09-19-1240.md"), """
+                # Release 2026-09-19 12:40
+
+                | module | version | tag | stage | changelog | jitpack | actions |
+                |---|---|---|---|---|---|---|
+                | botmaker-studio-api | 0.1.3 | v0.1.3 | built on jitpack | stamped | ok (resolves clean) | success (1) |
+                | botmaker-shared | 0.0.25 | v0.0.25 | built on jitpack | stamped | ok (resolves clean) | success (1) |
+
+                ## Timing
+
+                | step | elapsed |
+                |---|---|
+                | botmaker-studio-api | 3m41s |
+                | botmaker-shared | 2m08s |
+                | verify pass | 6m40s |
+                | total | 24m03s |
+                """);
+
+        // The second table names modules too: read as release rows they would double the release.
+        assertEquals(2, log.rows().size());
+        assertEquals("3m41s", log.rows().get(0).elapsed());
+        assertEquals("6m40s", log.timing().verifyPass());
+        assertEquals("24m03s", log.timing().total());
+        assertEquals(Optional.of(Duration.ofSeconds(221)), ReleaseLog.duration("3m41s"));
+        assertEquals(Optional.of(Duration.ofSeconds(3840)), ReleaseLog.duration("1h04m"));
+        assertEquals(Optional.empty(), ReleaseLog.duration(""));
+        assertEquals(Optional.empty(), ReleaseLog.duration("ages"));
+    }
+
+    @Test
+    void aLogWithoutTheTimingSectionSaysSoRatherThanGuessing() {
+        assertEquals("", parsed().rows().get(0).elapsed());
+        assertEquals(ReleaseLog.Timing.NONE, parsed().timing());
     }
 
     @Test
