@@ -47,6 +47,10 @@
         <!-- Numeric-only version for jpackage (it rejects -SNAPSHOT). The package job passes the tag's
              number as -Dapp.version; a local `-Pdist package` gets this placeholder. -->
         <app.version>1.0.0</app.version>
+        <!-- jpackage's app icon: the desktop entry and the launcher, rasterized from
+             src/main/resources/icons/icon.svg because jpackage cannot read SVG. Linux only here, so .png;
+             Studio's pom overrides the same property per OS profile because Studio ships those. -->
+        <installer.icon>${project.basedir}/src/main/resources/icons/icon.png</installer.icon>
     </properties>
 
     <repositories>
@@ -242,7 +246,7 @@
     <profiles>
         <!--
           `dist` profile: the Linux installers, via jpackage — Studio's profile with everything Studio
-          needs and this window does not taken out (no Windows leg, no javac/JDI modules, no icon set, no
+          needs and this window does not taken out (no Windows leg, no javac/JDI modules, no .ico/.icns, no
           spec override). Run on Linux only; jpackage builds for the OS it runs on.
 
             mvn -Pdist package -Dapp.version=1.2.3
@@ -370,6 +374,9 @@
                                         <jLinkOption>--compress=zip-0</jLinkOption>
                                     </jLinkOptions>
                                     <destination>${project.build.directory}/dist</destination>
+                                    <!-- Baked into the app-image, so the two installers below must NOT
+                                         repeat it: jpackage rejects an icon beside an <appImage>. -->
+                                    <icon>${installer.icon}</icon>
                                 </configuration>
                             </execution>
 

@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **The dashboard has an icon.** The window, the application menu entry and the installed launcher all
+  carry it. It is the release board — three lanes of step nodes, done, running and waiting — in Studio's
+  squircle with a teal accent, so the two are told apart where they sit side by side.
 - **Every lane has an Actions ↗ chip**, on a live release and on a past one, not only on a lane that
   failed. It opens the run itself when the release log or a poll recorded one, and the repository's runs
   filtered by the tag otherwise — which is what every release cut before this gets.

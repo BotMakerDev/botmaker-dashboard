@@ -16,6 +16,7 @@ import com.botmaker.shared.github.GitHubClient;
 import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
@@ -26,6 +27,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 
 /**
@@ -145,10 +148,31 @@ public final class DashboardApp extends Application {
         Themed.scene(scene);
 
         stage.setTitle("BotMaker Dashboard");
+        applyAppIcons(stage);
         stage.setScene(scene);
         stage.show();
 
         refreshAdmin();
+    }
+
+    /**
+     * The window's own icon, in every size the desktop may ask for.
+     *
+     * <p>Six sizes rather than one: a window manager picks the nearest and scales it, and a 512 scaled into
+     * a 16px taskbar slot is mush. The set is this module's, not Studio's — the two live side by side in an
+     * application menu, so the mark is a release board where Studio's is the robot.
+     *
+     * <p>The packaged app gets its icon from jpackage (the {@code dist} profile's {@code <icon>}), which is
+     * a different thing: that one is the desktop entry and the launcher, this one is the running window.
+     */
+    private void applyAppIcons(Stage stage) {
+        for (int size : new int[] {16, 32, 64, 128, 256, 512}) {
+            try (InputStream in = getClass().getResourceAsStream("/icons/icon-" + size + ".png")) {
+                if (in != null) stage.getIcons().add(new Image(in));
+            } catch (IOException e) {
+                // A window with no icon is a window; there is nothing to tell the operator here.
+            }
+        }
     }
 
     private void umbrellaChosen(Path root) {

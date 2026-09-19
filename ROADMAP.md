@@ -8,6 +8,24 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-19 — an icon of its own
+
+**Done**
+- `src/main/resources/icons/`: `icon.svg` plus 16–512 PNGs, `icon.png` and `icon.ico`, Studio's layout.
+  The mark is the release board (three lanes of step nodes: done, running, waiting) on Studio's squircle
+  with a teal→purple background instead of purple→purple — the two windows sit next to each other in an
+  application menu, so they have to differ at 16px, before any shape is legible.
+- `DashboardApp.applyAppIcons` puts all six sizes on the stage, as Studio does; the `dist` profile's
+  app-image execution gets `<icon>${installer.icon}</icon>`, so the `.desktop` entry and the launcher have
+  one too. The icon must not be repeated on the deb and rpm executions: jpackage rejects it beside
+  `<appImage>`.
+
+**Deferred / next**
+- No `.icns` and no Windows `.ico` wiring, because this module ships Linux packages only. `icon.ico` is
+  generated anyway so a Windows leg would need no new art.
+
+---
+
 ## 2026-09-19 — one click from a lane to its Actions run
 
 **Done**
