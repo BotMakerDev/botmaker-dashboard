@@ -9,18 +9,19 @@ Fedora / RHEL, from this repository's dnf repository on GitHub Pages:
 
 ```bash
 sudo curl -fsSL -o /etc/yum.repos.d/botmaker-dashboard.repo \
-  https://liqiyedev.github.io/botmaker-dashboard/botmaker-dashboard.repo
+  https://botmakerdev.github.io/botmaker-dashboard/botmaker-dashboard.repo
 sudo dnf install botmaker-dashboard
 ```
 
 Later versions arrive with `sudo dnf upgrade`. Debian / Ubuntu: the
-[repository page](https://liqiyedev.github.io/botmaker-dashboard/) prints the apt line. x86-64 only; each
+[repository page](https://botmakerdev.github.io/botmaker-dashboard/) prints the apt line. x86-64 only; each
 version's rpm and deb are also on the Releases page.
 
-**The repository is signed only once the three signing secrets are set on this repository** (or on its
-organization) with the umbrella's `tools/signing-secret.sh`. Until then it is published unsigned, the
-`.repo` turns `gpgcheck` off, and the repository page says so rather than implying a check nobody
-performed. The key is the one `botmaker-cli`'s repository publishes.
+**The next release signs itself.** The three signing secrets are set on the `BotMakerDev` organization,
+which this repository joined on 2026-09-18, so `GPG_KEY_ID` is no longer empty here. v0.0.3 was published
+unsigned — with `gpgcheck` off in its `.repo` and the repository page saying so, rather than implying a
+check nobody performed. The key is the one `botmaker-cli`'s repository publishes; the umbrella's
+`tools/signing-secret.sh` is how it got there.
 
 ## From a checkout
 

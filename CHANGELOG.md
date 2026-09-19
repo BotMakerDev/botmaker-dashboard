@@ -15,7 +15,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **Links open the `BotMakerDev` organization's pages.** GitHub, Actions, Releases and comparisons follow
   the repositories that moved on 2026-09-18. JitPack links still open `LiQiyeDev`'s page, because that is
   where the builds a consumer resolves are published. The package repository lives at
-  `botmakerdev.github.io/botmaker-dashboard`.
+  `botmakerdev.github.io/botmaker-dashboard`, and the README says the next release signs itself: the three
+  signing secrets are the organization's, so `GPG_KEY_ID` is no longer empty here as it was for v0.0.3.
 
 ### Fixed
 
