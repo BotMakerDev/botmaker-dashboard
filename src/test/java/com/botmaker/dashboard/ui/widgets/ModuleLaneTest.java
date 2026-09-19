@@ -103,6 +103,34 @@ class ModuleLaneTest extends FxHeadless {
         assertTrue(lane.errorText().getText().startsWith("actions: CI: failure — https://"));
     }
 
+    /**
+     * Every lane with a tag offers its run, not only a failed one.
+     *
+     * <p>The link lived in a failed lane's details panel, which is the one case where the operator already
+     * knows something is wrong. What was missing was the ordinary question — <i>what did this tag's CI
+     * do?</i> — on a lane that is green or still running.
+     */
+    @Test
+    void everyTaggedLaneOffersItsActionsRun() {
+        draw(ReleaseFixtures.midChain().lanes().get(1));
+
+        assertTrue(lane.actionsChip().isVisible());
+        clickOn(lane.actionsChip());
+        assertEquals(List.of("https://github.com/BotMakerDev/botmaker-plugin-host/actions?query=branch%3Av0.1.0"),
+                opened, "with no polled run, the repository's runs filtered by the tag");
+    }
+
+    /** A polled run is one click, not one page away. */
+    @Test
+    void aLaneThatKnowsItsRunGoesStraightToIt() {
+        ReleaseProgress.Lane model = ReleaseFixtures.midChain().lanes().get(1);
+        draw(new ReleaseProgress.Lane(model.module(), model.tag(), model.stage(), model.steps(),
+                model.errors(), model.elapsed(), "https://example.invalid/runs/7"));
+
+        clickOn(lane.actionsChip());
+        assertEquals(List.of("https://example.invalid/runs/7"), opened);
+    }
+
     @Test
     void aModuleNeverReachedIsDimmedThroughout() {
         draw(ReleaseFixtures.crashed().lanes().get(2));

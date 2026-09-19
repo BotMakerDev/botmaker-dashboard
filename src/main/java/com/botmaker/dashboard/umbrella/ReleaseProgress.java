@@ -122,11 +122,18 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
      * @param elapsed how long this module has taken, when it has started
      */
     public record Lane(String module, String tag, String stage, Map<Step, NodeState> steps,
-                       List<String> errors, Optional<Duration> elapsed) {
+                       List<String> errors, Optional<Duration> elapsed, String actionsUrl) {
 
         public Lane {
             steps = Map.copyOf(steps);
             errors = List.copyOf(errors);
+            actionsUrl = actionsUrl == null ? "" : actionsUrl;
+        }
+
+        /** The six-argument shape from before a lane knew which run to open. */
+        public Lane(String module, String tag, String stage, Map<Step, NodeState> steps,
+                    List<String> errors, Optional<Duration> elapsed) {
+            this(module, tag, stage, steps, errors, elapsed, "");
         }
 
         public NodeState state(Step step) {
@@ -357,6 +364,9 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
                     : logged.map(ReleaseLog.Row::jitpack).filter(s -> !s.isBlank()).orElse("pending");
             String actions = !entry.actions().isBlank() ? entry.actions()
                     : logged.map(ReleaseLog.Row::actions).filter(s -> !s.isBlank()).orElse("pending");
+            // The cached poll's run outranks the log's, for the same reason its verdict does: it is newer.
+            String actionsUrl = !entry.actionsUrl().isBlank() ? entry.actionsUrl()
+                    : logged.map(ReleaseLog.Row::actionsUrl).orElse("");
             String stage = logged.map(ReleaseLog.Row::stage).filter(s -> !s.isBlank()).orElse("tagged");
             // The tag exists, so whatever the log last said about how far it got, it got at least this far.
             if (stage.equals("pending") || stage.equals("FAILED") || stage.equals("not reached")) {
@@ -364,7 +374,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
             }
             rows.add(new ReleaseLog.Row(tag.module(), tag.tag().replaceFirst("^v", ""), tag.tag(),
                     logged.map(ReleaseLog.Row::changelog).orElse(""), jitpack, actions, stage,
-                    logged.map(ReleaseLog.Row::elapsed).orElse("")));
+                    logged.map(ReleaseLog.Row::elapsed).orElse(""), actionsUrl));
 
             for (String kind : List.of("jitpack", "actions")) {
                 String cached = kind.equals("jitpack") ? entry.jitpackError() : entry.actionsError();
@@ -405,7 +415,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
             Optional<Duration> took = ReleaseLog.duration(row.elapsed())
                     .or(() -> Optional.ofNullable(gaps.get(key)));
             lanes.add(new Lane(lane.module(), lane.tag(), ages.getOrDefault(key, row.stage()), lane.steps(),
-                    lane.errors(), took));
+                    lane.errors(), took, lane.actionsUrl()));
         }
         Duration span = log.map(ReleaseLog::timing).flatMap(t -> ReleaseLog.duration(t.total()))
                 .orElseGet(release::span);
@@ -592,7 +602,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         Optional<Duration> elapsed = segment.startedAt().map(from -> Duration.between(from,
                 segment.closedAt().orElseGet(() -> live ? now
                         : segment.lines().stream().flatMap(l -> l.at().stream()).reduce((a, b) -> b).orElse(from))));
-        return new Lane(row.module(), row.tag(), row.stage(), steps, errors, elapsed);
+        return new Lane(row.module(), row.tag(), row.stage(), steps, errors, elapsed, row.actionsUrl());
     }
 
     /** A polled verdict as a node. {@code builtWhileWaiting} stands in until the verify pass has answered. */

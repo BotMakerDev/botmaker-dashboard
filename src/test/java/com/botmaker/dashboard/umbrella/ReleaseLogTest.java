@@ -159,6 +159,35 @@ class ReleaseLogTest {
     }
 
     /**
+     * The Actions cell may be a link since 2026-09-19, and it is still a verdict.
+     *
+     * <p>The link is what one click on a lane's <b>Actions ↗</b> reaches. It went into the existing cell
+     * rather than into a column of its own because this reader takes six or seven cells and drops anything
+     * else — an eighth would make every installed dashboard draw a release with no lanes at all.
+     */
+    @Test
+    void anActionsCellThatLinksToItsRunIsReadAsBoth() {
+        ReleaseLog log = ReleaseLog.parse(Path.of("x.md"), """
+                # Release 2026-09-19 10:00
+
+                | module | version | tag | stage | changelog | jitpack | actions |
+                |---|---|---|---|---|---|---|
+                | botmaker-sdk | 1.1.12 | v1.1.12 | tagged | stamped | ok (resolves clean) | [success (2)](https://github.com/BotMakerDev/botmaker-sdk/actions/runs/42) |
+                """);
+
+        ReleaseLog.Row row = log.rows().getFirst();
+        assertEquals("success (2)", row.actions(), "the verdict is the verdict, link or no link");
+        assertEquals(ReleaseLog.Health.OK, row.actionsHealth());
+        assertEquals("https://github.com/BotMakerDev/botmaker-sdk/actions/runs/42", row.actionsUrl());
+    }
+
+    /** Every log written before then: a bare verdict, and no run to open. */
+    @Test
+    void aPlainActionsCellHasNoRunBehindIt() {
+        assertEquals("", parsed().rows().getFirst().actionsUrl());
+    }
+
+    /**
      * A re-poll of a log that is not there stops with a reason, and does not throw.
      *
      * <p>The real poll resolves ten artifacts and calls {@code gh} ten times, so it is a manual test. This

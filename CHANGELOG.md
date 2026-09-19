@@ -10,9 +10,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-No source changes since v0.0.5; re-released for updated upstream pins.
-
 ### Added
+
+- **Every lane has an Actions ↗ chip**, on a live release and on a past one, not only on a lane that
+  failed. It opens the run itself when the release log or a poll recorded one, and the repository's runs
+  filtered by the tag otherwise — which is what every release cut before this gets.
 
 - **A finished release shows the time it actually took**, not the gap between its tags. The release log's
   new `## Timing` section is read for each lane and for the elapsed tile; a log written before the section

@@ -46,6 +46,8 @@ public final class ModuleLane extends VBox {
 
     private final Label module = new Label();
     private final Hyperlink chip = new Hyperlink();
+    /** <b>Actions ↗</b> — the run this tag fired, on every lane that has a tag and not only a failed one. */
+    private final Hyperlink actionsChip = new Hyperlink("Actions ↗");
     private final Label stage = new Label();
     private final Label elapsed = new Label();
     private final Map<Step, StackPane> nodes = new EnumMap<>(Step.class);
@@ -73,6 +75,12 @@ public final class ModuleLane extends VBox {
         chip.setOnAction(e -> {
             if (lane != null) {
                 open.accept(Links.release(lane.module(), lane.tag()));
+            }
+        });
+        actionsChip.getStyleClass().add("tag-chip");
+        actionsChip.setOnAction(e -> {
+            if (lane != null) {
+                open.accept(actionsTarget());
             }
         });
         stage.getStyleClass().add("lane-stage");
@@ -115,7 +123,7 @@ public final class ModuleLane extends VBox {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, module, chip, stepper, spacer, stage, elapsed);
+        HBox header = new HBox(10, module, chip, actionsChip, stepper, spacer, stage, elapsed);
         header.setAlignment(Pos.CENTER_LEFT);
 
         errorText.setEditable(false);
@@ -125,7 +133,7 @@ public final class ModuleLane extends VBox {
         Button openRun = new Button("Open run");
         openRun.setOnAction(e -> {
             if (lane != null) {
-                open.accept(Links.actions(lane.module(), lane.tag()));
+                open.accept(actionsTarget());
             }
         });
         Button openJitpack = new Button("Open JitPack build");
@@ -150,6 +158,11 @@ public final class ModuleLane extends VBox {
         this.lane = lane;
         module.setText(lane.module());
         chip.setText(lane.tag());
+        // A lane with no tag has no run to open: the release never got that far, and the repository's run
+        // list filtered by a tag that does not exist is an empty page.
+        boolean tagged = !lane.tag().isBlank();
+        actionsChip.setVisible(tagged);
+        actionsChip.setManaged(tagged);
         stage.setText(lane.stage());
         elapsed.setText(lane.elapsed().map(ReleaseProgress::clock).orElse(""));
 
@@ -195,6 +208,20 @@ public final class ModuleLane extends VBox {
      */
     private String copyText() {
         return lane.module() + " " + lane.tag() + " — " + lane.stage() + "\n\n" + errorText.getText();
+    }
+
+    /**
+     * Where <b>Actions ↗</b> goes: the run the poll picked, else the repository's runs filtered by this tag.
+     *
+     * <p>The fallback is what every release cut before 2026-09-19 gets, and what a tag whose runs were never
+     * polled gets — one page further from the answer, and still the right page.
+     */
+    String actionsTarget() {
+        return lane.actionsUrl().isBlank() ? Links.actions(lane.module(), lane.tag()) : lane.actionsUrl();
+    }
+
+    Hyperlink actionsChip() {
+        return actionsChip;
     }
 
     /** Whether the running node may pulse. The owner turns it off while the lane cannot be seen. */

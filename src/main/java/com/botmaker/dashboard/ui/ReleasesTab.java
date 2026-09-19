@@ -344,7 +344,7 @@ public final class ReleasesTab extends BorderPane {
                 }
                 if (actionsDue) {
                     Actions.Poll answer = backend.actions(module.get(), version.get());
-                    entry = entry.withActions(answer.verdict(), answer.error(), Instant.now());
+                    entry = entry.withActions(answer.verdict(), answer.error(), answer.url(), Instant.now());
                 }
                 polling.put(tag.module(), tag.tag(), entry);
                 redraw(release);

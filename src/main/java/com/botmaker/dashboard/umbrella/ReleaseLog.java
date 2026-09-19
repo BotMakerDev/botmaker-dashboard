@@ -93,18 +93,36 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
      *
      * @param stage how far the release got with this module; empty for a log older than the column
      * @param elapsed what the {@code ## Timing} section says this module's turn took, or empty
+     * @param actionsUrl the run the Actions cell linked to, or empty — a log written before 2026-09-19
+     *                   carries a bare verdict, and the lane then falls back to the repository's run list
      */
     public record Row(String module, String version, String tag,
-                      String changelog, String jitpack, String actions, String stage, String elapsed) {
+                      String changelog, String jitpack, String actions, String stage, String elapsed,
+                      String actionsUrl) {
+
+        public Row {
+            actionsUrl = actionsUrl == null ? "" : actionsUrl;
+        }
+
+        /** The eight-argument shape from before the Actions cell was a link. */
+        public Row(String module, String version, String tag,
+                   String changelog, String jitpack, String actions, String stage, String elapsed) {
+            this(module, version, tag, changelog, jitpack, actions, stage, elapsed, "");
+        }
 
         /** The seven-argument shape from before the timings; a row nobody timed. */
         public Row(String module, String version, String tag,
                    String changelog, String jitpack, String actions, String stage) {
-            this(module, version, tag, changelog, jitpack, actions, stage, "");
+            this(module, version, tag, changelog, jitpack, actions, stage, "", "");
         }
 
         public Row withElapsed(String took) {
-            return new Row(module, version, tag, changelog, jitpack, actions, stage, took);
+            return new Row(module, version, tag, changelog, jitpack, actions, stage, took, actionsUrl);
+        }
+
+        /** The same, with the run the Actions verdict is about — what a fresh poll knows and a file did not. */
+        public Row withActionsUrl(String url) {
+            return new Row(module, version, tag, changelog, jitpack, actions, stage, elapsed, url);
         }
 
         public Health jitpackHealth() {
@@ -317,8 +335,31 @@ public record ReleaseLog(Path file, String stamp, List<Row> rows, List<Problem> 
             return null;
         }
         if (cells.length == 7) {
-            return new Row(cells[0], cells[1], cells[2], cells[4], cells[5], cells[6], cells[3]);
+            return new Row(cells[0], cells[1], cells[2], cells[4], cells[5], linkText(cells[6]), cells[3],
+                    "", linkTarget(cells[6]));
         }
-        return new Row(cells[0], cells[1], cells[2], cells[3], cells[4], cells[5], "");
+        return new Row(cells[0], cells[1], cells[2], cells[3], cells[4], linkText(cells[5]), "",
+                "", linkTarget(cells[5]));
+    }
+
+    /**
+     * A cell the release wrote as {@code [verdict](url)}, split back in two.
+     *
+     * <p>The link went into the Actions cell rather than into a column of its own for the reason the timings
+     * are a section and not a column: an eighth cell would make every dashboard already installed drop the
+     * row. A cell that is not a link is its own verdict with no run behind it, which is every log written
+     * before 2026-09-19.
+     */
+    private static final java.util.regex.Pattern LINK =
+            java.util.regex.Pattern.compile("\\[(?<text>[^]]*)]\\((?<url>[^)]*)\\)");
+
+    static String linkText(String cell) {
+        java.util.regex.Matcher link = LINK.matcher(cell.strip());
+        return link.matches() ? link.group("text").strip() : cell.strip();
+    }
+
+    static String linkTarget(String cell) {
+        java.util.regex.Matcher link = LINK.matcher(cell.strip());
+        return link.matches() ? link.group("url").strip() : "";
     }
 }

@@ -45,18 +45,41 @@ public final class VerdictCache {
      * @param jitpackError   the clean room's error text, when it had one
      * @param actions        {@code Actions.poll}'s verdict cell
      * @param actionsError   its failing runs and their excerpt
+     * @param actionsUrl     the run that poll picked, so the lane's <b>Actions ↗</b> chip reaches it
+     *                       without asking {@code gh} again. Absent from every cache file written before
+     *                       2026-09-19, which Jackson hands over as null.
      */
     public record Entry(String jitpack, String jitpackError, long jitpackAt,
-                        String actions, String actionsError, long actionsAt) {
+                        String actions, String actionsError, long actionsAt, String actionsUrl) {
 
-        public static final Entry EMPTY = new Entry("", "", 0, "", "", 0);
+        public Entry {
+            jitpack = jitpack == null ? "" : jitpack;
+            jitpackError = jitpackError == null ? "" : jitpackError;
+            actions = actions == null ? "" : actions;
+            actionsError = actionsError == null ? "" : actionsError;
+            actionsUrl = actionsUrl == null ? "" : actionsUrl;
+        }
+
+        /** The six-argument shape from before a poll carried the run's URL. */
+        public Entry(String jitpack, String jitpackError, long jitpackAt,
+                     String actions, String actionsError, long actionsAt) {
+            this(jitpack, jitpackError, jitpackAt, actions, actionsError, actionsAt, "");
+        }
+
+        public static final Entry EMPTY = new Entry("", "", 0, "", "", 0, "");
 
         public Entry withJitpack(String verdict, String error, Instant at) {
-            return new Entry(verdict, error, at.toEpochMilli(), actions, actionsError, actionsAt);
+            return new Entry(verdict, error, at.toEpochMilli(), actions, actionsError, actionsAt,
+                    actionsUrl);
         }
 
         public Entry withActions(String verdict, String error, Instant at) {
-            return new Entry(jitpack, jitpackError, jitpackAt, verdict, error, at.toEpochMilli());
+            return withActions(verdict, error, "", at);
+        }
+
+        /** The same, with the run the verdict is about. */
+        public Entry withActions(String verdict, String error, String url, Instant at) {
+            return new Entry(jitpack, jitpackError, jitpackAt, verdict, error, at.toEpochMilli(), url);
         }
 
         public boolean jitpackStale(Instant now) {

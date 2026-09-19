@@ -8,6 +8,32 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-19 — one click from a lane to its Actions run
+
+**Done**
+- `com.botmaker.cli.release.Actions.Poll` carries a `url`: `bestRun` picks the failing run when there is
+  one (that is the page the operator is opening), else one still going, else the newest — `gh run list`
+  returns newest first. A tag with no run has none, and the caller falls back.
+- `cli`'s `ReleaseLog.Row` gained `actionsUrl`, and `actionsCell()` writes `[verdict](url)`. The link is in
+  the existing cell and not in a new column for the reason the timings are a section: this module's reader
+  takes six or seven cells and drops anything else, so an eighth column would blank every installed
+  dashboard's lanes. Both parsers strip the link back to a verdict plus a target, so every log written
+  before today reads unchanged.
+- `umbrella/VerdictCache.Entry` and `umbrella/ReleaseLog.Row` carry the URL; a cached poll's run outranks
+  the log's, as its verdict already did. The cache file is JSON, so `Entry`'s compact constructor turns the
+  nulls of an older file into empty strings.
+- `ReleaseProgress.Lane` carries it, and `ModuleLane` shows an **Actions ↗** chip on every lane with a tag
+  — it was a button inside a *failed* lane's details panel, which is the one case where the operator
+  already knows something is wrong. `actionsTarget()` falls back to `Links.actions(module, tag)`.
+
+**Deferred / next**
+- The chip is a `Hyperlink` styled as `tag-chip` beside the tag. If the header gets crowded on a narrow
+  window, it is the first thing to move into the stepper's right-hand side.
+- `cli` forces a dashboard release (the dashboard calls the release library in-process), so the next
+  release that cuts `--cli` must cut `--dashboard` too. Not done here.
+
+---
+
 ## 2026-09-16 — gallery v2, phase 5: tiers, vetting and the merge job's word
 
 **Done**
