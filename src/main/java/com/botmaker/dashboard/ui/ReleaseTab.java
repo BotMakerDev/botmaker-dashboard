@@ -695,6 +695,29 @@ public final class ReleaseTab extends BorderPane {
         }
     }
 
+    /**
+     * Watches a release somebody else started — the Catalog tab's template button.
+     *
+     * <p><b>Handed the job rather than found by {@link #reattach()}, and that is deliberate.</b> Reattach
+     * filters for a job still {@linkplain ReleaseLauncher.Job#alive alive}, because it runs whenever this
+     * tab is built or the checkout changes and a finished release from last week is not news. A template
+     * release takes about ten seconds, so it is reliably dead before the operator arrives — the case that
+     * needs showing is exactly the case that filter drops. Being handed the job says *this* one, started
+     * *now*, which is the fact the filter was standing in for.
+     *
+     * <p>A release started here still arms nothing, for {@link #launch}'s reason: the way to get Execute
+     * back is to preview again against the checkout as it now is.
+     */
+    public void attach(ReleaseLauncher.Job job) {
+        if (job == null) {
+            return;
+        }
+        disarm();
+        hideBanner();
+        watch(job);
+        say("Started from the Catalog tab at " + HOUR.format(job.startedAt()) + " — watching it here.");
+    }
+
     /** A job that is still alive in this checkout gets watched again — the window was closed mid-release. */
     private void reattach() {
         Path root = umbrella;

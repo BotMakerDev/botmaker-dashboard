@@ -139,6 +139,15 @@ public final class DashboardApp extends Application {
                 new Tab("Catalog", catalog));
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
+        // A template released from the Catalog tab is a release like any other, so it is watched where
+        // releases are watched. Wired here because this is the only place that holds both tabs and the one
+        // thing neither of them can do: select the other. Without it the run finished — in about ten
+        // seconds — before the operator could switch tabs, and the board they arrived at was empty.
+        catalog.setOnReleaseStarted(job -> {
+            release.attach(job);
+            tabs.getSelectionModel().select(releaseTab);
+        });
+
         BorderPane root = new BorderPane();
         root.setTop(top);
         root.setCenter(tabs);

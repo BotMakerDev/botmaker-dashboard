@@ -25,6 +25,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   agree, amber when the vetting is behind; behind is not an error, it is a vetting lagging while somebody
   looks. Bots only: a plugin's `verifiedVersion` is a different idea.
 
+### Fixed
+
+- **A template release started from the Catalog tab is now visible.** The status line claimed the Release
+  tab was watching it and nothing made that true: that tab reattaches on construction and on a change of
+  checkout, and only to a job still alive. A template release finishes in about ten seconds, so it was
+  reliably dead before the operator could switch tabs, and the board they arrived at was empty — a release
+  with no sign it had run. The job is handed over and the tab selected, so the board draws it.
+
 ### Changed
 
 - **The Release tab has no row for a template.** `--gamebot` works identically through all three doors, but

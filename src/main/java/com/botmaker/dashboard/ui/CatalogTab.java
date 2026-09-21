@@ -114,6 +114,19 @@ public final class CatalogTab extends BorderPane {
     private Admin admin = new Admin(false, "not checked yet");
     private Path umbrella;
 
+    /**
+     * Where a release started from this tab is handed to, so the operator sees it running.
+     *
+     * <p><b>A handoff rather than a field of type {@code ReleaseTab}.</b> The board, the lanes and the
+     * reattach are that tab's, and this one has no business knowing they exist — what it knows is that it
+     * started a job and that somebody else draws jobs. {@code DashboardApp} is where the two are wired,
+     * which is also the only place that can select a tab.
+     *
+     * <p>Does nothing by default, so a test constructing this tab alone starts a release without a window
+     * to show it in.
+     */
+    private Consumer<ReleaseLauncher.Job> onReleaseStarted = job -> { };
+
     public CatalogTab(Path umbrella, GitHubClient client, GitHubAuth auth) {
         this.umbrella = umbrella;
         this.client = client;
@@ -286,6 +299,16 @@ public final class CatalogTab extends BorderPane {
     public void setUmbrella(Path umbrella) {
         this.umbrella = umbrella;
         gateButtons();
+    }
+
+    /**
+     * What to do with a release this tab starts: show it, wherever releases are shown.
+     *
+     * <p>Set by {@code DashboardApp} to hand the job to the Release tab and select it. See
+     * {@link #onReleaseStarted} for why it is a callback and not that tab.
+     */
+    public void setOnReleaseStarted(Consumer<ReleaseLauncher.Job> onReleaseStarted) {
+        this.onReleaseStarted = onReleaseStarted == null ? job -> { } : onReleaseStarted;
     }
 
     /**
@@ -467,12 +490,21 @@ public final class CatalogTab extends BorderPane {
         return dialog.showAndWait().filter(cut::equals).isPresent();
     }
 
-    /** Starts the release in a process of its own — {@link ReleaseLauncher}, as the Release tab does. */
+    /**
+     * Starts the release in a process of its own — {@link ReleaseLauncher}, as the Release tab does.
+     *
+     * <p><b>Then hands the job over and says so.</b> This line claimed the Release tab was watching it and
+     * nothing made that true: that tab reattaches on construction and on a change of checkout, and it
+     * filters for a job still {@linkplain ReleaseLauncher.Job#alive alive}. A template release finishes in
+     * about ten seconds, so by the time the operator had switched tabs there was nothing left to find and
+     * the board stayed empty — a release with no visible sign it had run.
+     */
     private void launch(ReleaseSpec spec) {
         try {
             ReleaseLauncher.Launched launched = ReleaseLauncher.launch(umbrella, spec);
             status.setText("Released " + String.join(" ", spec.command(true)) + " — started "
                     + launched.how() + ". The Release tab is watching it.");
+            onReleaseStarted.accept(launched.job());
         } catch (IOException e) {
             status.setText("The release process did not start, and nothing was run: " + e.getMessage());
         }
