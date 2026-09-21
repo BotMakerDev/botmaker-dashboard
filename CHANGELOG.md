@@ -8,7 +8,7 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [0.0.7] — 2026-09-21
 
 No source changes since v0.0.6; re-released for updated upstream pins.
 
