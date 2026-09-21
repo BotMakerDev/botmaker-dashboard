@@ -244,7 +244,7 @@ public final class ReleaseTab extends BorderPane {
      * <p>Lowercase and unremarkable on purpose: the barrier is having to read the list and type at all, not
      * having to shout.
      */
-    private static final String CONFIRM_WORD = "release";
+    static final String CONFIRM_WORD = "release";
 
     /** The confirmation's affirmative, named for what it does rather than "OK". */
     private static final ButtonType CUT = new ButtonType("Cut the release", ButtonBar.ButtonData.OK_DONE);

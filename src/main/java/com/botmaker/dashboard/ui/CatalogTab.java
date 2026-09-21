@@ -1,11 +1,13 @@
 package com.botmaker.dashboard.ui;
 
 import com.botmaker.cli.release.Module;
+import com.botmaker.cli.release.Plan;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
 import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
+import com.botmaker.dashboard.umbrella.ReleaseLauncher;
 import com.botmaker.dashboard.umbrella.ReleaseRun;
 import com.botmaker.dashboard.umbrella.ReleaseSpec;
 import com.botmaker.shared.github.GitHubAuth;
@@ -37,12 +39,14 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -69,8 +73,9 @@ import java.util.function.Function;
  * template this project maintains — {@code botmaker-gamebot} — is listed here as the bot it is published as,
  * so this is where its release lives: it previews {@code botmaker release --gamebot} through
  * {@link ReleaseRun}, the same library and the same call the Release tab makes, which has no row for a
- * template. It is a shortcut into one implementation, not a second thing that tags a repository, and it
- * stops at the preview — cutting the tag stays behind the Release tab's arming and typed confirmation.
+ * template. It is a shortcut into one implementation, not a second thing that tags a repository: it previews,
+ * and then it can cut — under the Release tab's guards rather than beside them, arming by value on the exact
+ * version previewed, the same typed word and the same {@link ReleaseLauncher} child.
  * <b>Releasing is not vetting</b>: {@code Vet…} is still what moves {@code vettedVersion}, and the
  * {@code Latest} column beside the tier is what makes a vetting left behind visible at all.
  */
@@ -341,10 +346,13 @@ public final class CatalogTab extends BorderPane {
      * {@link ReleaseRun#go} with one module ticked, exactly as the Release tab does, so the plan on screen
      * is produced by the code that would do the work.
      *
-     * <p><b>It previews and stops.</b> Cutting the tag stays behind the Release tab's arming and typed
-     * confirmation — this button's job is to make the preview one click away from the row that shows the
-     * template is behind, and a second confirmation built here would be a second implementation of the one
-     * guard that keeps a permanent tag from a reflex.
+     * <p><b>It previews, then it can cut, under the Release tab's guards rather than beside them.</b> Release
+     * it… is dead until a preview of <i>this exact version, in this session</i> has come back with no
+     * refusal, and editing the version kills it again — arming by value, the same rule and the same reason:
+     * the plan on screen would otherwise describe a release nobody read. Then the same typed
+     * {@link ReleaseTab#CONFIRM_WORD}, and the same {@link ReleaseLauncher} child, so closing this window
+     * does not stop a release. What is <b>not</b> duplicated is the decision: both buttons are
+     * {@link ReleaseRun#go} with one module ticked.
      *
      * <p><b>And {@code Vet…} is still what moves {@code vettedVersion}.</b> Releasing the template publishes
      * a tag; deciding that Studio should offer it is a separate act, a pull request a human merges.
@@ -365,7 +373,8 @@ public final class CatalogTab extends BorderPane {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Update " + entry.id());
         dialog.setHeaderText("Previews " + String.join(" ", spec(module, "…").command(false))
-                + " in " + umbrella + ".\nNothing is tagged here: the Release tab's Execute is what cuts it."
+                + " in " + umbrella + ".\nRelease it… stays dead until a preview of that exact version comes"
+                + " back clean."
                 + (entry.vetted() == null ? ""
                         : "\nVetted now at " + entry.vetted().record().vettedVersion()
                                 + " — releasing does not move that; Vet… does."));
@@ -374,15 +383,99 @@ public final class CatalogTab extends BorderPane {
         DialogPane pane = dialog.getDialogPane();
         pane.setContent(body);
         ButtonType previewIt = new ButtonType("Preview", ButtonBar.ButtonData.OTHER);
-        pane.getButtonTypes().setAll(previewIt, ButtonType.CLOSE);
+        ButtonType releaseIt = new ButtonType("Release it…", ButtonBar.ButtonData.OTHER);
+        pane.getButtonTypes().setAll(previewIt, releaseIt, ButtonType.CLOSE);
         Button previewButton = (Button) pane.lookupButton(previewIt);
+        Button releaseButton = (Button) pane.lookupButton(releaseIt);
+        releaseButton.getStyleClass().add("danger");
+        releaseButton.setDisable(true);
+
+        // What a clean preview armed, as a value: the spec that produced the plan on screen, and the plan
+        // itself for the confirmation's list. Editing the version clears both, because the text then
+        // describes a release nobody previewed — the Release tab's rule, for its reason.
+        ReleaseSpec[] armed = {null};
+        Plan[] armedPlan = {null};
+        version.textProperty().addListener((o, was, is) -> {
+            armed[0] = null;
+            armedPlan[0] = null;
+            releaseButton.setDisable(true);
+        });
+
         // Consumed, so the dialog stays open with the plan in it — the whole point of previewing here.
         previewButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
             e.consume();
-            preview(module, version.getText().trim(), output, previewButton);
+            preview(module, version.getText().trim(), output, previewButton, run -> {
+                boolean clean = run != null && run.decided() && !run.stopped();
+                armed[0] = clean ? spec(module, version.getText().trim()) : null;
+                armedPlan[0] = clean ? run.plan().orElse(null) : null;
+                releaseButton.setDisable(armedPlan[0] == null);
+            });
+        });
+        releaseButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+            e.consume();
+            if (armed[0] != null && armedPlan[0] != null && confirm(armed[0], armedPlan[0])) {
+                launch(armed[0]);
+                dialog.setResult(ButtonType.CLOSE);
+                dialog.close();
+            }
         });
         Themed.dialog(dialog, window());
         dialog.showAndWait();
+    }
+
+    /**
+     * The same confirmation the Release tab puts in front of Execute: what will be tagged, why it cannot be
+     * undone, and a word to type.
+     *
+     * <p>It lists the plan rather than the flag, because a release cuts what the <i>decide pass</i> decided —
+     * a forced module would be in that list and is not in the command line.
+     */
+    private boolean confirm(ReleaseSpec spec, Plan plan) {
+        List<String> tags = plan.releasing().entrySet().stream()
+                .map(cut -> "    " + cut.getKey().directory() + "  " + cut.getValue().tag())
+                .toList();
+        if (tags.isEmpty()) {
+            status.setText("The preview decided to release nothing — there is no tag to cut.");
+            return false;
+        }
+        TextArea list = new TextArea(String.join("\n", tags));
+        list.setEditable(false);
+        list.getStyleClass().add("output-text");
+        list.setPrefRowCount(Math.min(8, tags.size() + 1));
+
+        Label warning = new Label(tags.size() + " tag(s) will be pushed, and a pushed tag cannot be edited or"
+                + " recalled.\n\nThe release runs as a process of its own: closing this window does not stop"
+                + " it, and the Release tab shows it.\n\nThis publishes the template. It does not change what"
+                + " Studio offers — Vet… is what moves vettedVersion.\n\nType " + ReleaseTab.CONFIRM_WORD
+                + " to enable the button.");
+        warning.setWrapText(true);
+
+        TextField typed = new TextField();
+        typed.setPromptText(ReleaseTab.CONFIRM_WORD);
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Cut this release");
+        dialog.setHeaderText(String.join(" ", spec.command(true)));
+        ButtonType cut = new ButtonType("Cut the release", ButtonBar.ButtonData.OK_DONE);
+        DialogPane pane = dialog.getDialogPane();
+        pane.getButtonTypes().setAll(ButtonType.CANCEL, cut);
+        pane.setContent(new VBox(10, list, warning, typed));
+        pane.lookupButton(cut).setDisable(true);
+        typed.textProperty().addListener((o, was, is) ->
+                pane.lookupButton(cut).setDisable(!ReleaseTab.CONFIRM_WORD.equals(is.strip())));
+        Themed.dialog(dialog, window());
+        return dialog.showAndWait().filter(cut::equals).isPresent();
+    }
+
+    /** Starts the release in a process of its own — {@link ReleaseLauncher}, as the Release tab does. */
+    private void launch(ReleaseSpec spec) {
+        try {
+            ReleaseLauncher.Launched launched = ReleaseLauncher.launch(umbrella, spec);
+            status.setText("Released " + String.join(" ", spec.command(true)) + " — started "
+                    + launched.how() + ". The Release tab is watching it.");
+        } catch (IOException e) {
+            status.setText("The release process did not start, and nothing was run: " + e.getMessage());
+        }
     }
 
     /** One module, one spec — what the flag would be on the command line. */
@@ -390,10 +483,17 @@ public final class CatalogTab extends BorderPane {
         return new ReleaseSpec(Optional.empty(), Map.of(module, version), false, false);
     }
 
-    /** Runs the preview off the FX thread: the decide pass shells to git and the gates run Maven. */
-    private void preview(Module module, String version, TextArea output, Button button) {
+    /**
+     * Runs the preview off the FX thread: the decide pass shells to git and the gates run Maven.
+     *
+     * @param armed called on the FX thread with the finished run, or {@code null} when it could not start —
+     *              which is what decides whether Release it… wakes up
+     */
+    private void preview(Module module, String version, TextArea output, Button button,
+                         Consumer<ReleaseRun> armed) {
         if (!ReleaseSpec.wellFormed(version)) {
             output.setText("want x.y.z or patch|minor|major, not " + version);
+            armed.accept(null);
             return;
         }
         button.setDisable(true);
@@ -407,6 +507,7 @@ public final class CatalogTab extends BorderPane {
                     button.setDisable(false);
                     output.setText(error != null ? message(error) : run.output());
                     output.positionCaret(output.getLength());
+                    armed.accept(error != null ? null : run);
                 }));
     }
 

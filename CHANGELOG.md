@@ -14,10 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **`Update template…` in the Catalog tab.** The worked bot is released from the row it is listed on: the
   button previews `botmaker release --gamebot <version>` through the same in-process call the Release tab
-  makes. It stops at the preview — cutting the tag stays behind the Release tab's arming and typed
-  confirmation, and a second confirmation here would be a second implementation of the one guard that keeps
-  a permanent tag from a reflex. Which row gets it is the release library's module list matched on the
-  repository name, never the entry's `template` tag, which any submission can claim.
+  makes, and then cuts it — `Release it…` is dead until a preview of that exact version came back clean in
+  this session, editing the version kills it again, and the same word has to be typed into the same
+  confirmation. The release runs in a `setsid` child, as the Release tab's does, so closing the window does
+  not stop it. Which row gets the button is the release library's module list matched on the repository
+  name, never the entry's `template` tag, which any submission can claim.
 - **A `Latest` column beside the tier**, from the entry's newest GitHub release. `Vetted v0.2.0` reads as
   healthy whatever `main` is doing — on 2026-09-21 the worked bot's vetting pointed at the pre-migration
   template while three releases had gone out past it, and nothing in this window said so. Green when the two
