@@ -8,6 +8,30 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.0.6; re-released for updated upstream pins.
+
+### Added
+
+- **The dashboard has an icon.** The window, the application menu entry and the installed launcher all
+  carry it. It is the release board — three lanes of step nodes, done, running and waiting — in Studio's
+  squircle with a teal accent, so the two are told apart where they sit side by side.
+- **Every lane has an Actions ↗ chip**, on a live release and on a past one, not only on a lane that
+  failed. It opens the run itself when the release log or a poll recorded one, and the repository's runs
+  filtered by the tag otherwise — which is what every release cut before this gets.
+
+- **A finished release shows the time it actually took**, not the gap between its tags. The release log's
+  new `## Timing` section is read for each lane and for the elapsed tile; a log written before the section
+  existed still falls back to the gaps, which counted one module's JitPack wait as the next module's time.
+
+### Changed
+
+- **The package page looks like the rest of the project, and its commands copy.** The stylesheet and the
+  copy button come from `botmakerdev.github.io/assets/`, the organization's front page, rather than from a
+  `<style>` block repeated in four repositories, and the page links to that front page — where one command
+  installs every BotMaker tool at once. The published repository is untouched.
+
 ## [0.0.6] — 2026-09-21
 
 ### Added
