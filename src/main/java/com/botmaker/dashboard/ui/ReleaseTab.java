@@ -86,7 +86,15 @@ import java.util.function.Consumer;
  *
  * <p><b>The rows are every module the library knows, before any preview</b>, in {@link Order#TAG}. They came
  * from the decide pass until 2026-09-16, which left the table empty until the first preview and meant a level
- * could not be picked before one. {@link Module} is the library's list, not a copy of it here. <b>Picking a
+ * could not be picked before one. {@link Module} is the library's list, not a copy of it here.
+ *
+ * <p><b>With one exception, and it is a placement rather than an omission</b>: a template
+ * ({@link Module#template}) has no row here. {@code --gamebot} works identically through all three doors —
+ * one implementation is the house rule — but the thing a template is published as is a <i>bot</i>, listed in
+ * the Catalog tab beside the vetted and community ones, and that is where its fast update lives. A row here
+ * would put an admin-owned template in the middle of the module chain it is not part of.
+ *
+ * <p><b>Picking a
  * level or typing a version ticks that row</b>: it did not, and a level chosen on an unticked row changed
  * nothing while Execute stayed armed for the global level — which read as the tab remembering only the
  * preview's settings. Unticking resets nothing.
@@ -325,6 +333,11 @@ public final class ReleaseTab extends BorderPane {
         allLevel.disableProperty().bind(allBox.selectedProperty().not());
 
         for (Module module : Order.TAG) {
+            if (module.template()) {
+                // Released from the Catalog tab, where the thing it is published as is listed. See the
+                // class javadoc: this is the one place the rows are not every module the library knows.
+                continue;
+            }
             Row row = new Row(module.directory());
             // A tick changes what a release would do, so the command line follows every one. Not a disarm:
             // arming is a value comparison, so un-ticking puts the button back for the plan actually read.

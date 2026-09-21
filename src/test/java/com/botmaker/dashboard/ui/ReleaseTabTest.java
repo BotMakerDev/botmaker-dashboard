@@ -100,8 +100,12 @@ class ReleaseTabTest extends FxHeadless {
         open();
 
         // Fourteen since 2026-09-17: botmaker-remote, botmaker-remote-server and this module joined the
-        // release chain.
-        assertEquals(Module.values().length, tab.rows().size());
+        // release chain. A template is the one module with no row here, since 2026-09-21: it is released
+        // from the Catalog tab, where the bot it is published as is listed. Derived from the predicate, so
+        // a second template needs no edit to this test.
+        long templates = java.util.Arrays.stream(Module.values()).filter(Module::template).count();
+        assertEquals(Module.values().length - templates, tab.rows().size());
+        assertTrue(tab.rows().stream().noneMatch(r -> r.getModule().equals("botmaker-gamebot")));
         assertEquals("botmaker-pilot", tab.rows().getFirst().getModule(), "tag order: the pilot first");
         assertEquals("botmaker-dashboard", tab.rows().getLast().getModule(), "and the dashboard last");
         assertTrue(tab.executeButton().isDisabled());

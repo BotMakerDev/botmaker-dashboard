@@ -1,10 +1,13 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.cli.release.Module;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
 import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
+import com.botmaker.dashboard.umbrella.ReleaseRun;
+import com.botmaker.dashboard.umbrella.ReleaseSpec;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +18,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
@@ -33,7 +37,10 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -57,6 +64,15 @@ import java.util.function.Function;
  * buys is that the operator learns they cannot do it before typing an edit rather than after. Neither
  * action changes {@code main}: Edit proposes new text, Unpublish proposes removing the file, and a human
  * merges or does not.
+ *
+ * <p><b>The one button that is not about a data repository is {@code Update template…}</b> (2026-09-21). A
+ * template this project maintains — {@code botmaker-gamebot} — is listed here as the bot it is published as,
+ * so this is where its release lives: it previews {@code botmaker release --gamebot} through
+ * {@link ReleaseRun}, the same library and the same call the Release tab makes, which has no row for a
+ * template. It is a shortcut into one implementation, not a second thing that tags a repository, and it
+ * stops at the preview — cutting the tag stays behind the Release tab's arming and typed confirmation.
+ * <b>Releasing is not vetting</b>: {@code Vet…} is still what moves {@code vettedVersion}, and the
+ * {@code Latest} column beside the tier is what makes a vetting left behind visible at all.
  */
 public final class CatalogTab extends BorderPane {
 
@@ -79,10 +95,22 @@ public final class CatalogTab extends BorderPane {
     private final Button unpublish = new Button("Unpublish…");
     private final Button vet = new Button("Vet…");
     private final Button revoke = new Button("Revoke vetting…");
+    private final Button update = new Button("Update template…");
+
+    /**
+     * The newest release GitHub reports per entry path, filled after the listing lands.
+     *
+     * <p>Keyed by {@link Catalog.Entry#path()} rather than held on the entry, because an entry is the file
+     * as it stands on {@code main} and this is not in it. A row whose answer has not arrived — or whose
+     * repository has no release — shows nothing rather than a guess.
+     */
+    private final Map<String, SimpleStringProperty> latest = new HashMap<>();
 
     private Admin admin = new Admin(false, "not checked yet");
+    private Path umbrella;
 
-    public CatalogTab(GitHubClient client, GitHubAuth auth) {
+    public CatalogTab(Path umbrella, GitHubClient client, GitHubAuth auth) {
+        this.umbrella = umbrella;
         this.client = client;
         this.auth = auth;
 
@@ -95,10 +123,11 @@ public final class CatalogTab extends BorderPane {
         unpublish.setOnAction(e -> withSelected(this::unpublish));
         vet.setOnAction(e -> withSelected(this::vet));
         revoke.setOnAction(e -> withSelected(this::revoke));
+        update.setOnAction(e -> withSelected(this::updateTemplate));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, refresh, edit, unpublish, vet, revoke, spacer, status);
+        HBox bar = new HBox(10, refresh, edit, unpublish, vet, revoke, update, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -160,7 +189,35 @@ public final class CatalogTab extends BorderPane {
             entries.setAll(found);
             status.setText(summary(found) + readOnly());
             gateButtons();
+            loadLatest(found);
         }));
+    }
+
+    /**
+     * Fills the Latest column, one request per bot, after the listing is on screen.
+     *
+     * <p><b>Why it is worth a column rather than a glance at the repository.</b> {@code Vetted v0.2.0} reads
+     * as healthy whatever {@code main} is doing — on 2026-09-21 the worked bot's vetting pointed at the
+     * pre-migration template while three releases had gone out past it, and nothing in this window said so.
+     * The two numbers side by side are the whole diagnosis.
+     *
+     * <p>Only bots are asked. A plugin's {@code verifiedVersion} is a different idea — the release the
+     * registry's gate downloaded — and putting a newest-release number beside it would invite reading one as
+     * the other.
+     */
+    private void loadLatest(List<Catalog.Entry> found) {
+        latest.keySet().retainAll(found.stream().map(Catalog.Entry::path).toList());
+        for (Catalog.Entry entry : found) {
+            if (entry.kind() != Catalog.Kind.BOT || entry.repo().isEmpty()) {
+                continue;
+            }
+            SimpleStringProperty cell = latest.computeIfAbsent(entry.path(), p -> new SimpleStringProperty(""));
+            Vetting.latestRelease(client, auth, entry).whenComplete((tag, error) -> Platform.runLater(() ->
+                    // A repository with no release answers blank, and so does one this token cannot read.
+                    // Neither is worth a red cell: the column says what is published, not whether GitHub
+                    // answered, and the status line already carries a failure that touched every row.
+                    cell.set(error != null || tag == null ? "" : tag)));
+        }
     }
 
     /**
@@ -220,6 +277,37 @@ public final class CatalogTab extends BorderPane {
         gateButtons();
     }
 
+    /** Called when the operator picks a different checkout — the templates are released out of that one. */
+    public void setUmbrella(Path umbrella) {
+        this.umbrella = umbrella;
+        gateButtons();
+    }
+
+    /**
+     * Which release module a listed entry <b>is</b>, when it is one this project maintains.
+     *
+     * <p>Matched on the repository <b>name</b> against {@link Module#directory}, never on the entry's
+     * {@code template} tag: that tag is a gallery idea any submission can claim, and this button cuts a tag.
+     * The answer is the release library's own list, so a template that stops being a module stops having a
+     * button rather than having a broken one.
+     *
+     * <p><b>The owner is dropped, deliberately.</b> What the button releases is the {@code botmaker-gamebot}
+     * submodule of the umbrella in use — never the repository the entry names — so the question is which
+     * module of this checkout the row is about. This project's own repositories do not agree on one owner
+     * anyway (the gallery's entries are {@code BotMakerDev}'s, the registry is {@code LiQiyeDev}'s), so an
+     * owner in the match would be a second list to keep.
+     */
+    static Optional<Module> releasable(Catalog.Entry entry) {
+        if (entry == null || entry.repo().isEmpty()) {
+            return Optional.empty();
+        }
+        String repo = entry.repo().substring(entry.repo().indexOf('/') + 1);
+        return java.util.Arrays.stream(Module.values())
+                .filter(Module::template)
+                .filter(module -> module.directory().equals(repo))
+                .findFirst();
+    }
+
     /**
      * Which buttons are live.
      *
@@ -237,6 +325,89 @@ public final class CatalogTab extends BorderPane {
         boolean bot = row && selected.kind() == Catalog.Kind.BOT && selected.readable();
         vet.setDisable(!bot || !admin.canWrite());
         revoke.setDisable(!bot || !admin.canWrite() || selected.vetted() == null);
+        // Not gated on admin.canWrite(): that probe asks about the two data repositories this tab proposes
+        // pull requests against, and a release pushes tags to the module's own repository with git's
+        // credentials. A permission answered about the wrong repository is worse than none.
+        update.setDisable(umbrella == null || releasable(selected).isEmpty());
+    }
+
+    /**
+     * The fast path to {@code botmaker release --gamebot} — a shortcut into the release library, not a
+     * second thing that tags a repository.
+     *
+     * <p><b>It is here rather than in the Release tab</b> because a template is published as a <i>bot</i>,
+     * listed on this very row beside the vetted and community ones; a row in the module chain would put an
+     * admin-owned template in the middle of a dependency order it is not part of. What it reaches is
+     * {@link ReleaseRun#go} with one module ticked, exactly as the Release tab does, so the plan on screen
+     * is produced by the code that would do the work.
+     *
+     * <p><b>It previews and stops.</b> Cutting the tag stays behind the Release tab's arming and typed
+     * confirmation — this button's job is to make the preview one click away from the row that shows the
+     * template is behind, and a second confirmation built here would be a second implementation of the one
+     * guard that keeps a permanent tag from a reflex.
+     *
+     * <p><b>And {@code Vet…} is still what moves {@code vettedVersion}.</b> Releasing the template publishes
+     * a tag; deciding that Studio should offer it is a separate act, a pull request a human merges.
+     */
+    private void updateTemplate(Catalog.Entry entry) {
+        Module module = releasable(entry).orElse(null);
+        if (module == null || umbrella == null) {
+            return;
+        }
+        TextField version = new TextField("patch");
+        version.setPromptText("x.y.z, or patch|minor|major");
+        TextArea output = new TextArea();
+        output.setEditable(false);
+        output.getStyleClass().add("output-text");
+        output.setPrefRowCount(18);
+        output.setPrefColumnCount(100);
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Update " + entry.id());
+        dialog.setHeaderText("Previews " + String.join(" ", spec(module, "…").command(false))
+                + " in " + umbrella + ".\nNothing is tagged here: the Release tab's Execute is what cuts it."
+                + (entry.vetted() == null ? ""
+                        : "\nVetted now at " + entry.vetted().record().vettedVersion()
+                                + " — releasing does not move that; Vet… does."));
+        VBox body = new VBox(8, version, output);
+        VBox.setVgrow(output, Priority.ALWAYS);
+        DialogPane pane = dialog.getDialogPane();
+        pane.setContent(body);
+        ButtonType previewIt = new ButtonType("Preview", ButtonBar.ButtonData.OTHER);
+        pane.getButtonTypes().setAll(previewIt, ButtonType.CLOSE);
+        Button previewButton = (Button) pane.lookupButton(previewIt);
+        // Consumed, so the dialog stays open with the plan in it — the whole point of previewing here.
+        previewButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+            e.consume();
+            preview(module, version.getText().trim(), output, previewButton);
+        });
+        Themed.dialog(dialog, window());
+        dialog.showAndWait();
+    }
+
+    /** One module, one spec — what the flag would be on the command line. */
+    private static ReleaseSpec spec(Module module, String version) {
+        return new ReleaseSpec(Optional.empty(), Map.of(module, version), false, false);
+    }
+
+    /** Runs the preview off the FX thread: the decide pass shells to git and the gates run Maven. */
+    private void preview(Module module, String version, TextArea output, Button button) {
+        if (!ReleaseSpec.wellFormed(version)) {
+            output.setText("want x.y.z or patch|minor|major, not " + version);
+            return;
+        }
+        button.setDisable(true);
+        output.setText("");
+        Path root = umbrella;
+        StringBuilder text = new StringBuilder();
+        CompletableFuture
+                .supplyAsync(() -> ReleaseRun.go(root, spec(module, version), false,
+                        line -> text.append(line).append('\n')))
+                .whenComplete((run, error) -> Platform.runLater(() -> {
+                    button.setDisable(false);
+                    output.setText(error != null ? message(error) : run.output());
+                    output.positionCaret(output.getLength());
+                }));
     }
 
     /**
@@ -488,6 +659,7 @@ public final class CatalogTab extends BorderPane {
                 kindColumn(),
                 column("Entry", 260, Catalog.Entry::label),
                 tierColumn(),
+                latestColumn(),
                 column("Name", 180, Catalog.Entry::name),
                 column("Tags", 200, Catalog.Entry::tagLine),
                 column("Description", 380, Catalog.Entry::summary));
@@ -527,6 +699,40 @@ public final class CatalogTab extends BorderPane {
                 }
             });
             return cell;
+        });
+        return col;
+    }
+
+    /**
+     * The repository's newest release, beside the one the vetting pins.
+     *
+     * <p>Green when they agree, amber when the vetting is behind, plain when there is nothing to compare —
+     * an unvetted bot, or a repository that has cut no release. <b>Behind is not an error</b> and does not
+     * get the broken style: a vetting deliberately lags while somebody looks at the new release, and that
+     * is the tier working rather than failing.
+     */
+    private TableColumn<Catalog.Entry, String> latestColumn() {
+        TableColumn<Catalog.Entry, String> col = new TableColumn<>("Latest");
+        col.setPrefWidth(110);
+        col.setCellValueFactory(c -> latest.computeIfAbsent(c.getValue().path(),
+                p -> new SimpleStringProperty("")));
+        col.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null || item.isBlank() ? null : item);
+                getStyleClass().removeAll("cell--ok", "cell--pending", "cell--dim");
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    return;
+                }
+                Catalog.Vetted vetted = getTableRow().getItem().vetted();
+                if (item == null || item.isBlank() || vetted == null) {
+                    getStyleClass().add("cell--dim");
+                    return;
+                }
+                getStyleClass().add(item.equals(vetted.record().vettedVersion())
+                        ? "cell--ok" : "cell--pending");
+            }
         });
         return col;
     }

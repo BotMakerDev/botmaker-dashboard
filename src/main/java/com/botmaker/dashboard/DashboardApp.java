@@ -117,7 +117,7 @@ public final class DashboardApp extends Application {
         release = new ReleaseTab(remembered);
         changelog = new ChangelogTab(remembered, client, auth);
         queue = new QueueTab(client, auth);
-        catalog = new CatalogTab(client, auth);
+        catalog = new CatalogTab(remembered, client, auth);
 
         // Catalog sits beside Queue because they are the two halves of one question — what shipped, and
         // what is waiting — and after it because a queue is usually empty while the catalog never is.
@@ -181,6 +181,8 @@ public final class DashboardApp extends Application {
         releases.setUmbrella(root);
         release.setUmbrella(root);
         changelog.setUmbrella(root);
+        // The Catalog tab releases the templates out of whichever checkout is in use.
+        catalog.setUmbrella(root);
     }
 
     /** The toggle names the palette it switches <i>to</i>, which is the only thing a click would change. */
