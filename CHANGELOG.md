@@ -8,6 +8,32 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **`Update template…` in the Catalog tab.** The worked bot is released from the row it is listed on: the
+  button previews `botmaker release --gamebot <version>` through the same in-process call the Release tab
+  makes. It stops at the preview — cutting the tag stays behind the Release tab's arming and typed
+  confirmation, and a second confirmation here would be a second implementation of the one guard that keeps
+  a permanent tag from a reflex. Which row gets it is the release library's module list matched on the
+  repository name, never the entry's `template` tag, which any submission can claim.
+- **A `Latest` column beside the tier**, from the entry's newest GitHub release. `Vetted v0.2.0` reads as
+  healthy whatever `main` is doing — on 2026-09-21 the worked bot's vetting pointed at the pre-migration
+  template while three releases had gone out past it, and nothing in this window said so. Green when the two
+  agree, amber when the vetting is behind; behind is not an error, it is a vetting lagging while somebody
+  looks. Bots only: a plugin's `verifiedVersion` is a different idea.
+
+### Changed
+
+- **The Release tab has no row for a template.** `--gamebot` works identically through all three doors, but
+  a template is published as a *bot* and belongs beside the vetted and community ones; a row in the module
+  chain would put an admin-owned template in the middle of a dependency order it is not part of. It is the
+  one place the rows are not every module the library knows, and the row count is derived from
+  `Module::template` rather than counted.
+- Releasing the template still does not vet it: `Vet…` is what moves `vettedVersion`, as a pull request a
+  human merges.
+
 ## [0.0.7] — 2026-09-21
 
 No source changes since v0.0.6; re-released for updated upstream pins.
