@@ -8,6 +8,43 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.0.8; re-released for updated upstream pins.
+
+### Added
+
+- **`Update template…` in the Catalog tab.** The worked bot is released from the row it is listed on: the
+  button previews `botmaker release --gamebot <version>` through the same in-process call the Release tab
+  makes, and then cuts it — `Release it…` is dead until a preview of that exact version came back clean in
+  this session, editing the version kills it again, and the same word has to be typed into the same
+  confirmation. The release runs in a `setsid` child, as the Release tab's does, so closing the window does
+  not stop it. Which row gets the button is the release library's module list matched on the repository
+  name, never the entry's `template` tag, which any submission can claim.
+- **A `Latest` column beside the tier**, from the entry's newest GitHub release. `Vetted v0.2.0` reads as
+  healthy whatever `main` is doing — on 2026-09-21 the worked bot's vetting pointed at the pre-migration
+  template while three releases had gone out past it, and nothing in this window said so. Green when the two
+  agree, amber when the vetting is behind; behind is not an error, it is a vetting lagging while somebody
+  looks. Bots only: a plugin's `verifiedVersion` is a different idea.
+
+### Fixed
+
+- **A template release started from the Catalog tab is now visible.** The status line claimed the Release
+  tab was watching it and nothing made that true: that tab reattaches on construction and on a change of
+  checkout, and only to a job still alive. A template release finishes in about ten seconds, so it was
+  reliably dead before the operator could switch tabs, and the board they arrived at was empty — a release
+  with no sign it had run. The job is handed over and the tab selected, so the board draws it.
+
+### Changed
+
+- **The Release tab has no row for a template.** `--gamebot` works identically through all three doors, but
+  a template is published as a *bot* and belongs beside the vetted and community ones; a row in the module
+  chain would put an admin-owned template in the middle of a dependency order it is not part of. It is the
+  one place the rows are not every module the library knows, and the row count is derived from
+  `Module::template` rather than counted.
+- Releasing the template still does not vet it: `Vet…` is what moves `vettedVersion`, as a pull request a
+  human merges.
+
 ## [0.0.8] — 2026-09-23
 
 ### Added
