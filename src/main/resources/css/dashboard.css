@@ -98,7 +98,8 @@
 /* Nothing chosen yet — the one state where this label is an instruction rather than a fact. */
 .umbrella-path:unset {
     -fx-text-fill: -bm-warn;
-    -fx-font-family: inherit;
+    /* The root's family, spelled out: JavaFX has no `inherit` for a font property (it throws converting it). */
+    -fx-font-family: "Inter", "Segoe UI", "Cantarell", sans-serif;
 }
 
 /* An installed build whose cli the checkout has moved past: a fact to read before trusting a preview. */
@@ -238,7 +239,9 @@
 }
 
 .combo-box-popup .list-view .list-cell {
-    -fx-font-family: inherit;
+    /* A popup is its own scene, so `.root`'s family does not reach it; and `inherit` is not JavaFX CSS for a
+       font (it threw ClassCastException converting -fx-font on every layout). Named, like `.root`. */
+    -fx-font-family: "Inter", "Segoe UI", "Cantarell", sans-serif;
     -fx-text-fill: -bm-text;
 }
 

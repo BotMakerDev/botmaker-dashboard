@@ -8,6 +8,15 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **No more `ClassCastException` warnings from a combo box's list.** Two rules set `-fx-font-family: inherit`,
+  which JavaFX CSS does not accept for a font: converting `-fx-font` threw on every layout and the rule was
+  dropped. Both now name the family, so a combo box's list uses the dashboard's font instead of the system
+  default.
+
 ## [0.1.0] — 2026-09-29
 
 ### Added
