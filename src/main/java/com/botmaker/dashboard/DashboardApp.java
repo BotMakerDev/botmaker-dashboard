@@ -209,7 +209,11 @@ public final class DashboardApp extends Application {
      */
     private void refreshAdmin() {
         adminBadge.setText("checking…");
-        Admin.probe(client, auth).thenAccept(verdict -> javafx.application.Platform.runLater(() -> {
+        // whenComplete, not thenAccept: a probe that threw left the badge on "checking…" and never reloaded the
+        // tabs below (2026-09-29). A failure is read-only with its reason, like every other probe failure.
+        Admin.probe(client, auth).whenComplete((answer, error) -> javafx.application.Platform.runLater(() -> {
+            Admin verdict = error == null ? answer
+                    : new Admin(false, "read-only — could not ask GitHub: " + error.getMessage());
             adminBadge.setText(verdict.summary());
             adminBadge.getStyleClass().removeAll("badge--write", "badge--read");
             adminBadge.getStyleClass().add(verdict.canWrite() ? "badge--write" : "badge--read");

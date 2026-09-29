@@ -12,6 +12,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Sign in with GitHub, through the OAuth <b>device flow</b> — the operator authorizes in a browser and
  * never pastes a token.
@@ -59,8 +61,10 @@ public final class AccountBar extends HBox {
         action.setDisable(false);
         if (auth.isAuthenticated()) {
             who.setText("…");
-            auth.login(client).thenAccept(login -> Platform.runLater(() ->
-                    who.setText(login.isBlank() ? "signed in" : "@" + login)));
+            // Both outcomes are drawn: with only the success handled, a failed lookup left "…" for good.
+            auth.login(client).whenComplete((login, error) -> Platform.runLater(() ->
+                    who.setText(error != null ? "signed in (login unknown)"
+                            : login == null || login.isBlank() ? "signed in" : "@" + login)));
             action.setText("Sign out");
             action.setOnAction(e -> {
                 auth.signOut();
@@ -87,12 +91,19 @@ public final class AccountBar extends HBox {
         auth.requestDeviceCode()
                 .thenAccept(code -> Platform.runLater(() -> {
                     Alert waiting = showCode(code);
-                    auth.pollForToken(code)
+                    // Cancel closes the alert; the poll sees it before its next request and stops. Until
+                    // 2026-09-29 it kept polling and reported "Sign-in failed" minutes after the Cancel.
+                    AtomicBoolean cancelled = new AtomicBoolean();
+                    waiting.setOnHidden(e -> cancelled.set(true));
+                    auth.pollForToken(code, cancelled::get)
                             .whenComplete((token, error) -> Platform.runLater(() -> {
+                                waiting.setOnHidden(null);
                                 waiting.close();
                                 action.setDisable(false);
                                 if (error != null) {
-                                    failed(error);
+                                    if (!cancelled.get()) {
+                                        failed(error);
+                                    }
                                     return;
                                 }
                                 render();

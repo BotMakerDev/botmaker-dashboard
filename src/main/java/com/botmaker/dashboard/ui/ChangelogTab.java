@@ -93,6 +93,9 @@ public final class ChangelogTab extends BorderPane {
     private ChangelogEdit.Doc opened;
     private boolean owner;
 
+    /** The list selection is being put back after the operator kept unsaved text. */
+    private boolean reverting;
+
     public ChangelogTab(Path umbrella, GitHubClient client, GitHubAuth auth) {
         this.umbrella = umbrella;
 
@@ -111,10 +114,28 @@ public final class ChangelogTab extends BorderPane {
         style.setWrapText(true);
         style.getStyleClass().add("output-text");
 
-        list.getSelectionModel().selectedItemProperty().addListener((obs, was, now) -> open(now));
+        list.getSelectionModel().selectedItemProperty().addListener((obs, was, now) -> {
+            if (reverting) {
+                return;
+            }
+            if (!mayDiscard()) {
+                // Put the selection back; the listener fires again for it and must not ask twice.
+                reverting = true;
+                Platform.runLater(() -> {
+                    list.getSelectionModel().select(was);
+                    reverting = false;
+                });
+                return;
+            }
+            open(now);
+        });
         list.setPrefWidth(220);
 
-        reload.setOnAction(e -> open(selected));
+        reload.setOnAction(e -> {
+            if (mayDiscard()) {
+                open(selected);
+            }
+        });
         save.setOnAction(e -> save());
         draft.setOnAction(e -> draftWithClaude());
         draftAll.setOnAction(e -> draftAll());
@@ -159,7 +180,7 @@ public final class ChangelogTab extends BorderPane {
             return;
         }
         // Every module the release cuts, in tag order: what has a CHANGELOG.md a gate will read.
-        modules.setAll(Module.values() == null ? List.of() : java.util.Arrays.stream(Module.values())
+        modules.setAll(java.util.Arrays.stream(Module.values())
                 .map(Module::directory)
                 .filter(directory -> java.nio.file.Files.isDirectory(umbrella.resolve(directory)))
                 .toList());
@@ -177,6 +198,9 @@ public final class ChangelogTab extends BorderPane {
      */
     private void open(String module) {
         selected = module;
+        // Forgotten first: until the read comes back, the document on screen is not this module's, and a Save
+        // that ran meanwhile would pass the old module's document with the new module's name.
+        opened = null;
         if (module == null || umbrella == null) {
             return;
         }
@@ -223,6 +247,33 @@ public final class ChangelogTab extends BorderPane {
         save.setDisable(!read.doc().exists() || read.doc().dirty());
         draft.setDisable(!read.doc().exists());
         state.setText(stateLine(read));
+    }
+
+    /**
+     * Whether the editor holds text the file does not: a section typed or drafted and not saved.
+     *
+     * <p>Compared stripped, because {@link #show} strips what it puts in the editor.
+     */
+    static boolean unsaved(ChangelogEdit.Doc opened, String editorText) {
+        return opened != null && opened.exists() && !editorText.strip().equals(opened.unreleased().strip());
+    }
+
+    /**
+     * Whether the editor may be replaced: nothing unsaved, or the operator said to discard it.
+     *
+     * <p>A module click, Reload and the end of Draft all each replaced the editor without asking until
+     * 2026-09-29, and a section typed for ten minutes went with it.
+     */
+    private boolean mayDiscard() {
+        if (!unsaved(opened, editor.getText())) {
+            return true;
+        }
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION);
+        ask.setTitle("Unsaved section");
+        ask.setHeaderText("Discard the unsaved [Unreleased] text for " + selected + "?");
+        ask.setContentText("It has not been saved. Cancel keeps it in the editor.");
+        Themed.dialog(ask, getScene() == null ? null : getScene().getWindow());
+        return ask.showAndWait().filter(button -> button == ButtonType.OK).isPresent();
     }
 
     /**
@@ -309,7 +360,8 @@ public final class ChangelogTab extends BorderPane {
      * and a refusal otherwise, so the copies land either way and the report names what was left.
      */
     private void draftAll() {
-        if (umbrella == null) {
+        // Asked now rather than when it ends: it re-reads the module on screen, and minutes later is too late.
+        if (umbrella == null || !mayDiscard()) {
             return;
         }
         Path root = umbrella;
@@ -341,6 +393,7 @@ public final class ChangelogTab extends BorderPane {
                 + "previous section carried forward; the rest are drafted with Claude"
                 + (ClaudeDraft.available() ? "." : " — which is not on this machine, so those are skipped.")
                 + "\nEach section is committed in its module. Nothing is pushed.");
+        Themed.dialog(ask, getScene() == null ? null : getScene().getWindow());
         return ask.showAndWait().filter(button -> button == ButtonType.OK).isPresent();
     }
 
@@ -389,6 +442,9 @@ public final class ChangelogTab extends BorderPane {
         draft.setDisable(busy || opened == null || !opened.exists());
         draftAll.setDisable(busy || umbrella == null);
         editor.setDisable(busy);
+        // A click during a minutes-long draft queued the next module's read behind it, then Save woke up with
+        // one module's document under another's name. The list waits with everything else.
+        list.setDisable(busy);
         status.setText(sentence);
     }
 

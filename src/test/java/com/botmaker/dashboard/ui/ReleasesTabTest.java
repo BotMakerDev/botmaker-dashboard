@@ -33,6 +33,7 @@ class ReleasesTabTest extends FxHeadless {
 
     private ReleasesTab tab;
     private final AtomicInteger actionsPolls = new AtomicInteger();
+    private volatile boolean deepFails;
 
     private static ReleaseHistory.TagRow tag(String module, String tag, String date) {
         return new ReleaseHistory.TagRow(module, tag, OffsetDateTime.parse(date).toInstant());
@@ -76,6 +77,9 @@ class ReleasesTabTest extends FxHeadless {
 
         @Override
         public Verdicts.Deep deepCheck(Module module, Version version) {
+            if (deepFails) {
+                throw new IllegalStateException("maven is not on this machine");
+            }
             return new Verdicts.Deep("ok (resolves clean)", "");
         }
 
@@ -132,6 +136,24 @@ class ReleasesTabTest extends FxHeadless {
         WaitForAsyncUtils.waitForFxEvents();
         assertTrue(lookup(".health-dot").queryAll().stream()
                 .anyMatch(dot -> dot.getStyleClass().contains("health-dot--broken")));
+    }
+
+    /** A deep check that throws said nothing and left its button disabled for good until 2026-09-29. */
+    @Test
+    void aFailedDeepCheckSaysSoAndGivesTheButtonBack() throws Exception {
+        deepFails = true;
+        open();
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> actionsPolls.get() == 4);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        clickOn("Deep check");
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> lookup(".status-line").queryAs(javafx.scene.control
+                .Label.class).getText().startsWith("The deep check failed"));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(lookup(".status-line").queryAs(javafx.scene.control.Label.class).getText()
+                .contains("maven is not on this machine"));
+        assertFalse(lookup("Deep check").queryButton().isDisabled());
     }
 
     @Test

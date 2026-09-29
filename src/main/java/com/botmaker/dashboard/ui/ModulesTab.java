@@ -58,6 +58,9 @@ public final class ModulesTab extends BorderPane {
      */
     private final Map<String, CiStatus> ci = new ConcurrentHashMap<>();
 
+    /** The newest CI batch asked for. Read and written on the FX thread only. */
+    private int ciBatch;
+
     /**
      * Four threads, because every check is a {@code gh} process waiting on the network.
      *
@@ -155,16 +158,26 @@ public final class ModulesTab extends BorderPane {
     private void askCi(List<ModuleRow> scanned) {
         ci.clear();
         table.refresh();
+        // Each batch is numbered, and an answer from an older batch is dropped: clearing the map alone let a
+        // check still in flight from the previous scan land its badge in this one (2026-09-29).
+        int batch = ++ciBatch;
         for (ModuleRow row : scanned) {
             String module = row.name();
             checks.submit(() -> {
                 CiStatus answer = CiStatus.check(module);
                 Platform.runLater(() -> {
-                    ci.put(module, answer);
-                    table.refresh();
+                    if (current(batch, ciBatch)) {
+                        ci.put(module, answer);
+                        table.refresh();
+                    }
                 });
             });
         }
+    }
+
+    /** Whether an answer from {@code batch} still belongs on screen, {@code latest} being the newest batch. */
+    static boolean current(int batch, int latest) {
+        return batch == latest;
     }
 
     private List<Links.Link> linksFor(ModuleRow row) {

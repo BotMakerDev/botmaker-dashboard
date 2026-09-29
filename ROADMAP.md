@@ -8,6 +8,32 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-29 — robustness (dashboard pass, phase 2)
+
+**Done**
+- `ui/ReleasesTab`:
+  - The verdict cache is loaded once per tab; `reload` passes the held one into the read.
+  - A poll is `guarded` (an exception becomes a status line; an interrupt says nothing) and saves in `finally`.
+  - The poll loop moved to `pollTags`, which stops at the next tag when interrupted.
+  - `currentPoll` is cancelled when another release is selected.
+  - The deep check re-enables its button in `finally` and says "done" only when it finished.
+- `umbrella/VerdictCache.save`: writes `cache.json.tmp`, then moves it over the file (atomic where supported).
+- `ui/ChangelogTab`:
+  - `unsaved(doc, text)` and `mayDiscard()` (a themed confirm) run before a module change, Reload and Draft all.
+  - The list selection is put back when the operator keeps the text.
+  - `open` forgets `opened` first.
+  - `setBusy` disables the list.
+  - The Draft all confirmation goes through `Themed.dialog`; the dead `Module.values() == null` check is gone.
+- `ui/AccountBar`: Cancel sets a flag, and shared's new `pollForToken(code, cancelled)` stops on it. A
+  cancelled poll reports nothing. `render` draws a failed login lookup too.
+- `ui/ModulesTab`: CI checks are numbered by batch, and `current(batch, latest)` drops an older batch's answer.
+- `DashboardApp.refreshAdmin`: `whenComplete`; a failure becomes a read-only verdict with its reason.
+- `ui/ReleaseTab.watch`: the scheduled read catches, because a throwing scheduled task is cancelled silently.
+- Tests: `ReleasesTabTest.aFailedDeepCheckSaysSoAndGivesTheButtonBack`, `TabRulesTest`, and
+  `VerdictCacheTest.savesReplaceTheFileWholeAndLeaveNoTemporary`.
+
+---
+
 ## 2026-09-29 — release safety (dashboard pass, phase 1)
 
 An audit of the whole module found 13 bugs. This entry fixes the four that could cut a wrong release or hide

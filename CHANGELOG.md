@@ -25,6 +25,22 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   request showed as "0 plugins · 0 bots" in Catalog and "0 open" in Queue. Both tabs now show GitHub's own
   sentence. A spent rate limit says to sign in or wait. A missing directory is still an empty list.
 
+- **A failed poll or deep check says so.** An error in the Releases tab's background check left "Polling …" on
+  screen, or the Deep check button disabled until a restart. The error is now shown and the button comes back.
+- **Verdicts are no longer lost between saves.** Each reload of the Releases tab read its own copy of the
+  verdict cache, and two saves could overwrite each other. The tab keeps one copy, and the file is replaced
+  whole.
+- **Moving through the history no longer queues a poll per release.** Selecting another release cancels the
+  check still running for the previous one.
+- **Unsaved changelog text is not thrown away without asking.** Choosing another module, Reload and Draft
+  all now ask first. The module list is locked while a draft or save runs.
+- **Cancel in the sign-in dialog stops the sign-in.** It no longer reports "Sign-in failed" minutes later. A
+  failed login lookup no longer leaves the account name as "…".
+- **CI badges from a previous scan no longer appear in a new one** on the Modules tab.
+- The Draft all confirmation is themed like every other dialog. When the write-permission check fails, the
+  badge says read-only with the reason and the tabs still load. A failed read of a running release's
+  progress no longer stops the watch.
+
 ### Changed
 
 - The Release and Catalog tabs share one release confirmation dialog.

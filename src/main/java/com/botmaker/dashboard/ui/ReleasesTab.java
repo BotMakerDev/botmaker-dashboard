@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
@@ -149,6 +150,9 @@ public final class ReleasesTab extends BorderPane {
         return thread;
     });
 
+    /** The poll for the release on screen; a new selection cancels it. Deep checks are never cancelled. */
+    private Future<?> currentPoll;
+
     private Path umbrella;
     private VerdictCache cache;
 
@@ -213,9 +217,13 @@ public final class ReleasesTab extends BorderPane {
             return;
         }
         say("Reading tags and release logs…");
+        // One cache for the tab's life: a fresh load per reload left a queued poll saving the old one, and the
+        // two saves overwrote each other's answers (2026-09-29). The file is not per checkout, so nothing to drop.
+        VerdictCache known = cache;
         CompletableFuture.supplyAsync(() -> {
             List<ReleaseHistory.TagRow> tags = backend.tags(root, false);
-            return new Read(backend.cache(), tags, ReleaseHistory.releases(tags, backend.logs(root)));
+            return new Read(known != null ? known : backend.cache(), tags,
+                    ReleaseHistory.releases(tags, backend.logs(root)));
         }).whenComplete((read, error) -> Platform.runLater(() -> {
             if (error != null || !root.equals(umbrella)) {
                 say(error == null ? "" : "Could not read the history: " + error.getMessage());
@@ -319,44 +327,79 @@ public final class ReleasesTab extends BorderPane {
      */
     private void poll(ReleaseHistory.Release release, boolean all) {
         VerdictCache polling = cache;
-        polls.submit(() -> {
+        // Arrowing through the history queued a full poll per release passed over; only the one on screen
+        // matters. A poll already running stops at its next tag, and what it answered is kept.
+        if (currentPoll != null) {
+            currentPoll.cancel(true);
+        }
+        currentPoll = polls.submit(() -> guarded("The poll", () -> {
             int asked = 0;
-            for (ReleaseHistory.TagRow tag : release.tags()) {
-                Optional<Module> module = Module.byDirectory(tag.module());
-                Optional<Version> version = Version.parse(tag.tag());
-                if (module.isEmpty() || version.isEmpty()) {
-                    continue;
-                }
-                Instant now = Instant.now();
-                VerdictCache.Entry entry = polling.get(tag.module(), tag.tag());
-                boolean jitpackDue = com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())
-                        && (all || entry.jitpackAt() == 0 || entry.jitpackStale(now))
-                        // A deep check's answer outranks a HEAD, and a refresh must not downgrade it.
-                        && !entry.jitpack().startsWith("ok (resolves") && !entry.jitpack().startsWith("BROKEN");
-                boolean actionsDue = all || entry.actionsAt() == 0 || entry.actionsStale(now);
-                if (!jitpackDue && !actionsDue) {
-                    continue;
-                }
-                asked++;
-                Platform.runLater(() -> say("Polling " + tag.module() + " " + tag.tag() + "…"));
-                if (jitpackDue) {
-                    entry = entry.withJitpack(backend.jitpackHead(module.get(), version.get()), "", Instant.now());
-                }
-                if (actionsDue) {
-                    Actions.Poll answer = backend.actions(module.get(), version.get());
-                    entry = entry.withActions(answer.verdict(), answer.error(), answer.url(), Instant.now());
-                }
-                polling.put(tag.module(), tag.tag(), entry);
-                redraw(release);
+            try {
+                asked = pollTags(release, all, polling);
+            } finally {
+                polling.save();
             }
-            polling.save();
             int count = asked;
             Platform.runLater(() -> {
                 if (Objects.equals(list.getSelectionModel().getSelectedItem(), release)) {
                     say(count == 0 ? "Every verdict is cached and current." : "Polled " + count + " tag(s).");
                 }
             });
-        });
+        }));
+    }
+
+    /** The poll's loop: asks about each due tag, redrawing as each answers. Answers how many were asked. */
+    private int pollTags(ReleaseHistory.Release release, boolean all, VerdictCache polling) {
+        int asked = 0;
+        for (ReleaseHistory.TagRow tag : release.tags()) {
+            if (Thread.currentThread().isInterrupted()) {
+                return asked;
+            }
+            Optional<Module> module = Module.byDirectory(tag.module());
+            Optional<Version> version = Version.parse(tag.tag());
+            if (module.isEmpty() || version.isEmpty()) {
+                continue;
+            }
+            Instant now = Instant.now();
+            VerdictCache.Entry entry = polling.get(tag.module(), tag.tag());
+            boolean jitpackDue = com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())
+                    && (all || entry.jitpackAt() == 0 || entry.jitpackStale(now))
+                    // A deep check's answer outranks a HEAD, and a refresh must not downgrade it.
+                    && !entry.jitpack().startsWith("ok (resolves") && !entry.jitpack().startsWith("BROKEN");
+            boolean actionsDue = all || entry.actionsAt() == 0 || entry.actionsStale(now);
+            if (!jitpackDue && !actionsDue) {
+                continue;
+            }
+            asked++;
+            Platform.runLater(() -> say("Polling " + tag.module() + " " + tag.tag() + "…"));
+            if (jitpackDue) {
+                entry = entry.withJitpack(backend.jitpackHead(module.get(), version.get()), "", Instant.now());
+            }
+            if (actionsDue) {
+                Actions.Poll answer = backend.actions(module.get(), version.get());
+                entry = entry.withActions(answer.verdict(), answer.error(), answer.url(), Instant.now());
+            }
+            polling.put(tag.module(), tag.tag(), entry);
+            redraw(release);
+        }
+        return asked;
+    }
+
+    /**
+     * Runs one background task and says so when it throws.
+     *
+     * <p>{@code ExecutorService.submit} keeps a task's exception in a {@code Future} nobody reads, so a
+     * failed poll left "Polling …" on screen and a failed deep check left its button disabled for good
+     * (2026-09-29). An interrupt is a cancel, not a failure, and says nothing.
+     */
+    private void guarded(String what, Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException e) {
+            if (!Thread.currentThread().isInterrupted()) {
+                Platform.runLater(() -> say(what + " failed: " + (e.getMessage() == null ? e.toString() : e.getMessage())));
+            }
+        }
     }
 
     private void redraw(ReleaseHistory.Release release) {
@@ -389,25 +432,34 @@ public final class ReleasesTab extends BorderPane {
         VerdictCache polling = cache;
         deep.setDisable(true);
         polls.submit(() -> {
-            for (ReleaseHistory.TagRow tag : release.tags()) {
-                Optional<Module> module = Module.byDirectory(tag.module());
-                Optional<Version> version = Version.parse(tag.tag());
-                if (module.isEmpty() || version.isEmpty()
-                        || !com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())) {
-                    continue;
-                }
-                Platform.runLater(() -> say("Deep check: resolving " + tag.module() + ":" + tag.tag()
-                        + " in a clean repository (about 40 s)…"));
-                Verdicts.Deep answer = backend.deepCheck(module.get(), version.get());
-                polling.put(tag.module(), tag.tag(),
-                        polling.get(tag.module(), tag.tag()).withJitpack(answer.verdict(), answer.error(), Instant.now()));
-                redraw(release);
+            boolean[] done = {false};
+            try {
+                guarded("The deep check", () -> {
+                    for (ReleaseHistory.TagRow tag : release.tags()) {
+                        Optional<Module> module = Module.byDirectory(tag.module());
+                        Optional<Version> version = Version.parse(tag.tag());
+                        if (module.isEmpty() || version.isEmpty()
+                                || !com.botmaker.cli.release.ReleaseLog.onJitpack(module.get())) {
+                            continue;
+                        }
+                        Platform.runLater(() -> say("Deep check: resolving " + tag.module() + ":" + tag.tag()
+                                + " in a clean repository (about 40 s)…"));
+                        Verdicts.Deep answer = backend.deepCheck(module.get(), version.get());
+                        polling.put(tag.module(), tag.tag(), polling.get(tag.module(), tag.tag())
+                                .withJitpack(answer.verdict(), answer.error(), Instant.now()));
+                        redraw(release);
+                    }
+                    done[0] = true;
+                });
+            } finally {
+                polling.save();
+                Platform.runLater(() -> {
+                    deep.setDisable(false);
+                    if (done[0]) {
+                        say("Deep check done.");
+                    }
+                });
             }
-            polling.save();
-            Platform.runLater(() -> {
-                deep.setDisable(false);
-                say("Deep check done.");
-            });
         });
     }
 

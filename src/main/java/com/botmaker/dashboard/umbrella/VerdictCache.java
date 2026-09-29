@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -141,11 +143,22 @@ public final class VerdictCache {
         entries.put(key(module, tag), entry);
     }
 
-    /** Writes the file. Best effort: a cache that cannot be saved costs a re-poll next time, nothing more. */
+    /**
+     * Writes the file. Best effort: a cache that cannot be saved costs a re-poll next time, nothing more.
+     *
+     * <p>Through a temporary file and a move, so a reader never sees half a file and a crash mid-write leaves
+     * the previous one (2026-09-29).
+     */
     public synchronized void save() {
         try {
             Files.createDirectories(file.getParent());
-            JSON.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), entries);
+            Path temp = file.resolveSibling(file.getFileName() + ".tmp");
+            JSON.writerWithDefaultPrettyPrinter().writeValue(temp.toFile(), entries);
+            try {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             // Nothing to do.
         }

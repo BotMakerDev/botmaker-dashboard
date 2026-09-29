@@ -27,6 +27,22 @@ class VerdictCacheTest {
         assertTrue(running.withActions("no run on v0.1.0", "", NOW.minusSeconds(3600)).actionsStale(NOW));
     }
 
+    /** Written through a temporary file and a move: the file is whole after every save, and no temp is left. */
+    @Test
+    void savesReplaceTheFileWholeAndLeaveNoTemporary(@TempDir Path dir) {
+        Path file = dir.resolve("cache.json");
+        VerdictCache cache = VerdictCache.load(file);
+        cache.put("botmaker-sdk", "v2.0.0", VerdictCache.Entry.EMPTY.withActions("success (1)", "", NOW));
+        cache.save();
+        cache.put("botmaker-cli", "v0.3.0", VerdictCache.Entry.EMPTY.withActions("success (2)", "", NOW));
+        cache.save();
+
+        VerdictCache read = VerdictCache.load(file);
+        assertEquals("success (1)", read.get("botmaker-sdk", "v2.0.0").actions());
+        assertEquals("success (2)", read.get("botmaker-cli", "v0.3.0").actions());
+        assertFalse(Files.exists(dir.resolve("cache.json.tmp")));
+    }
+
     @Test
     void aSettledVerdictIsNeverStale() {
         Instant weekAgo = NOW.minusSeconds(7 * 24 * 3600);

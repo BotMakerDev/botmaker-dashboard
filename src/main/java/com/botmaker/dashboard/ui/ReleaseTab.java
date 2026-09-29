@@ -717,9 +717,19 @@ public final class ReleaseTab extends BorderPane {
         refreshCommandLine();
 
         watching = watcher.scheduleWithFixedDelay(() -> {
-            ReleaseProgress progress = job.progress(Instant.now());
-            List<ReleaseProgress.Line> lines = ReleaseProgress.Line.parseAll(job.output());
-            Platform.runLater(() -> showJob(job, progress, lines));
+            // Caught here: a scheduled task that throws is cancelled silently, which left jobRunning true and
+            // Preview dead until a restart (2026-09-29). One failed read is reported and the watch goes on.
+            try {
+                ReleaseProgress progress = job.progress(Instant.now());
+                List<ReleaseProgress.Line> lines = ReleaseProgress.Line.parseAll(job.output());
+                Platform.runLater(() -> showJob(job, progress, lines));
+            } catch (RuntimeException e) {
+                Platform.runLater(() -> {
+                    if (job == watched) {
+                        say("Could not read the release's progress this second: " + e.getMessage());
+                    }
+                });
+            }
         }, 0, 1, TimeUnit.SECONDS);
     }
 
