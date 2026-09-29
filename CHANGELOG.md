@@ -8,6 +8,27 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **A preview no longer arms Execute for another checkout.** A preview still running when you picked a
+  different checkout came back and armed Execute there, with the old checkout's plan. Its result is now
+  dropped, and the status line says so. Execute also checks that the armed checkout is the current one.
+- **A second release is refused while one is running.** The Catalog tab's template release did not check for a
+  running release, so two releases could tag the same repositories at once. The launcher now refuses in both
+  tabs and names the running job.
+- **A hung `git fetch` or `claude` now times out.** The output was read to the end before the timeout was
+  counted, so a process that never finished held its thread for good. Output is now read beside the timeout,
+  and a timed-out process is killed together with its children.
+- **A GitHub refusal is an error, not an empty list.** A used-up rate limit, a network failure or a refused
+  request showed as "0 plugins · 0 bots" in Catalog and "0 open" in Queue. Both tabs now show GitHub's own
+  sentence. A spent rate limit says to sign in or wait. A missing directory is still an empty list.
+
+### Changed
+
+- The Release and Catalog tabs share one release confirmation dialog.
+
 ## [0.0.10] — 2026-09-27
 
 No source changes since v0.0.9; re-released for updated upstream pins.

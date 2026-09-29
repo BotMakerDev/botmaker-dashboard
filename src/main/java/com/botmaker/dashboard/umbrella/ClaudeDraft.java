@@ -1,16 +1,11 @@
 package com.botmaker.dashboard.umbrella;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -151,33 +146,9 @@ public final class ClaudeDraft {
                 || lower.contains("upgrade to increase") || lower.contains("credit balance");
     }
 
-    /** One process, the prompt on stdin, output captured, a timeout that is a result. */
+    /** One process, the prompt on stdin, output captured, a timeout that is a result — {@link Proc}'s. */
     private static Proc run(Path where, List<String> argv, String prompt) {
-        ProcessBuilder builder = new ProcessBuilder(argv)
-                .directory(where.toFile())
-                .redirectErrorStream(true);
-        Process process = null;
-        try {
-            process = builder.start();
-            try (OutputStream in = process.getOutputStream()) {
-                in.write(prompt.getBytes(StandardCharsets.UTF_8));
-            }
-            String out;
-            try (InputStream stream = process.getInputStream()) {
-                out = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            if (!process.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroyForcibly();
-                return new Proc(Proc.TIMED_OUT, "gave up after " + TIMEOUT.toMinutes() + " minutes");
-            }
-            return new Proc(process.exitValue(), out);
-        } catch (IOException e) {
-            return new Proc(Proc.TIMED_OUT, String.valueOf(e.getMessage()));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            process.destroyForcibly();
-            return new Proc(Proc.TIMED_OUT, "interrupted");
-        }
+        return Proc.run(where, TIMEOUT, argv, prompt);
     }
 
     private static String firstLine(String text) {

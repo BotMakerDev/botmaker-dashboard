@@ -138,7 +138,10 @@ public final class QueueTab extends BorderPane {
         Queue.open(client, auth).whenComplete((found, error) -> Platform.runLater(() -> {
             refresh.setDisable(false);
             if (error != null) {
-                status.setText("Could not read the queue: " + error.getMessage());
+                Throwable cause = error instanceof java.util.concurrent.CompletionException
+                        && error.getCause() != null ? error.getCause() : error;
+                status.setText("Could not read the queue: "
+                        + (cause.getMessage() == null ? cause.toString() : cause.getMessage()));
                 return;
             }
             submissions.setAll(found);

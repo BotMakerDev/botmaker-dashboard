@@ -48,6 +48,19 @@ class ReleaseLauncherTest {
     }
 
     @Test
+    void aSecondReleaseIsRefusedWhileOneIsRunning(@TempDir Path umbrella) throws Exception {
+        ReleaseLauncher.refuseIfLive(Optional.empty());
+
+        ReleaseLauncher.Job job = new ReleaseLauncher.Job(umbrella, "2026-09-29-101500");
+        Files.createDirectories(job.pidFile().getParent());
+        Files.writeString(job.pidFile(), "4242");
+        java.io.IOException refused = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                () -> ReleaseLauncher.refuseIfLive(Optional.of(job)));
+        assertTrue(refused.getMessage().contains("10:15"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("process 4242"), refused.getMessage());
+    }
+
+    @Test
     void theNewestJobIsFoundAndADeadPidIsNotAlive(@TempDir Path umbrella) throws Exception {
         assertEquals(Optional.empty(), ReleaseLauncher.latest(umbrella));
 

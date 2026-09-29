@@ -373,8 +373,8 @@ public final class CatalogTab extends BorderPane {
      * it… is dead until a preview of <i>this exact version, in this session</i> has come back with no
      * refusal, and editing the version kills it again — arming by value, the same rule and the same reason:
      * the plan on screen would otherwise describe a release nobody read. Then the same typed
-     * {@link ReleaseTab#CONFIRM_WORD}, and the same {@link ReleaseLauncher} child, so closing this window
-     * does not stop a release. What is <b>not</b> duplicated is the decision: both buttons are
+     * {@link ReleaseConfirm}, and the same {@link ReleaseLauncher} child, so closing this window does not stop
+     * a release — and the launcher refuses while another release is running in the checkout. What is <b>not</b> duplicated is the decision: both buttons are
      * {@link ReleaseRun#go} with one module ticked.
      *
      * <p><b>And {@code Vet…} is still what moves {@code vettedVersion}.</b> Releasing the template publishes
@@ -454,40 +454,16 @@ public final class CatalogTab extends BorderPane {
      * a forced module would be in that list and is not in the command line.
      */
     private boolean confirm(ReleaseSpec spec, Plan plan) {
-        List<String> tags = plan.releasing().entrySet().stream()
-                .map(cut -> "    " + cut.getKey().directory() + "  " + cut.getValue().tag())
-                .toList();
+        List<String> tags = ReleaseConfirm.tags(plan);
         if (tags.isEmpty()) {
             status.setText("The preview decided to release nothing — there is no tag to cut.");
             return false;
         }
-        TextArea list = new TextArea(String.join("\n", tags));
-        list.setEditable(false);
-        list.getStyleClass().add("output-text");
-        list.setPrefRowCount(Math.min(8, tags.size() + 1));
-
-        Label warning = new Label(tags.size() + " tag(s) will be pushed, and a pushed tag cannot be edited or"
-                + " recalled.\n\nThe release runs as a process of its own: closing this window does not stop"
-                + " it, and the Release tab shows it.\n\nThis publishes the template. It does not change what"
-                + " Studio offers — Vet… is what moves vettedVersion.\n\nType " + ReleaseTab.CONFIRM_WORD
-                + " to enable the button.");
-        warning.setWrapText(true);
-
-        TextField typed = new TextField();
-        typed.setPromptText(ReleaseTab.CONFIRM_WORD);
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Cut this release");
-        dialog.setHeaderText(String.join(" ", spec.command(true)));
-        ButtonType cut = new ButtonType("Cut the release", ButtonBar.ButtonData.OK_DONE);
-        DialogPane pane = dialog.getDialogPane();
-        pane.getButtonTypes().setAll(ButtonType.CANCEL, cut);
-        pane.setContent(new VBox(10, list, warning, typed));
-        pane.lookupButton(cut).setDisable(true);
-        typed.textProperty().addListener((o, was, is) ->
-                pane.lookupButton(cut).setDisable(!ReleaseTab.CONFIRM_WORD.equals(is.strip())));
-        Themed.dialog(dialog, window());
-        return dialog.showAndWait().filter(cut::equals).isPresent();
+        return ReleaseConfirm.ask(window(), String.join(" ", spec.command(true)), tags,
+                tags.size() + " tag(s) will be pushed, and a pushed tag cannot be edited or recalled.\n\nThe"
+                        + " release runs as a process of its own: closing this window does not stop it, and the"
+                        + " Release tab shows it.\n\nThis publishes the template. It does not change what Studio"
+                        + " offers — Vet… is what moves vettedVersion.");
     }
 
     /**

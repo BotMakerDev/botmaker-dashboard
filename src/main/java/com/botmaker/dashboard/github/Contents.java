@@ -3,12 +3,14 @@ package com.botmaker.dashboard.github;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
+import com.botmaker.shared.github.GitHubError;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * The contents API, which both readers of an entry file go through.
@@ -37,6 +39,29 @@ final class Contents {
                                             String repo, String path, String ref) {
         String url = contentsUrl(repo, path) + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
         return client.get(url, token(auth));
+    }
+
+    /**
+     * A directory's listing at a ref, for a caller that lists: a refusal fails the future with GitHub's
+     * {@link GitHubError}, and only a missing directory (404) is {@code null}.
+     *
+     * <p>{@link #read} answers {@code null} for both, which read a used-up rate limit as an empty catalog and
+     * an empty queue until 2026-09-29. A missing directory is still an empty listing: the registry had no
+     * {@code plugins/} for its whole first week.
+     */
+    static CompletableFuture<JsonNode> listing(GitHubClient client, GitHubAuth auth,
+                                               String repo, String path, String ref) {
+        String url = contentsUrl(repo, path) + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
+        return client.getOrFail(url, token(auth)).exceptionally(Contents::nullWhenMissing);
+    }
+
+    /** {@code null} for a 404, and the failure again for anything else. */
+    static JsonNode nullWhenMissing(Throwable error) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        if (cause instanceof GitHubError refused && refused.status() == 404) {
+            return null;
+        }
+        throw error instanceof CompletionException completion ? completion : new CompletionException(cause);
     }
 
     /**

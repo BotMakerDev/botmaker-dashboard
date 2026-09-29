@@ -218,7 +218,7 @@ public final class Catalog {
      * registry is simply new.
      */
     private static CompletableFuture<List<Entry>> listIn(GitHubClient client, GitHubAuth auth, Kind kind) {
-        return Contents.read(client, auth, kind.repo(), kind.directory(), MAIN).thenCompose(listing -> {
+        return Contents.listing(client, auth, kind.repo(), kind.directory(), MAIN).thenCompose(listing -> {
             if (listing == null || !listing.isArray() || listing.isEmpty()) {
                 return CompletableFuture.completedFuture(List.<Entry>of());
             }
@@ -243,7 +243,7 @@ public final class Catalog {
      */
     private static CompletableFuture<List<Vetted>> vettings(GitHubClient client, GitHubAuth auth) {
         String repo = Kind.BOT.repo();
-        return Contents.read(client, auth, repo, VettedRecord.DIRECTORY, MAIN).thenCompose(listing -> {
+        return Contents.listing(client, auth, repo, VettedRecord.DIRECTORY, MAIN).thenCompose(listing -> {
             if (listing == null || !listing.isArray() || listing.isEmpty()) {
                 return CompletableFuture.completedFuture(List.<Vetted>of());
             }

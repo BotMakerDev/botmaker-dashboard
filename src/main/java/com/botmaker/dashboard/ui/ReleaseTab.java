@@ -27,13 +27,9 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
@@ -238,17 +234,6 @@ public final class ReleaseTab extends BorderPane {
         }
     }
 
-    /**
-     * What has to be typed before the confirmation's own button works.
-     *
-     * <p>Lowercase and unremarkable on purpose: the barrier is having to read the list and type at all, not
-     * having to shout.
-     */
-    static final String CONFIRM_WORD = "release";
-
-    /** The confirmation's affirmative, named for what it does rather than "OK". */
-    private static final ButtonType CUT = new ButtonType("Cut the release", ButtonBar.ButtonData.OK_DONE);
-
     private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("HH:mm");
 
     private final Backend backend;
@@ -287,6 +272,13 @@ public final class ReleaseTab extends BorderPane {
 
     /** The plan that arming was granted for — what the confirmation lists, so it cannot list a newer one. */
     private Plan armedPlan;
+
+    /**
+     * The checkout that arming was granted in. The same flags decide different versions in a checkout whose
+     * tags are somewhere else, so Execute also needs {@code armedRoot.equals(umbrella)}: a preview still
+     * running when the operator switched checkout came back and armed the new one until 2026-09-29.
+     */
+    private Path armedRoot;
 
     /** A preview is running in this JVM. */
     private boolean previewing;
@@ -595,13 +587,14 @@ public final class ReleaseTab extends BorderPane {
         boolean runnable = umbrella != null && !spec.empty() && allSpecsWellFormed();
         boolean busy = previewing || jobRunning;
         preview.setDisable(!runnable || busy);
-        execute.setDisable(!runnable || busy || !spec.equals(armed));
+        execute.setDisable(!runnable || busy || !spec.equals(armed) || !umbrella.equals(armedRoot));
     }
 
     /** Forgets the arming. Every path that changes what a release would do calls it. */
     private void disarm() {
         armed = null;
         armedPlan = null;
+        armedRoot = null;
         execute.setDisable(true);
     }
 
@@ -630,46 +623,21 @@ public final class ReleaseTab extends BorderPane {
      * the button that opened it.
      */
     private void confirmThenExecute() {
-        if (umbrella == null || armed == null || armedPlan == null || jobRunning) {
+        if (umbrella == null || armed == null || armedPlan == null || jobRunning || !umbrella.equals(armedRoot)) {
             return;
         }
-        List<String> tags = armedPlan.releasing().entrySet().stream()
-                .map(cut -> "    " + cut.getKey().directory() + "  " + cut.getValue().tag())
-                .toList();
+        List<String> tags = ReleaseConfirm.tags(armedPlan);
         if (tags.isEmpty()) {
             say("The preview decided to release nothing — there is no tag to cut.");
             return;
         }
-
-        TextArea list = new TextArea(String.join("\n", tags));
-        list.setEditable(false);
-        list.getStyleClass().add("output-text");
-        list.setPrefRowCount(Math.min(12, tags.size() + 1));
-
-        Label warning = new Label(tags.size() + " tag(s) will be pushed, in tag order, and a pushed tag "
+        String warning = tags.size() + " tag(s) will be pushed, in tag order, and a pushed tag "
                 + "cannot be edited or recalled. Each module's CI publishes its GitHub Release from the "
                 + "tag, and JitPack caches its build result per tag — a bad one is repaired only by cutting "
                 + "another.\n\nThe release runs as a process of its own: closing this window does not stop it, "
-                + "and reopening the window shows it again.\n\nType " + CONFIRM_WORD + " to enable the button.");
-        warning.setWrapText(true);
-
-        TextField typed = new TextField();
-        typed.setPromptText(CONFIRM_WORD);
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Cut this release");
-        dialog.setHeaderText(armed.executeCommandLine());
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL, CUT);
-        VBox body = new VBox(10, list, warning, typed);
-        body.setPadding(new Insets(4));
-        dialog.getDialogPane().setContent(body);
-
-        Node cut = dialog.getDialogPane().lookupButton(CUT);
-        cut.setDisable(true);
-        typed.textProperty().addListener((o, was, is) -> cut.setDisable(!CONFIRM_WORD.equals(is.strip())));
-        Themed.dialog(dialog, getScene() == null ? null : getScene().getWindow());
-
-        if (dialog.showAndWait().filter(CUT::equals).isPresent()) {
+                + "and reopening the window shows it again.";
+        if (ReleaseConfirm.ask(getScene() == null ? null : getScene().getWindow(), armed.executeCommandLine(),
+                tags, warning)) {
             launch(armed);
         }
     }
@@ -682,7 +650,7 @@ public final class ReleaseTab extends BorderPane {
      * against the checkout as it now is.
      */
     private void launch(ReleaseSpec spec) {
-        Path root = umbrella;
+        Path root = armedRoot;
         disarm();
         hideBanner();
         try {
@@ -840,6 +808,14 @@ public final class ReleaseTab extends BorderPane {
                 })
                 .whenComplete((previewed, error) -> Platform.runLater(() -> {
                     previewing = false;
+                    if (!root.equals(umbrella)) {
+                        // The operator switched checkout while this ran: its plan is another tree's, and
+                        // setUmbrella has already cleared the screen for the new one.
+                        say("A preview of " + root + " finished after the checkout changed — it was dropped. "
+                                + "Press Preview to read " + umbrella + ".");
+                        refreshCommandLine();
+                        return;
+                    }
                     if (error != null) {
                         // Not a refusal — ReleaseRun turns those into a value. This is the thread dying.
                         disarm();
@@ -855,7 +831,7 @@ public final class ReleaseTab extends BorderPane {
                         refreshCommandLine();
                         return;
                     }
-                    show(spec, previewed.run());
+                    show(root, spec, previewed.run());
                 }));
     }
 
@@ -870,7 +846,7 @@ public final class ReleaseTab extends BorderPane {
      * "the plan is complete and a gate then refused it" is the ordinary shape of a preview over a constellation
      * that is not release-ready.
      */
-    private void show(ReleaseSpec spec, ReleaseRun run) {
+    private void show(Path root, ReleaseSpec spec, ReleaseRun run) {
         run.plan().ifPresent(this::mergeVerdicts);
         disarm();
 
@@ -885,6 +861,7 @@ public final class ReleaseTab extends BorderPane {
             Plan plan = run.plan().orElseThrow();
             armed = spec;
             armedPlan = plan;
+            armedRoot = root;
             say(plan.releasing().size() + " of " + plan.decisions().size()
                     + " would release · Execute is armed for these flags.");
         }

@@ -61,7 +61,8 @@ public final class Queue {
 
     private static CompletableFuture<List<Submission>> openIn(GitHubClient client, String token, String repo) {
         String url = GitHubConfig.API_BASE + "/repos/" + repo + "/pulls?state=open&per_page=50";
-        return client.get(url, token).thenCompose(prs -> {
+        // getOrFail, not get: a refused listing is an error the tab shows, never "0 open" (2026-09-29).
+        return client.getOrFail(url, token).thenCompose(prs -> {
             if (prs == null || !prs.isArray() || prs.isEmpty()) {
                 return CompletableFuture.completedFuture(List.<Submission>of());
             }

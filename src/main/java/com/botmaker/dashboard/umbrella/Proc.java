@@ -1,7 +1,9 @@
 package com.botmaker.dashboard.umbrella;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -46,27 +48,70 @@ public record Proc(int exit, String out) {
     }
 
     public static Proc run(Path dir, Duration timeout, List<String> command) {
+        return run(dir, timeout, command, null);
+    }
+
+    /**
+     * Runs {@code command} with {@code stdin} written to it and closed ({@code null}: stdin closed at once).
+     *
+     * <p><b>The output is drained on a thread of its own, and the timeout is counted beside it.</b> Reading to
+     * the end first and then waiting — how this was written until 2026-09-29 — never reached the wait for a
+     * hung {@code git fetch}: the pipe stays open for as long as the process does, so the timeout could not
+     * fire and the calling thread was held for good. stdin is written on its own thread for the same reason:
+     * a process that never reads it would otherwise block the write, and the wait behind it.
+     */
+    public static Proc run(Path dir, Duration timeout, List<String> command, String stdin) {
         ProcessBuilder pb = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true);
         Process p = null;
         try {
             p = pb.start();
-            String out;
-            try (InputStream in = p.getInputStream()) {
-                out = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            }
+            Process process = p;
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            Thread reader = Thread.ofVirtual().start(() -> {
+                try (InputStream in = process.getInputStream()) {
+                    in.transferTo(out);
+                } catch (IOException ignored) {
+                    // The process was destroyed under the read; what was read so far is the output.
+                }
+            });
+            Thread.ofVirtual().start(() -> {
+                try (OutputStream in = process.getOutputStream()) {
+                    if (stdin != null) {
+                        in.write(stdin.getBytes(StandardCharsets.UTF_8));
+                    }
+                } catch (IOException ignored) {
+                    // The process exited without reading its input; its output says why.
+                }
+            });
             if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                p.destroyForcibly();
-                return new Proc(TIMED_OUT, out + "\n(timed out after " + timeout.toSeconds() + "s)");
+                destroy(p);
+                reader.join(DRAIN_AFTER_KILL.toMillis());
+                return new Proc(TIMED_OUT, text(out) + "\n(timed out after " + timeout.toSeconds() + "s)");
             }
-            return new Proc(p.exitValue(), out);
+            // A grandchild (git's ssh) can hold the pipe after the process itself exits; bound the wait for it.
+            reader.join(DRAIN_AFTER_KILL.toMillis());
+            return new Proc(p.exitValue(), text(out));
         } catch (IOException e) {
             return new Proc(TIMED_OUT, String.valueOf(e.getMessage()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (p != null) {
-                p.destroyForcibly();
+                destroy(p);
             }
             return new Proc(TIMED_OUT, "interrupted");
         }
+    }
+
+    /** How long the output may keep arriving once the process is gone. */
+    private static final Duration DRAIN_AFTER_KILL = Duration.ofSeconds(2);
+
+    /** The process and everything it started: a killed {@code git} would otherwise leave its {@code ssh}. */
+    private static void destroy(Process p) {
+        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        p.destroyForcibly();
+    }
+
+    private static String text(ByteArrayOutputStream out) {
+        return out.toString(StandardCharsets.UTF_8);
     }
 }

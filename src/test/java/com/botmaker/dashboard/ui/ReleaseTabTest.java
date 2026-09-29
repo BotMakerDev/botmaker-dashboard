@@ -38,9 +38,19 @@ class ReleaseTabTest extends FxHeadless {
     private ReleaseTab tab;
     private List<String> refusals = List.of();
 
+    /** When set, a preview waits for it — the operator's time to do something else meanwhile. */
+    private java.util.concurrent.CountDownLatch hold;
+
     private final class Fake implements ReleaseTab.Backend {
         @Override
         public ReleaseRun preview(Path root, ReleaseSpec spec, Consumer<String> line) {
+            if (hold != null) {
+                try {
+                    hold.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             line.accept("Release plan:");
             // No module requested of the library, so it reads no git: an empty, clean plan.
             Plan plan = Plan.decide(root, Map.of(), false);
@@ -129,6 +139,26 @@ class ReleaseTabTest extends FxHeadless {
         String command = lookup(".command-line").queryAs(TextField.class).getText();
         assertTrue(command.endsWith("--all patch --sdk minor"), command);
         assertEquals("1.1.0 → 1.2.0", row("botmaker-sdk").targetProperty().get());
+    }
+
+    /** A preview of one checkout that finishes after the switch to another arms nothing (2026-09-29). */
+    @Test
+    void aPreviewThatOutlivesAChangeOfCheckoutDoesNotArmExecute(@TempDir Path other) throws Exception {
+        open();
+        hold = new java.util.concurrent.CountDownLatch(1);
+        clickOn(tab.previewButton());
+        interact(() -> tab.setUmbrella(other));
+        hold.countDown();
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> !tab.previewButton().isDisabled());
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(tab.executeButton().isDisabled(), "the plan was the other checkout's");
+        String said = lookup(".status-line").queryAs(Label.class).getText();
+        assertTrue(said.contains("finished after the checkout changed"), said);
+
+        hold = null;
+        previewAndWait();
+        assertFalse(tab.executeButton().isDisabled(), "a preview of this checkout arms it again");
     }
 
     @Test

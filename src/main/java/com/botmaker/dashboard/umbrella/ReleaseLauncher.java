@@ -162,6 +162,7 @@ public final class ReleaseLauncher {
      * @throws IOException when the files cannot be created or the process cannot start — nothing was run
      */
     public static Launched launch(Path umbrella, ReleaseSpec spec) throws IOException {
+        refuseIfLive(live(umbrella));
         String stamp = STAMP.format(LocalDateTime.now());
         Job job = new Job(umbrella, stamp);
         Files.createDirectories(running(umbrella));
@@ -183,6 +184,30 @@ public final class ReleaseLauncher {
                 ? "in its own session (setsid), process " + process.pid()
                 : "as a plain child process " + process.pid() + " — no setsid here, so stopping the window's "
                         + "process group would stop it too");
+    }
+
+    /** The newest job in this checkout while it is still running. */
+    public static Optional<Job> live(Path umbrella) {
+        return latest(umbrella).filter(Job::alive);
+    }
+
+    /**
+     * Refuses a second release beside a running one.
+     *
+     * <p>It lives in {@link #launch} rather than in either button, because there are two buttons: the Release
+     * tab checked its own watch and the Catalog tab's template release checked nothing, so two releases could
+     * push tags and commits into the same repositories at once (2026-09-29). One check where the process
+     * starts covers every caller, including the next one.
+     *
+     * @throws IOException naming the running job — the callers already show that as "nothing was run"
+     */
+    static void refuseIfLive(Optional<Job> live) throws IOException {
+        if (live.isPresent()) {
+            Job job = live.get();
+            throw new IOException("a release started at " + job.startedAt().toLocalTime() + " is still running"
+                    + job.pid().stream().mapToObj(pid -> " (process " + pid + ")").findFirst().orElse("")
+                    + " — wait for it, or stop it, before cutting another");
+        }
     }
 
     /** The newest job in this checkout, finished or not. */

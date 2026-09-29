@@ -8,6 +8,42 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-29 — release safety (dashboard pass, phase 1)
+
+An audit of the whole module found 13 bugs. This entry fixes the four that could cut a wrong release or hide
+a failure. Phases 2–4 of the pass take the rest, then speed and the split of the big tabs.
+
+**Done**
+- `umbrella/Proc.run`: the output is drained on a virtual thread and the timeout is counted beside it. Before,
+  `readAllBytes()` came first, so a hung `git fetch` never reached `waitFor(timeout)`. A timed-out process is
+  destroyed with its descendants (git's `ssh`), and the drain is bounded at 2 s. stdin is written on its own
+  thread. A new overload takes stdin, so `ClaudeDraft` lost its private copy of the same loop, bug included.
+- `ui/ReleaseTab`: `armedRoot` beside `armed`/`armedPlan`. A preview result whose root is no longer the
+  checkout is dropped with a status line; `refreshCommandLine`, `confirmThenExecute` and `launch` all require
+  `umbrella.equals(armedRoot)`.
+- `umbrella/ReleaseLauncher.launch` refuses while `live(root)` finds a running job (`refuseIfLive`). It sits in
+  the launcher, not in a button, because there are two buttons and the Catalog's checked nothing.
+- `ui/ReleaseConfirm`: the typed-word dialog, extracted from ReleaseTab and CatalogTab. Each caller keeps its
+  own warning.
+- `github/Contents.listing`: shared's new `GitHubClient.getOrFail` with a 404 read as an empty listing, used
+  for the Catalog's two directory listings. `Queue.openIn` uses `getOrFail` directly. Per-entry reads stay
+  best-effort: an unreadable entry is still a row. `QueueTab` unwraps the `CompletionException` the way
+  `CatalogTab.message` does.
+- Tests:
+  - `ProcTest`: a hung process times out on time, stdin arrives, and a process that ignores 1 MiB of stdin
+    still finishes;
+  - `ContentsTest`;
+  - `ReleaseLauncherTest.aSecondReleaseIsRefusedWhileOneIsRunning`;
+  - `ReleaseTabTest.aPreviewThatOutlivesAChangeOfCheckoutDoesNotArmExecute`.
+
+**Deferred / next**
+- Phase 2: the poll and deep-check failures in ReleasesTab, the `VerdictCache` overwrite, ChangelogTab's
+  unsaved text, AccountBar's cancel, ModulesTab's stale CI answers.
+- Phase 3: one I/O executor, parallel scans, lazy tabs, ETag cache.
+- Phase 4: split ReleaseTab/CatalogTab/ReleaseProgress, cancel buttons.
+
+---
+
 ## 2026-09-19 — an icon of its own
 
 **Done**
