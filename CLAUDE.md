@@ -294,8 +294,10 @@ com.botmaker.dashboard
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
 │   └── EntryFields     an entry, flattened into rows — read from the file, not a schema
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
-│   ├── Proc            one external command, output captured, a timeout that is a result; 8 at once at most
-│   ├── Io              the one executor (virtual threads) for blocking work, parallel(), a lock per repository
+│   ├── Proc            one external command, output captured, a timeout that is a result; 8 at once at most;
+│   │                   an interrupt kills it, runToTheEnd (a commit) is out of an interrupt's reach
+│   ├── Io              the one executor (virtual threads) for blocking work, parallel(), a lock per repository,
+│   │                   Task: what a Cancel button stops (fail the future, then interrupt)
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
 │   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
 │   ├── Changelog       is there an [Unreleased] section for a release to stamp
@@ -307,7 +309,9 @@ com.botmaker.dashboard
 │   ├── ReleaseLauncher starts ReleaseJob (setsid), and finds a job again from releases/.running/; refuses a
 │   │                   second while one runs; prunes finished jobs' files after a week
 │   ├── JobTail         a running job's output, read from where the last read stopped
+│   ├── ProgressLine    one stamped line the child wrote, the log it names, and its release-job: ending
 │   ├── ReleaseProgress where a running release is — lanes, tiles, phase — from its output and its log
+│   ├── PastProgress    a finished release as the same lanes, from its tags, its log and the verdict cache
 │   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes, as two command lines, and back
 │   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
 │   ├── ReleaseHistory  releases from tags: 15-min gap or a repeated module starts a new one; logs laid over
@@ -330,11 +334,16 @@ com.botmaker.dashboard
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     every release from tags, drawn as a board; write back = ReleaseStatus.repoll
     ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board
+    ├── ReleaseRowTable its rows: the level picker and the arrow each level resolves to
+    ├── ReleaseWatcher  reads a release child once a second and hands the tab what changed
+    ├── ReleaseBackend  what the tab calls outside itself — the seam a test replaces
     ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard, LinkBar — draw,
     │                   never count
     ├── ChangelogTab    write the [Unreleased] section, commit it in the submodule, optionally draft it
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
-    └── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
+    ├── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
+    ├── CatalogDialogs  edit, unpublish, vet, revoke — each asks, and answers the pull request it opens
+    └── TemplateReleaseDialog  Update template…: preview (streamed, cancellable), arm by value, cut
 ```
 
 **`--dry-run` is not a checkbox, and it is not a flag this module can spell at all.** `ReleaseSpec` appended

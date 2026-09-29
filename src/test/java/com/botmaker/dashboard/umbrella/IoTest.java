@@ -32,6 +32,36 @@ class IoTest {
     }
 
     @Test
+    void aCancelFailsTheFutureAtOnceAndInterruptsTheWork() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        Io.Task<String> task = Io.cancellable(() -> {
+            started.countDown();
+            try {
+                Thread.sleep(30_000);
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+            }
+            return "finished anyway";
+        });
+        assertTrue(started.await(5, TimeUnit.SECONDS));
+
+        task.cancel();
+
+        assertTrue(task.future().isCompletedExceptionally(), "the buttons come back before the work unwinds");
+        assertTrue(interrupted.await(5, TimeUnit.SECONDS), "the thread doing the work was interrupted");
+        assertTrue(task.cancelled());
+        // Wrapped however a caller meets it: whenComplete hands it over bare, a dependent stage wrapped.
+        Throwable wrapped = task.future().thenApply(s -> s).handle((s, e) -> e).get(5, TimeUnit.SECONDS);
+        assertTrue(Io.wasCancelled(wrapped), String.valueOf(wrapped));
+    }
+
+    @Test
+    void aTaskThatFinishesAnswersItsValue() throws Exception {
+        assertEquals("done", Io.cancellable(() -> "done").future().get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
     void oneRepositorysWorkNeverOverlapsAndAnotherRepositoryDoesNotWait() {
         Path sdk = Path.of("/u/botmaker-sdk");
         AtomicInteger inside = new AtomicInteger();

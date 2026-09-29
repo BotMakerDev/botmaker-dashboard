@@ -19,10 +19,10 @@ public final class ReleaseFixtures {
     }
 
     /** Output lines, each {@code seconds after T0} then text. */
-    public static List<ReleaseProgress.Line> out(Object... secondsThenText) {
-        List<ReleaseProgress.Line> lines = new ArrayList<>();
+    public static List<ProgressLine> out(Object... secondsThenText) {
+        List<ProgressLine> lines = new ArrayList<>();
         for (int i = 0; i < secondsThenText.length; i += 2) {
-            lines.add(ReleaseProgress.Line.parse(ReleaseProgress.Line.format(
+            lines.add(ProgressLine.parse(ProgressLine.format(
                     T0.plusSeconds((Integer) secondsThenText[i]), (String) secondsThenText[i + 1])));
         }
         return lines;
@@ -74,7 +74,7 @@ public final class ReleaseFixtures {
     }
 
     @SafeVarargs
-    public static List<ReleaseProgress.Line> join(List<Object>... parts) {
+    public static List<ProgressLine> join(List<Object>... parts) {
         List<Object> all = new ArrayList<>();
         for (List<Object> part : parts) {
             all.addAll(part);

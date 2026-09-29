@@ -5,9 +5,9 @@ import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Version;
 import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
 import com.botmaker.dashboard.umbrella.Io;
+import com.botmaker.dashboard.umbrella.PastProgress;
 import com.botmaker.dashboard.umbrella.ReleaseHistory;
 import com.botmaker.dashboard.umbrella.ReleaseLog;
-import com.botmaker.dashboard.umbrella.ReleaseProgress;
 import com.botmaker.dashboard.umbrella.VerdictCache;
 import com.botmaker.dashboard.umbrella.Verdicts;
 import javafx.application.Platform;
@@ -135,7 +135,7 @@ public final class ReleasesTab extends BorderPane {
     /**
      * Each release's dot colour, keyed by its start — the one thing the list cell reads.
      *
-     * <p><b>Held rather than computed in the cell.</b> {@code ReleaseProgress.past} rebuilds every lane of a
+     * <p><b>Held rather than computed in the cell.</b> {@code PastProgress.of} rebuilds every lane of a
      * release from its log and the cache, and a {@code ListCell} runs on every scroll, every resize and every
      * {@code refresh()} — so a poll that redrew the list after each answered tag recomputed the whole visible
      * history each time, and the dots flickered while it did. Now a dot changes when its release's health
@@ -150,8 +150,13 @@ public final class ReleasesTab extends BorderPane {
         return thread;
     });
 
-    /** The poll for the release on screen; a new selection cancels it. Deep checks are never cancelled. */
+    /** The poll for the release on screen; a new selection cancels it. */
     private Future<?> currentPoll;
+
+    /** The deep check running, which only its own Cancel stops — a selection change does not. */
+    private Future<?> currentDeep;
+    private final java.util.concurrent.atomic.AtomicBoolean deepStarted = new java.util.concurrent.atomic.AtomicBoolean();
+    private final Button cancelDeep = new Button("Cancel");
 
     private Path umbrella;
     private VerdictCache cache;
@@ -172,6 +177,8 @@ public final class ReleasesTab extends BorderPane {
         reload.setOnAction(e -> reload());
         refresh.setOnAction(e -> refresh());
         deep.setOnAction(e -> deepCheck());
+        cancelDeep.setOnAction(e -> cancelDeepCheck());
+        showCancel(false);
         writeBack.setOnAction(e -> writeBack());
         refresh.setDisable(true);
         deep.setDisable(true);
@@ -179,7 +186,7 @@ public final class ReleasesTab extends BorderPane {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, reload, refresh, deep, writeBack, status, spacer);
+        HBox bar = new HBox(10, reload, refresh, deep, cancelDeep, writeBack, status, spacer);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -291,7 +298,7 @@ public final class ReleasesTab extends BorderPane {
 
     private void draw(ReleaseHistory.Release release) {
         board.setVisible(true);
-        board.show(ReleaseProgress.past(release, cache, Instant.now()));
+        board.show(PastProgress.of(release, cache, Instant.now()));
         heading.setText(release.log()
                 .map(l -> "Log releases/" + l.file().getFileName() + " · ")
                 .orElse("No release log — read from tags alone · ")
@@ -309,7 +316,7 @@ public final class ReleasesTab extends BorderPane {
      */
     private String healthOf(ReleaseHistory.Release release) {
         return health.computeIfAbsent(release.start(),
-                key -> ReleaseProgress.past(release, cache, Instant.now()).health());
+                key -> PastProgress.of(release, cache, Instant.now()).health());
     }
 
     /** Recomputes one release's dot, and repaints the list only when that dot actually changed. */
@@ -431,11 +438,17 @@ public final class ReleasesTab extends BorderPane {
         }
         VerdictCache polling = cache;
         deep.setDisable(true);
-        polls.submit(() -> {
+        showCancel(true);
+        deepStarted.set(false);
+        currentDeep = polls.submit(() -> {
+            deepStarted.set(true);
             boolean[] done = {false};
             try {
                 guarded("The deep check", () -> {
                     for (ReleaseHistory.TagRow tag : release.tags()) {
+                        if (Thread.currentThread().isInterrupted()) {
+                            return;
+                        }
                         Optional<Module> module = Module.byDirectory(tag.module());
                         Optional<Version> version = Version.parse(tag.tag());
                         if (module.isEmpty() || version.isEmpty()
@@ -445,6 +458,10 @@ public final class ReleasesTab extends BorderPane {
                         Platform.runLater(() -> say("Deep check: resolving " + tag.module() + ":" + tag.tag()
                                 + " in a clean repository (about 40 s)…"));
                         Verdicts.Deep answer = backend.deepCheck(module.get(), version.get());
+                        if (Thread.currentThread().isInterrupted()) {
+                            // Cancelled under the resolve: its answer is about a killed Maven, not the tag.
+                            return;
+                        }
                         polling.put(tag.module(), tag.tag(), polling.get(tag.module(), tag.tag())
                                 .withJitpack(answer.verdict(), answer.error(), Instant.now()));
                         redraw(release);
@@ -453,14 +470,41 @@ public final class ReleasesTab extends BorderPane {
                 });
             } finally {
                 polling.save();
+                boolean cancelled = Thread.currentThread().isInterrupted();
                 Platform.runLater(() -> {
                     deep.setDisable(false);
+                    showCancel(false);
                     if (done[0]) {
                         say("Deep check done.");
+                    } else if (cancelled) {
+                        say("Deep check cancelled — what it answered before is kept.");
                     }
                 });
             }
         });
+    }
+
+    /**
+     * Stops the deep check: the interrupt kills the clean room's Maven (the release library's {@code Proc}
+     * stops on one since 2026-09-29), and the tag it was resolving keeps the verdict it had.
+     */
+    private void cancelDeepCheck() {
+        if (currentDeep != null) {
+            currentDeep.cancel(true);
+            if (!deepStarted.get()) {
+                // Still queued behind a poll: it will never run, so nothing else gives the button back.
+                deep.setDisable(false);
+                showCancel(false);
+                say("Deep check cancelled before it started.");
+                return;
+            }
+            say("Cancelling the deep check …");
+        }
+    }
+
+    private void showCancel(boolean shown) {
+        cancelDeep.setVisible(shown);
+        cancelDeep.setManaged(shown);
     }
 
     /** {@code ReleaseStatus.repoll} over the log this release has, then everything read again. */

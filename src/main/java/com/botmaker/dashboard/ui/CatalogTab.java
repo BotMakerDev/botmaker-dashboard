@@ -1,46 +1,35 @@
 package com.botmaker.dashboard.ui;
 
 import com.botmaker.cli.release.Module;
-import com.botmaker.cli.release.Plan;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
 import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
-import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
 import com.botmaker.dashboard.umbrella.ReleaseRun;
-import com.botmaker.dashboard.umbrella.ReleaseSpec;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
-import javafx.scene.control.DialogPane;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Button;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
@@ -64,26 +53,24 @@ import java.util.function.Function;
  * {@code RegistryGate}'s check run on the pull request that added it. A second opinion formed in this window
  * would eventually disagree with the gate, and the operator would have no way to know which was right.
  *
- * <p><b>The two writes are pull requests, and they are gated on {@link Admin#canWrite()}</b> exactly as the
+ * <p><b>The writes are pull requests, and they are gated on {@link Admin#canWrite()}</b> exactly as the
  * Queue tab's are — which is a courtesy and not a boundary, since GitHub answers 403 regardless. What it
- * buys is that the operator learns they cannot do it before typing an edit rather than after. Neither
- * action changes {@code main}: Edit proposes new text, Unpublish proposes removing the file, and a human
- * merges or does not.
+ * buys is that the operator learns they cannot do it before typing an edit rather than after. None of them
+ * changes {@code main}: {@link CatalogDialogs} asks, this tab opens the pull request, and a human merges or
+ * does not.
  *
- * <p><b>The one button that is not about a data repository is {@code Update template…}</b> (2026-09-21). A
- * template this project maintains — {@code botmaker-gamebot} — is listed here as the bot it is published as,
- * so this is where its release lives: it previews {@code botmaker release --gamebot} through
- * {@link ReleaseRun}, the same library and the same call the Release tab makes, which has no row for a
- * template. It is a shortcut into one implementation, not a second thing that tags a repository: it previews,
- * and then it can cut — under the Release tab's guards rather than beside them, arming by value on the exact
- * version previewed, the same typed word and the same {@link ReleaseLauncher} child.
- * <b>Releasing is not vetting</b>: {@code Vet…} is still what moves {@code vettedVersion}, and the
- * {@code Latest} column beside the tier is what makes a vetting left behind visible at all.
+ * <p><b>The one button that is not about a data repository is {@code Update template…}</b> (2026-09-21): a
+ * template this project maintains is listed here as the bot it is published as, so this is where its release
+ * lives — {@link TemplateReleaseDialog}, which previews through {@link ReleaseRun}, the same library and the
+ * same call the Release tab makes. <b>Releasing is not vetting</b>: {@code Vet…} is still what moves
+ * {@code vettedVersion}, and the {@code Latest} column beside the tier is what makes a vetting left behind
+ * visible at all.
  */
 public final class CatalogTab extends BorderPane {
 
     private final GitHubClient client;
     private final GitHubAuth auth;
+    private final CatalogDialogs dialogs;
 
     private final ObservableList<Catalog.Entry> entries = FXCollections.observableArrayList();
     private final TableView<Catalog.Entry> table = new TableView<>(entries);
@@ -132,16 +119,21 @@ public final class CatalogTab extends BorderPane {
         this.umbrella = umbrella;
         this.client = client;
         this.auth = auth;
+        this.dialogs = new CatalogDialogs(client, auth, this::window, status::setText);
 
         heading.getStyleClass().add("placeholder-title");
         status.getStyleClass().add("status-line");
         where.getStyleClass().add("status-line");
 
         refresh.setOnAction(e -> reload());
-        edit.setOnAction(e -> withSelected(this::edit));
-        unpublish.setOnAction(e -> withSelected(this::unpublish));
-        vet.setOnAction(e -> withSelected(this::vet));
-        revoke.setOnAction(e -> withSelected(this::revoke));
+        edit.setOnAction(e -> withSelected(entry -> dialogs.edit(entry)
+                .ifPresent(running -> propose(entry, "Edit", running))));
+        unpublish.setOnAction(e -> withSelected(entry -> dialogs.unpublish(entry)
+                .ifPresent(running -> propose(entry, "Unpublish", running))));
+        vet.setOnAction(e -> withSelected(entry -> dialogs.vet(entry)
+                .ifPresent(running -> propose(entry, "Vet", running))));
+        revoke.setOnAction(e -> withSelected(entry -> dialogs.revoke(entry)
+                .ifPresent(running -> propose(entry, "Revoke", running))));
         update.setOnAction(e -> withSelected(this::updateTemplate));
 
         Region spacer = new Region();
@@ -247,7 +239,7 @@ public final class CatalogTab extends BorderPane {
      * window cannot parse is a fact about the repository, not about this window, and burying it in a total
      * is how it stays unnoticed.
      */
-    private static String summary(java.util.List<Catalog.Entry> found) {
+    private static String summary(List<Catalog.Entry> found) {
         long plugins = found.stream().filter(e -> e.kind() == Catalog.Kind.PLUGIN).count();
         long bots = found.stream().filter(e -> e.kind() == Catalog.Kind.BOT).count();
         long templates = found.stream().filter(Catalog.Entry::template).count();
@@ -361,325 +353,13 @@ public final class CatalogTab extends BorderPane {
         update.setDisable(umbrella == null || releasable(selected).isEmpty());
     }
 
-    /**
-     * The fast path to {@code botmaker release --gamebot} — a shortcut into the release library, not a
-     * second thing that tags a repository.
-     *
-     * <p><b>It is here rather than in the Release tab</b> because a template is published as a <i>bot</i>,
-     * listed on this very row beside the vetted and community ones; a row in the module chain would put an
-     * admin-owned template in the middle of a dependency order it is not part of. What it reaches is
-     * {@link ReleaseRun#go} with one module ticked, exactly as the Release tab does, so the plan on screen
-     * is produced by the code that would do the work.
-     *
-     * <p><b>It previews, then it can cut, under the Release tab's guards rather than beside them.</b> Release
-     * it… is dead until a preview of <i>this exact version, in this session</i> has come back with no
-     * refusal, and editing the version kills it again — arming by value, the same rule and the same reason:
-     * the plan on screen would otherwise describe a release nobody read. Then the same typed
-     * {@link ReleaseConfirm}, and the same {@link ReleaseLauncher} child, so closing this window does not stop
-     * a release — and the launcher refuses while another release is running in the checkout. What is <b>not</b> duplicated is the decision: both buttons are
-     * {@link ReleaseRun#go} with one module ticked.
-     *
-     * <p><b>And {@code Vet…} is still what moves {@code vettedVersion}.</b> Releasing the template publishes
-     * a tag; deciding that Studio should offer it is a separate act, a pull request a human merges.
-     */
+    /** {@code Update template…}: see {@link TemplateReleaseDialog}. */
     private void updateTemplate(Catalog.Entry entry) {
         Module module = releasable(entry).orElse(null);
         if (module == null || umbrella == null) {
             return;
         }
-        TextField version = new TextField("patch");
-        version.setPromptText("x.y.z, or patch|minor|major");
-        TextArea output = new TextArea();
-        output.setEditable(false);
-        output.getStyleClass().add("output-text");
-        output.setPrefRowCount(18);
-        output.setPrefColumnCount(100);
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Update " + entry.id());
-        dialog.setHeaderText("Previews " + String.join(" ", spec(module, "…").command(false))
-                + " in " + umbrella + ".\nRelease it… stays dead until a preview of that exact version comes"
-                + " back clean."
-                + (entry.vetted() == null ? ""
-                        : "\nVetted now at " + entry.vetted().record().vettedVersion()
-                                + " — releasing does not move that; Vet… does."));
-        VBox body = new VBox(8, version, output);
-        VBox.setVgrow(output, Priority.ALWAYS);
-        DialogPane pane = dialog.getDialogPane();
-        pane.setContent(body);
-        ButtonType previewIt = new ButtonType("Preview", ButtonBar.ButtonData.OTHER);
-        ButtonType releaseIt = new ButtonType("Release it…", ButtonBar.ButtonData.OTHER);
-        pane.getButtonTypes().setAll(previewIt, releaseIt, ButtonType.CLOSE);
-        Button previewButton = (Button) pane.lookupButton(previewIt);
-        Button releaseButton = (Button) pane.lookupButton(releaseIt);
-        releaseButton.getStyleClass().add("danger");
-        releaseButton.setDisable(true);
-
-        // What a clean preview armed, as a value: the spec that produced the plan on screen, and the plan
-        // itself for the confirmation's list. Editing the version clears both, because the text then
-        // describes a release nobody previewed — the Release tab's rule, for its reason.
-        ReleaseSpec[] armed = {null};
-        Plan[] armedPlan = {null};
-        version.textProperty().addListener((o, was, is) -> {
-            armed[0] = null;
-            armedPlan[0] = null;
-            releaseButton.setDisable(true);
-        });
-
-        // Consumed, so the dialog stays open with the plan in it — the whole point of previewing here.
-        previewButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
-            e.consume();
-            preview(module, version.getText().trim(), output, previewButton, run -> {
-                boolean clean = run != null && run.decided() && !run.stopped();
-                armed[0] = clean ? spec(module, version.getText().trim()) : null;
-                armedPlan[0] = clean ? run.plan().orElse(null) : null;
-                releaseButton.setDisable(armedPlan[0] == null);
-            });
-        });
-        releaseButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
-            e.consume();
-            if (armed[0] != null && armedPlan[0] != null && confirm(armed[0], armedPlan[0])) {
-                launch(armed[0]);
-                dialog.setResult(ButtonType.CLOSE);
-                dialog.close();
-            }
-        });
-        Themed.dialog(dialog, window());
-        dialog.showAndWait();
-    }
-
-    /**
-     * The same confirmation the Release tab puts in front of Execute: what will be tagged, why it cannot be
-     * undone, and a word to type.
-     *
-     * <p>It lists the plan rather than the flag, because a release cuts what the <i>decide pass</i> decided —
-     * a forced module would be in that list and is not in the command line.
-     */
-    private boolean confirm(ReleaseSpec spec, Plan plan) {
-        List<String> tags = ReleaseConfirm.tags(plan);
-        if (tags.isEmpty()) {
-            status.setText("The preview decided to release nothing — there is no tag to cut.");
-            return false;
-        }
-        return ReleaseConfirm.ask(window(), String.join(" ", spec.command(true)), tags,
-                tags.size() + " tag(s) will be pushed, and a pushed tag cannot be edited or recalled.\n\nThe"
-                        + " release runs as a process of its own: closing this window does not stop it, and the"
-                        + " Release tab shows it.\n\nThis publishes the template. It does not change what Studio"
-                        + " offers — Vet… is what moves vettedVersion.");
-    }
-
-    /**
-     * Starts the release in a process of its own — {@link ReleaseLauncher}, as the Release tab does.
-     *
-     * <p><b>Then hands the job over and says so.</b> This line claimed the Release tab was watching it and
-     * nothing made that true: that tab reattaches on construction and on a change of checkout, and it
-     * filters for a job still {@linkplain ReleaseLauncher.Job#alive alive}. A template release finishes in
-     * about ten seconds, so by the time the operator had switched tabs there was nothing left to find and
-     * the board stayed empty — a release with no visible sign it had run.
-     */
-    private void launch(ReleaseSpec spec) {
-        try {
-            ReleaseLauncher.Launched launched = ReleaseLauncher.launch(umbrella, spec);
-            status.setText("Released " + String.join(" ", spec.command(true)) + " — started "
-                    + launched.how() + ". The Release tab is watching it.");
-            onReleaseStarted.accept(launched.job());
-        } catch (IOException e) {
-            status.setText("The release process did not start, and nothing was run: " + e.getMessage());
-        }
-    }
-
-    /** One module, one spec — what the flag would be on the command line. */
-    private static ReleaseSpec spec(Module module, String version) {
-        return new ReleaseSpec(Optional.empty(), Map.of(module, version), false, false);
-    }
-
-    /**
-     * Runs the preview off the FX thread: the decide pass shells to git and the gates run Maven.
-     *
-     * @param armed called on the FX thread with the finished run, or {@code null} when it could not start —
-     *              which is what decides whether Release it… wakes up
-     */
-    private void preview(Module module, String version, TextArea output, Button button,
-                         Consumer<ReleaseRun> armed) {
-        if (!ReleaseSpec.wellFormed(version)) {
-            output.setText("want x.y.z or patch|minor|major, not " + version);
-            armed.accept(null);
-            return;
-        }
-        button.setDisable(true);
-        output.setText("");
-        Path root = umbrella;
-        StringBuilder text = new StringBuilder();
-        Io.async(() -> ReleaseRun.go(root, spec(module, version), false,
-                        line -> text.append(line).append('\n')))
-                .whenComplete((run, error) -> Platform.runLater(() -> {
-                    button.setDisable(false);
-                    output.setText(error != null ? message(error) : run.output());
-                    output.positionCaret(output.getLength());
-                    armed.accept(error != null ? null : run);
-                }));
-    }
-
-    /**
-     * Proposes vetting the selected bot at one release.
-     *
-     * <p>The version box starts on the newest release, which is almost always the one just looked at, and is
-     * editable because it need not be. Nothing about the release is checked here: the gallery's gate checks
-     * that it downloads, on the pull request this opens.
-     */
-    private void vet(Catalog.Entry entry) {
-        TextField version = new TextField(entry.vetted() == null ? "" : entry.vetted().record().vettedVersion());
-        version.setPromptText("release tag, e.g. v0.1.0");
-        Vetting.latestRelease(client, auth, entry).thenAccept(tag -> Platform.runLater(() -> {
-            if (!tag.isBlank() && version.getText().isBlank()) {
-                version.setText(tag);
-            }
-        }));
-        TextField why = new TextField();
-        why.setPromptText("What you looked at (optional) — goes in the pull request body");
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Vet " + entry.id());
-        dialog.setHeaderText((entry.vetted() == null ? "" : "Vetted now at "
-                + entry.vetted().record().vettedVersion() + ".\n")
-                + "Opens a pull request writing vetted/ in " + entry.kind().repo() + ". Once merged, Studio shows "
-                + entry.id() + " as Vetted and installs exactly this release.\n\nThe release you looked at:");
-        VBox body = new VBox(8, version, why);
-        DialogPane pane = dialog.getDialogPane();
-        pane.setContent(body);
-        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        pane.getButtonTypes().setAll(open, ButtonType.CANCEL);
-        pane.lookupButton(open).disableProperty().bind(version.textProperty().isEmpty());
-        Themed.dialog(dialog, window());
-
-        Optional<ButtonType> chose = dialog.showAndWait();
-        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
-            return;
-        }
-        String tag = version.getText().trim();
-        if (entry.vetted() != null && tag.equals(entry.vetted().record().vettedVersion())) {
-            status.setText(entry.id() + " is already vetted at " + tag + ", so no pull request was opened.");
-            return;
-        }
-        propose(entry, "Vet", Vetting.vet(client, auth, entry, tag, why.getText()));
-    }
-
-    /** Proposes removing the selected bot's vetting; its listing stays. */
-    private void revoke(Catalog.Entry entry) {
-        TextField why = new TextField();
-        why.setPromptText("Why (optional) — goes in the pull request body");
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Revoke vetting of " + entry.id());
-        dialog.setHeaderText("Opens a pull request deleting " + entry.vetted().path() + ".\nOnce merged, "
-                + entry.id() + " is Community again: still listed, installed at its newest release, and gone from "
-                + "the index older Studios read.");
-        dialog.getDialogPane().setContent(new VBox(8, why));
-        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().setAll(open, ButtonType.CANCEL);
-        Themed.dialog(dialog, window());
-        Optional<ButtonType> chose = dialog.showAndWait();
-        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
-            return;
-        }
-        propose(entry, "Revoke", Vetting.revoke(client, auth, entry, why.getText()));
-    }
-
-    /**
-     * Proposes new text for the selected entry.
-     *
-     * <p><b>A text area over the JSON, not a form built from a field list.</b> A form can only show the
-     * keys it was written to know about, so it would silently drop one an entry carries and this window has
-     * never heard of — the same reason {@link EntryFields} reads the file rather than a schema. The dialog
-     * says whether the text parses, and does not refuse it: whether an entry is <i>good</i> is
-     * {@code RegistryGate}'s answer on the pull request, and a syntax opinion formed here is the first step
-     * towards a second gate.
-     */
-    private void edit(Catalog.Entry entry) {
-        TextArea json = new TextArea(entry.json() == null ? "" : entry.json());
-        json.getStyleClass().add("output-text");
-        json.setPrefRowCount(20);
-        json.setPrefColumnCount(90);
-
-        Label parses = new Label();
-        parses.getStyleClass().add("status-line");
-        json.textProperty().addListener((obs, was, now) -> sayWhetherItParses(parses, now));
-        sayWhetherItParses(parses, json.getText());
-
-        TextField why = new TextField();
-        why.setPromptText("Why (optional) — goes in the pull request body");
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Edit " + entry.id());
-        dialog.setHeaderText("Opens a pull request against " + entry.kind().repo()
-                + ". Nothing on " + "main" + " changes until somebody merges it.");
-        VBox body = new VBox(8, json, parses, why);
-        VBox.setVgrow(json, Priority.ALWAYS);
-        DialogPane pane = dialog.getDialogPane();
-        pane.setContent(body);
-        pane.getButtonTypes().setAll(new ButtonType("Open pull request", ButtonType.OK.getButtonData()),
-                ButtonType.CANCEL);
-        Themed.dialog(dialog, window());
-
-        Optional<ButtonType> chose = dialog.showAndWait();
-        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
-            return;
-        }
-        String text = json.getText();
-        if (text.equals(entry.json())) {
-            // Not a gate — arithmetic. A pull request that changes nothing is one somebody has to close.
-            status.setText("Nothing changed, so no pull request was opened.");
-            return;
-        }
-        propose(entry, "Edit", Catalog.edit(client, auth, entry, text, why.getText()));
-    }
-
-    private static void sayWhetherItParses(Label label, String text) {
-        try {
-            new ObjectMapper().readTree(text);
-            label.setText("Parses as JSON.");
-            label.getStyleClass().removeAll("cell--broken");
-        } catch (Exception e) {
-            label.setText("Not valid JSON — the gate will refuse this: " + e.getMessage());
-            if (!label.getStyleClass().contains("cell--broken")) {
-                label.getStyleClass().add("cell--broken");
-            }
-        }
-    }
-
-    /**
-     * Proposes removing the selected entry.
-     *
-     * <p><b>Typing the id, not clicking Yes.</b> Merging this makes a plugin disappear from every user's
-     * Manage Plugins and a bot from the gallery Studio reads — and the id is the one thing that cannot be
-     * recovered by re-submitting, because the file name is the claim. A confirmation somebody can dismiss
-     * by reflex is not one.
-     */
-    private void unpublish(Catalog.Entry entry) {
-        TextField typed = new TextField();
-        typed.setPromptText(entry.id());
-        TextField why = new TextField();
-        why.setPromptText("Why (optional) — goes in the pull request body");
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Unpublish " + entry.id());
-        dialog.setHeaderText("This opens a pull request that deletes " + entry.path() + " from "
-                + entry.kind().repo() + ".\nNothing is removed until somebody merges it. Merging it removes "
-                + entry.id() + " for everyone on the next index build.\n\nType the id to confirm:");
-        VBox body = new VBox(8, typed, why);
-        DialogPane pane = dialog.getDialogPane();
-        pane.setContent(body);
-        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        pane.getButtonTypes().setAll(open, ButtonType.CANCEL);
-        pane.lookupButton(open).setDisable(true);
-        typed.textProperty().addListener((obs, was, now) ->
-                pane.lookupButton(open).setDisable(!entry.id().equals(now.trim())));
-        Themed.dialog(dialog, window());
-
-        Optional<ButtonType> chose = dialog.showAndWait();
-        if (chose.isEmpty() || chose.get().getButtonData() != ButtonType.OK.getButtonData()) {
-            return;
-        }
-        propose(entry, "Unpublish", Catalog.unpublish(client, auth, entry, why.getText()));
+        new TemplateReleaseDialog(umbrella, window(), status::setText, onReleaseStarted).show(entry, module);
     }
 
     /**
@@ -697,27 +377,13 @@ public final class CatalogTab extends BorderPane {
             gateButtons();
             if (error != null) {
                 status.setText(what + " failed.");
-                failed(error);
+                dialogs.failed(message(error));
                 return;
             }
             status.setText(what + " proposed as " + entry.kind().repo() + " #" + proposal.number()
                     + " — it is in the Queue tab now, with the gate's verdict.");
-            opened(proposal);
+            dialogs.opened(proposal);
         }));
-    }
-
-    /** Offers the pull request rather than opening a browser unasked. */
-    private void opened(Catalog.Proposal proposal) {
-        ButtonType openIt = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setHeaderText("Opened #" + proposal.number());
-        alert.setContentText("Branch " + proposal.branch()
-                + ".\nNothing is published or unpublished until it is merged.");
-        alert.getButtonTypes().setAll(openIt, ButtonType.CLOSE);
-        Themed.dialog(alert, window());
-        alert.showAndWait()
-                .filter(b -> b == openIt)
-                .ifPresent(b -> Browse.open(proposal.url(), status::setText));
     }
 
     private void setWritesDisabled(boolean disabled) {
@@ -727,38 +393,18 @@ public final class CatalogTab extends BorderPane {
         revoke.setDisable(disabled);
     }
 
-    /**
-     * Shows GitHub's own sentence.
-     *
-     * <p>A 403 because the token's scope was narrowed, a 409 because {@code main} moved under the blob sha,
-     * and a 422 because the branch already exists are three different problems, and paraphrasing them into
-     * "could not open a pull request" costs the operator the only line that says which.
-     */
-    private void failed(Throwable error) {
-        TextArea text = new TextArea(message(error));
-        text.setEditable(false);
-        text.setWrapText(true);
-        text.getStyleClass().add("error-text");
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setHeaderText("GitHub refused it");
-        alert.getDialogPane().setContent(text);
-        alert.getButtonTypes().setAll(ButtonType.OK);
-        Themed.dialog(alert, window());
-        alert.showAndWait();
-    }
-
-    private javafx.stage.Window window() {
+    private Window window() {
         return getScene() == null ? null : getScene().getWindow();
     }
 
-    private void withSelected(java.util.function.Consumer<Catalog.Entry> action) {
+    private void withSelected(Consumer<Catalog.Entry> action) {
         Catalog.Entry entry = table.getSelectionModel().getSelectedItem();
         if (entry != null) {
             action.accept(entry);
         }
     }
 
-    private static String message(Throwable error) {
+    static String message(Throwable error) {
         Throwable cause = error instanceof java.util.concurrent.CompletionException && error.getCause() != null
                 ? error.getCause() : error;
         return cause.getMessage() == null ? cause.toString() : cause.getMessage();

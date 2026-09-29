@@ -144,7 +144,7 @@ class ReleaseHistoryTest {
                 .withJitpack("published (pom HEAD)", "", now.minusSeconds(7200))
                 .withActions("FAILED — CI", "CI: failure — https://example/run\nPluginLoaderTest:171", now.minusSeconds(300)));
 
-        ReleaseProgress progress = ReleaseProgress.past(release, cache, now);
+        ReleaseProgress progress = PastProgress.of(release, cache, now);
 
         assertEquals(ReleaseProgress.Phase.PAST, progress.phase());
         List<ReleaseProgress.Lane> lanes = progress.lanes();

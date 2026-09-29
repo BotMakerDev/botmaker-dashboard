@@ -22,14 +22,14 @@ public final class JobTail {
 
     private final Path file;
     private long offset;
-    private final List<ReleaseProgress.Line> lines = new ArrayList<>();
+    private final List<ProgressLine> lines = new ArrayList<>();
 
     public JobTail(Path file) {
         this.file = file;
     }
 
     /** Every complete line so far. A file that cannot be read yet (not created) answers what was read before. */
-    public List<ReleaseProgress.Line> read() {
+    public List<ProgressLine> read() {
         try (RandomAccessFile in = new RandomAccessFile(file.toFile(), "r")) {
             long length = in.length();
             if (length < offset) {
@@ -46,7 +46,7 @@ public final class JobTail {
                 int end = lastNewline(added);
                 if (end >= 0) {
                     offset += end + 1;
-                    lines.addAll(ReleaseProgress.Line.parseAll(new String(added, 0, end, StandardCharsets.UTF_8)));
+                    lines.addAll(ProgressLine.parseAll(new String(added, 0, end, StandardCharsets.UTF_8)));
                 }
             }
         } catch (IOException e) {

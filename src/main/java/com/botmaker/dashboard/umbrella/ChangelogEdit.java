@@ -148,7 +148,7 @@ public final class ChangelogEdit {
         } catch (IOException e) {
             return new Saved(false, "Could not write " + opened.file() + ": " + e.getMessage());
         }
-        Proc commit = Proc.run(dir, GIT_TIMEOUT, "git", "commit",
+        Proc commit = Proc.runToTheEnd(dir, GIT_TIMEOUT, "git", "commit",
                 "-m", "docs: changelog for the next release", "--", "CHANGELOG.md");
         if (!commit.ok()) {
             return new Saved(false, "Written, but git refused the commit: " + commit.out().strip());

@@ -143,6 +143,29 @@ class ChangelogDraftsTest {
         assertEquals(STAMPED_ONLY, Files.readString(module.resolve("CHANGELOG.md")));
     }
 
+    @Test
+    void aCancelledDraftIsNotCommittedAndTheModulesAfterItAreNotStarted() throws IOException {
+        Files.writeString(module.resolve("Thing.java"), "class Thing {}\n");
+        git("add", "-A");
+        git("commit", "-q", "-m", "feat: something");
+
+        // The Cancel lands while Claude is answering: the draft comes back, and is not committed.
+        List<ChangelogDrafts.Result> results = ChangelogDrafts.draftAll(umbrella,
+                List.of("botmaker-session", "botmaker-shared"),
+                (root, request, progress) -> {
+                    Thread.currentThread().interrupt();
+                    return new ClaudeDraft.Result("### Added\n\n- a thing", "account 1", "drafted");
+                },
+                line -> { });
+        boolean interrupted = Thread.interrupted();
+
+        assertTrue(interrupted);
+        assertEquals(ChangelogDrafts.Outcome.FAILED, results.get(0).outcome());
+        assertTrue(results.get(0).message().startsWith("cancelled"), results.get(0).message());
+        assertEquals(ChangelogDrafts.CANCELLED, results.get(1).message());
+        assertEquals(STAMPED_ONLY, Files.readString(module.resolve("CHANGELOG.md")));
+    }
+
     private void git(String... args) {
         String[] command = new String[args.length + 1];
         command[0] = "git";

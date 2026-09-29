@@ -90,6 +90,9 @@ public final class ReleaseHistory {
                 .toList();
         // Every module at once, in module order: a fetch per module one after another, thirty seconds each at
         // worst, was minutes. A fetch holds its repository's lock, so the Release tab's own fetch waits.
+        // Which tags count is Version.parse's (parse below), the library's grammar; the fetch is spelled here
+        // rather than taken from Tags.latest because that one has no timeout, and a hung remote would hold the
+        // whole history.
         List<List<TagRow>> each = Io.parallel(present, module -> {
             Path dir = umbrella.resolve(module.directory());
             if (fetch) {

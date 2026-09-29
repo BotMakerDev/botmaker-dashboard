@@ -8,6 +8,52 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-29 — split, cancel, one tag reading (dashboard pass, phase 4)
+
+**Done**
+- Split, no behaviour moved:
+  - `ReleaseTab` (975 lines) into `ui/ReleaseBackend` (the test seam, was `ReleaseTab.Backend`),
+    `ui/ReleaseRowTable` (the `Row` model, the level cell, the columns, `picked`, `mergeVerdicts`,
+    `loadLatest`) and `ui/ReleaseWatcher` (the once-a-second `JobTail` read and its `View` callbacks).
+  - `CatalogTab` (877) into `ui/CatalogDialogs` (edit, unpublish, vet, revoke, opened, failed: each answers the
+    proposal future or empty, and the tab runs it) and `ui/TemplateReleaseDialog` (Update template…).
+  - `ReleaseProgress` (617) into `umbrella/ProgressLine` (the stamped line, `logName`, `Ending`), the live
+    model left in `ReleaseProgress`, and `umbrella/PastProgress` (the Releases tab's projection, was
+    `ReleaseProgress.past`).
+- Cancel is an interrupt:
+  - `Io.Task` / `Io.cancellable`: the future fails with `CancellationException` first, then the worker thread
+    is interrupted (the other order let work that caught the interrupt complete the future first).
+    `Io.wasCancelled` unwraps.
+  - The dashboard's `Proc` already killed a process on interrupt; the release library's `Proc` did not (it read
+    to the end first). `botmaker-cli`'s `Proc.run` now drains on a virtual thread, kills the process tree on an
+    interrupt, answers `INTERRUPTED` (130), and starts nothing on an interrupted thread.
+  - `Proc.runToTheEnd` runs on another thread and `join`s, which no interrupt reaches: `ChangelogEdit.save`'s
+    `git commit` uses it, since a killed commit leaves `index.lock`.
+  - `ChangelogDrafts.draftAll` and `ClaudeDraft.draft` check the interrupt between modules and accounts; a
+    draft that comes back after a cancel is not committed.
+  - Buttons: Release tab Preview (a Cancel beside it, shown while a preview runs; lines of a cancelled preview
+    are dropped), Releases tab Deep check (its own `Future`; a cancelled resolve's answer is not cached; a deep
+    check still queued behind a poll gives the button back at once), Changelog tab Draft with Claude and Draft
+    all (as `Io.Task`s now, off the `work` thread), the template dialog (its Preview button reads Cancel preview
+    while one runs; closing the dialog cancels).
+- The template preview streams its lines (the `StringBuilder` nobody read is gone).
+- One tag reading: `ModuleScan.newestTag` is `Tags.highest` over `git tag --list`, keeping git's spelling of the
+  winner. `--sort=-v:refname` put `demo-2026` and `1.2.0-rc1` above a release. `ReleaseHistory` keeps its own
+  fetch (with a timeout, which `Tags.latest` has none of); which tags count was already `Version.parse`.
+- One `onPath`: `ReleaseLauncher` and `ClaudeDraft` call `com.botmaker.cli.release.Proc.onPath`.
+  `ClaudeDraft.availability()` scans once on `Io`; `ChangelogTab` keeps the answer in a field.
+- Tests: `ModuleScanTest`, `QueueTest` (`listingReason`), `ReleaseJobTest` (runs the child: pid file, stamped
+  lines, `STOPPED` ending on a refused flag), `ProcTest` (interrupt, `runToTheEnd`), `IoTest` (cancel),
+  `ChangelogDraftsTest` (cancel), `ReleaseTabTest.cancellingAPreviewGivesTheButtonsBackAndArmsNothing`.
+  Dashboard 219 tests.
+
+**Deferred / next**
+- The plan named a `widgets/ReleaseRowTable`; it lives in `ui/`, because `widgets/` draws and never counts, and
+  the rows resolve versions through the library.
+- `ReleaseWatcher` is the Release tab's alone. The Catalog tab still hands its job to that tab, which is the
+  one place a running release is drawn.
+- "Releases list marks broken releases without opening" stays open.
+
 ## 2026-09-29 — speed and the rate limit (dashboard pass, phase 3)
 
 **Done**

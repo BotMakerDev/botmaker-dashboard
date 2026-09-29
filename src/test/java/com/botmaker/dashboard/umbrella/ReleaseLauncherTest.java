@@ -67,8 +67,8 @@ class ReleaseLauncherTest {
         Path running = Files.createDirectories(umbrella.resolve("releases/.running"));
         Files.writeString(running.resolve("2026-09-05-120000.pid"), "1");
         Files.writeString(running.resolve("2026-09-16-102000.pid"), "999999999");
-        Files.writeString(running.resolve("2026-09-16-102000.out"), ReleaseProgress.Line.format(
-                ReleaseFixtures.T0, ReleaseProgress.Ending.DONE.line("")) + "\n");
+        Files.writeString(running.resolve("2026-09-16-102000.out"), ProgressLine.format(
+                ReleaseFixtures.T0, ProgressLine.Ending.DONE.line("")) + "\n");
         Files.writeString(running.resolve("notes.pid"), "3");
 
         ReleaseLauncher.Job job = ReleaseLauncher.latest(umbrella).orElseThrow();
@@ -93,8 +93,8 @@ class ReleaseLauncherTest {
         Path running = Files.createDirectories(umbrella.resolve("releases/.running"));
         Files.writeString(running.resolve("2026-09-16-102000.pid"), "999999999");
         Files.writeString(running.resolve("2026-09-16-102000.out"), String.join("\n",
-                ReleaseProgress.Line.format(ReleaseFixtures.at(0), "Release log: releases/2026-09-16-1020.md"),
-                ReleaseProgress.Line.format(ReleaseFixtures.at(1), "Releasing botmaker-sdk v1.2.0")) + "\n");
+                ProgressLine.format(ReleaseFixtures.at(0), "Release log: releases/2026-09-16-1020.md"),
+                ProgressLine.format(ReleaseFixtures.at(1), "Releasing botmaker-sdk v1.2.0")) + "\n");
         Files.writeString(umbrella.resolve("releases/2026-09-16-1020.md"), "# Release 2026-09-16 10:20\n\n"
                 + "| module | version | tag | stage | changelog | jitpack | actions |\n|---|---|---|---|---|---|---|\n"
                 + "| botmaker-sdk | 1.2.0 | v1.2.0 | pending | — | pending | pending |\n");

@@ -4,7 +4,6 @@ import com.botmaker.cli.release.Module;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -31,6 +30,9 @@ import java.util.regex.Pattern;
  * {@code Release}'s own. What this class adds is the one thing a window needs and a log does not: <i>where is
  * it now</i>. That is presentation, and it is tested as a pure function over text for the same reason the rest
  * of {@code umbrella/} is.
+ *
+ * <p>The child's lines are {@link ProgressLine}s, and a release read from its tags rather than watched is
+ * {@link PastProgress}; both ended up here until 2026-09-29.
  *
  * @param phase   where the whole run is
  * @param lanes   one per module being released, in tag order — empty until the log exists
@@ -166,96 +168,10 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
                         Duration elapsed) {
     }
 
-    /**
-     * One line the child wrote, with the moment it wrote it.
-     *
-     * <p>The child stamps every line itself ({@link #format}) because the window may not be there to: it can
-     * be closed and reopened mid-release, and a lane's elapsed time read off the moment the window happened
-     * to read the file would be the window's history, not the release's.
-     *
-     * @param at   when it was written; empty for a line the child did not stamp — a JVM warning on stderr
-     */
-    public record Line(Optional<Instant> at, String text) {
-
-        public static String format(Instant at, String text) {
-            return at + " " + text;
-        }
-
-        /** A stamped line, or the whole thing as text when the first word is not an instant. */
-        public static Line parse(String raw) {
-            int space = raw.indexOf(' ');
-            if (space > 0) {
-                try {
-                    return new Line(Optional.of(Instant.parse(raw.substring(0, space))), raw.substring(space + 1));
-                } catch (DateTimeParseException e) {
-                    // Not stamped: fall through.
-                }
-            }
-            return new Line(Optional.empty(), raw);
-        }
-
-        public static List<Line> parseAll(String text) {
-            List<Line> lines = new ArrayList<>();
-            for (String raw : text.split("\n", -1)) {
-                if (!raw.isEmpty()) {
-                    lines.add(parse(raw));
-                }
-            }
-            return List.copyOf(lines);
-        }
-    }
-
-    /**
-     * The last line {@link ReleaseJob} writes, and so the only way to tell "finished" from "killed".
-     *
-     * <p>Written by the child rather than inferred from the log, because a refusal and a decide-pass error
-     * leave no log at all, and a run that died after its last tag leaves a log that looks finished.
-     */
-    public enum Ending {
-        DONE("done"), UNPUSHED("done, a branch was not pushed"), REFUSED("refused"), STOPPED("stopped");
-
-        public static final String PREFIX = "release-job: ";
-
-        private final String word;
-
-        Ending(String word) {
-            this.word = word;
-        }
-
-        public String line(String detail) {
-            return PREFIX + word + (detail.isBlank() ? "" : " — " + detail);
-        }
-
-        static Optional<Ending> of(String text) {
-            if (!text.startsWith(PREFIX)) {
-                return Optional.empty();
-            }
-            String rest = text.substring(PREFIX.length());
-            // Longest first: "done, a branch…" also starts with "done".
-            for (Ending ending : List.of(UNPUSHED, DONE, REFUSED, STOPPED)) {
-                if (rest.equals(ending.word) || rest.startsWith(ending.word + " — ")) {
-                    return Optional.of(ending);
-                }
-            }
-            return Optional.empty();
-        }
-
-        Phase phase() {
-            return switch (this) {
-                case DONE -> Phase.DONE;
-                case UNPUSHED -> Phase.UNPUSHED;
-                case REFUSED -> Phase.REFUSED;
-                case STOPPED -> Phase.STOPPED;
-            };
-        }
-    }
-
     // ---- the library's narration, as it reads today ---------------------------------------------------
 
     /** {@code Release.release}: the first line of one module's segment. */
     private static final Pattern RELEASING = Pattern.compile("^Releasing (\\S+) (v\\S+)$");
-    /** {@code ReleaseLog.write}: which file the chain is keeping. */
-    private static final Pattern LOG = Pattern.compile("^Release log: releases/(\\S+\\.md)$");
     private static final String RECORDING = "Recording submodule pointers in the umbrella";
     private static final String CHAIN_ERROR = "error: ";
 
@@ -263,34 +179,24 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
     private static final String PUSH_STEP = "commit, tag and push";
     private static final String JITPACK_STEP = "jitpack wait";
 
-    /** The log file the child's chain is keeping, once it has said so. */
-    public static Optional<String> logName(List<Line> lines) {
-        for (Line line : lines) {
-            Matcher match = LOG.matcher(line.text());
-            if (match.matches()) {
-                return Optional.of(match.group(1));
-            }
-        }
-        return Optional.empty();
-    }
-
     /**
-     * The model.
+     * The model of a release being watched.
      *
      * @param lines the child's output so far
      * @param log   the release log it names, once it exists
      * @param alive whether the child process is still running
      * @param now   the clock, handed in so a test can hold it still
      */
-    public static ReleaseProgress of(List<Line> lines, Optional<ReleaseLog> log, boolean alive, Instant now) {
+    public static ReleaseProgress of(List<ProgressLine> lines, Optional<ReleaseLog> log, boolean alive,
+                                     Instant now) {
         Instant started = lines.stream().flatMap(l -> l.at().stream()).findFirst().orElse(now);
         Optional<Instant> last = lines.stream().flatMap(l -> l.at().stream()).reduce((a, b) -> b);
 
-        Optional<Ending> ending = Optional.empty();
+        Optional<ProgressLine.Ending> ending = Optional.empty();
         Instant endedAt = null;
         boolean recording = false;
-        for (Line line : lines) {
-            Optional<Ending> end = Ending.of(line.text());
+        for (ProgressLine line : lines) {
+            Optional<ProgressLine.Ending> end = ProgressLine.Ending.of(line.text());
             if (end.isPresent()) {
                 ending = end;
                 endedAt = line.at().orElse(null);
@@ -326,100 +232,11 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
     }
 
     /**
-     * A past release, drawn with the same lanes as a running one — so the two look alike and are read alike.
-     *
-     * <p>Every tag in the group is a lane whose commit and tag are done, since the tag exists. Its JitPack and
-     * Actions nodes come from the newest answer there is: the cache's polled verdict, else the log's cell, else
-     * {@code pending}. A module the log names with no tag — {@code FAILED}, {@code not reached} — is a lane too,
-     * read the way a live one is. The lane's stage line carries the words behind each node and how old they are,
-     * because {@code published (pom HEAD)} and {@code ok (resolves clean)} are both green and are not the same
-     * answer.
-     *
-     * <p>A lane's elapsed time is the gap since the previous tag: what the timeline is for is where the minutes
-     * went, and for a finished release that is the time between tags.
+     * A lane of a release nobody is watching: read from its log row alone, with no narration to fill in a
+     * {@code pending} row. {@link PastProgress} draws a finished release with it.
      */
-    public static ReleaseProgress past(ReleaseHistory.Release release, VerdictCache cache, Instant now) {
-        Optional<ReleaseLog> log = release.log();
-        List<ReleaseLog.Row> rows = new ArrayList<>();
-        List<ReleaseLog.Problem> problems = new ArrayList<>();
-        Map<String, Duration> gaps = new java.util.HashMap<>();
-        Map<String, String> ages = new java.util.HashMap<>();
-        java.util.Set<String> seen = new java.util.HashSet<>();
-
-        Instant previous = null;
-        for (ReleaseHistory.TagRow tag : release.tags()) {
-            String key = tag.module() + "@" + tag.tag();
-            seen.add(key);
-            gaps.put(key, previous == null ? Duration.ZERO : Duration.between(previous, tag.date()));
-            previous = tag.date();
-
-            Optional<ReleaseLog.Row> logged = log.flatMap(l -> l.rows().stream()
-                    .filter(r -> r.module().equals(tag.module()) && r.tag().equals(tag.tag())).findFirst());
-            VerdictCache.Entry entry = cache.get(tag.module(), tag.tag());
-            boolean onJitpack = Module.byDirectory(tag.module())
-                    .map(com.botmaker.cli.release.ReleaseLog::onJitpack).orElse(true);
-
-            String jitpack = !onJitpack ? "n/a (not a Maven artifact)"
-                    : !entry.jitpack().isBlank() ? entry.jitpack()
-                    : logged.map(ReleaseLog.Row::jitpack).filter(s -> !s.isBlank()).orElse("pending");
-            String actions = !entry.actions().isBlank() ? entry.actions()
-                    : logged.map(ReleaseLog.Row::actions).filter(s -> !s.isBlank()).orElse("pending");
-            // The cached poll's run outranks the log's, for the same reason its verdict does: it is newer.
-            String actionsUrl = !entry.actionsUrl().isBlank() ? entry.actionsUrl()
-                    : logged.map(ReleaseLog.Row::actionsUrl).orElse("");
-            String stage = logged.map(ReleaseLog.Row::stage).filter(s -> !s.isBlank()).orElse("tagged");
-            // The tag exists, so whatever the log last said about how far it got, it got at least this far.
-            if (stage.equals("pending") || stage.equals("FAILED") || stage.equals("not reached")) {
-                stage = "tagged";
-            }
-            rows.add(new ReleaseLog.Row(tag.module(), tag.tag().replaceFirst("^v", ""), tag.tag(),
-                    logged.map(ReleaseLog.Row::changelog).orElse(""), jitpack, actions, stage,
-                    logged.map(ReleaseLog.Row::elapsed).orElse(""), actionsUrl));
-
-            for (String kind : List.of("jitpack", "actions")) {
-                String cached = kind.equals("jitpack") ? entry.jitpackError() : entry.actionsError();
-                boolean polled = kind.equals("jitpack") ? !entry.jitpack().isBlank() : !entry.actions().isBlank();
-                if (polled) {
-                    if (!cached.isBlank()) {
-                        problems.add(new ReleaseLog.Problem(tag.module(), kind, cached));
-                    }
-                } else {
-                    log.ifPresent(l -> l.problemsFor(tag.module()).stream()
-                            .filter(p -> p.kind().equals(kind)).forEach(problems::add));
-                }
-            }
-            ages.put(key, "jitpack: " + jitpack
-                    + (onJitpack && !entry.jitpack().isBlank() ? ", " + VerdictCache.age(entry.jitpackTime(), now) : "")
-                    + " · actions: " + actions
-                    + (!entry.actions().isBlank() ? ", " + VerdictCache.age(entry.actionsTime(), now) : ""));
-        }
-        // What the log names and no tag carries: the module that failed and those never reached.
-        log.ifPresent(l -> {
-            for (ReleaseLog.Row row : l.rows()) {
-                if (!seen.contains(row.module() + "@" + row.tag())) {
-                    rows.add(row);
-                    l.problemsFor(row.module()).stream().filter(p -> p.kind().equals("release")).forEach(problems::add);
-                }
-            }
-        });
-
-        ReleaseLog synthetic = new ReleaseLog(log.map(ReleaseLog::file).orElse(null),
-                log.map(ReleaseLog::stamp).orElse(""), rows, problems);
-        List<Lane> lanes = new ArrayList<>();
-        for (ReleaseLog.Row row : rows) {
-            String key = row.module() + "@" + row.tag();
-            Lane lane = lane(row, synthetic, Segment.NONE, false, now);
-            // What the release measured beats the gap between tags. The gap is a proxy — it counts the wait
-            // for the previous module's JitPack build as this one's time — and it is all a log written
-            // before 2026-09-19 can offer.
-            Optional<Duration> took = ReleaseLog.duration(row.elapsed())
-                    .or(() -> Optional.ofNullable(gaps.get(key)));
-            lanes.add(new Lane(lane.module(), lane.tag(), ages.getOrDefault(key, row.stage()), lane.steps(),
-                    lane.errors(), took, lane.actionsUrl()));
-        }
-        Duration span = log.map(ReleaseLog::timing).flatMap(t -> ReleaseLog.duration(t.total()))
-                .orElseGet(release::span);
-        return new ReleaseProgress(Phase.PAST, List.copyOf(lanes), release.start(), span);
+    static Lane settledLane(ReleaseLog.Row row, ReleaseLog log, Instant now) {
+        return lane(row, log, Segment.NONE, false, now);
     }
 
     public Tiles tiles() {
@@ -486,7 +303,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
      *
      * @param closedAt when the segment ended, when it has
      */
-    private record Segment(List<Line> lines, Optional<Instant> startedAt, boolean closed,
+    private record Segment(List<ProgressLine> lines, Optional<Instant> startedAt, boolean closed,
                            Optional<Instant> closedAt) {
         static final Segment NONE = new Segment(List.of(), Optional.empty(), false, Optional.empty());
 
@@ -505,7 +322,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         }
     }
 
-    private static Segment segment(List<Line> lines, String module) {
+    private static Segment segment(List<ProgressLine> lines, String module) {
         int start = -1;
         for (int i = 0; i < lines.size(); i++) {
             Matcher match = RELEASING.matcher(lines.get(i).text());
@@ -520,7 +337,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
         for (int end = start + 1; end < lines.size(); end++) {
             String text = lines.get(end).text();
             if (RELEASING.matcher(text).matches() || text.equals(RECORDING)
-                    || text.startsWith(CHAIN_ERROR) || text.startsWith(Ending.PREFIX)) {
+                    || text.startsWith(CHAIN_ERROR) || text.startsWith(ProgressLine.Ending.PREFIX)) {
                 return new Segment(lines.subList(start + 1, end), lines.get(start).at(), true,
                         lines.get(end).at());
             }

@@ -1,11 +1,11 @@
 package com.botmaker.dashboard.umbrella;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
@@ -52,9 +52,32 @@ public final class ClaudeDraft {
     private ClaudeDraft() {
     }
 
-    /** Whether both programs are on {@code PATH}. When they are not, the button is hidden, not disabled. */
+    /** The {@code PATH} scan, started once. */
+    private static volatile CompletableFuture<Boolean> availability;
+
+    /**
+     * Whether both programs are on {@code PATH}, asked once per run and off the FX thread. When they are not,
+     * the button is hidden, not disabled.
+     *
+     * <p>It was a directory scan on every call, two of them on the FX thread each time the account changed; a
+     * {@code PATH} on a network mount made that a pause. {@code PATH} does not change under a running window.
+     */
+    public static CompletableFuture<Boolean> availability() {
+        CompletableFuture<Boolean> known = availability;
+        if (known == null) {
+            synchronized (ClaudeDraft.class) {
+                if (availability == null) {
+                    availability = Io.async(() -> onPath("claude") && onPath("cswap"));
+                }
+                known = availability;
+            }
+        }
+        return known;
+    }
+
+    /** {@link #availability()}, waited for — for a background thread only. */
     public static boolean available() {
-        return onPath("claude") && onPath("cswap");
+        return availability().join();
     }
 
     /**
@@ -72,6 +95,10 @@ public final class ClaudeDraft {
         String prompt = prompt(request);
         List<String> refusals = new ArrayList<>();
         for (CswapAccounts.Account account : accounts) {
+            if (Thread.currentThread().isInterrupted()) {
+                // A Cancel: the account being asked lost its process, and the next one is not asked.
+                return new Result("", "", "Cancelled — nothing was drafted.");
+            }
             progress.accept("Drafting with " + account.label() + " …");
             Proc answer = run(where, argv(account.slot()), prompt);
             String out = answer.out().strip();
@@ -155,16 +182,8 @@ public final class ClaudeDraft {
         return text.lines().findFirst().orElse(text);
     }
 
-    private static boolean onPath(String program) {
-        String path = System.getenv("PATH");
-        if (path == null) {
-            return false;
-        }
-        for (String dir : path.split(java.io.File.pathSeparator)) {
-            if (!dir.isBlank() && Files.isExecutable(Path.of(dir, program))) {
-                return true;
-            }
-        }
-        return false;
+    /** The release library's reading of {@code PATH}: one implementation, and it never asks a shell. */
+    static boolean onPath(String program) {
+        return com.botmaker.cli.release.Proc.onPath(program);
     }
 }

@@ -203,23 +203,23 @@ class ReleaseProgressTest {
     @Test
     void theEndingsReadBack() {
         assertEquals(Phase.REFUSED, ReleaseProgress.of(out(0, "Gates:", 5,
-                ReleaseProgress.Ending.REFUSED.line("2 gate(s)")), Optional.empty(), false, at(9)).phase());
+                ProgressLine.Ending.REFUSED.line("2 gate(s)")), Optional.empty(), false, at(9)).phase());
         assertEquals(Phase.UNPUSHED, ReleaseProgress.of(out(0,
-                ReleaseProgress.Ending.UNPUSHED.line("")), Optional.empty(), false, at(9)).phase());
+                ProgressLine.Ending.UNPUSHED.line("")), Optional.empty(), false, at(9)).phase());
         assertEquals(Phase.DONE, ReleaseProgress.of(out(0,
-                ReleaseProgress.Ending.DONE.line("")), Optional.empty(), false, at(9)).phase());
+                ProgressLine.Ending.DONE.line("")), Optional.empty(), false, at(9)).phase());
     }
 
     @Test
     void anUnstampedLineIsKeptAsText() {
-        ReleaseProgress.Line line = ReleaseProgress.Line.parse("WARNING: A restricted method was called");
+        ProgressLine line = ProgressLine.parse("WARNING: A restricted method was called");
         assertEquals(Optional.empty(), line.at());
         assertEquals("WARNING: A restricted method was called", line.text());
 
-        List<ReleaseProgress.Line> lines = ReleaseProgress.Line.parseAll(
-                ReleaseProgress.Line.format(at(0), "Release log: releases/2026-09-16-1020.md") + "\n");
+        List<ProgressLine> lines = ProgressLine.parseAll(
+                ProgressLine.format(at(0), "Release log: releases/2026-09-16-1020.md") + "\n");
         assertEquals(1, lines.size());
-        assertEquals(Optional.of("2026-09-16-1020.md"), ReleaseProgress.logName(lines));
+        assertEquals(Optional.of("2026-09-16-1020.md"), ProgressLine.logName(lines));
     }
 
     @Test

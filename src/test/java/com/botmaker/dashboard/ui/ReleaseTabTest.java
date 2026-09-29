@@ -41,7 +41,7 @@ class ReleaseTabTest extends FxHeadless {
     /** When set, a preview waits for it — the operator's time to do something else meanwhile. */
     private java.util.concurrent.CountDownLatch hold;
 
-    private final class Fake implements ReleaseTab.Backend {
+    private final class Fake implements ReleaseBackend {
         @Override
         public ReleaseRun preview(Path root, ReleaseSpec spec, Consumer<String> line) {
             if (hold != null) {
@@ -95,13 +95,13 @@ class ReleaseTabTest extends FxHeadless {
                         at = at.getParent();
                     }
                     return at instanceof TableCell<?, ?> cell && cell.getTableRow() != null
-                            && cell.getTableRow().getItem() instanceof ReleaseTab.Row row
+                            && cell.getTableRow().getItem() instanceof ReleaseRowTable.Row row
                             && row.getModule().equals(module);
                 })
                 .findFirst().orElseThrow(() -> new AssertionError("no " + level + " segment for " + module));
     }
 
-    private ReleaseTab.Row row(String module) {
+    private ReleaseRowTable.Row row(String module) {
         return tab.rows().stream().filter(r -> r.getModule().equals(module)).findFirst().orElseThrow();
     }
 
@@ -159,6 +159,30 @@ class ReleaseTabTest extends FxHeadless {
         hold = null;
         previewAndWait();
         assertFalse(tab.executeButton().isDisabled(), "a preview of this checkout arms it again");
+    }
+
+    /** Cancel gives the buttons back at once, and a preview that was cancelled arms nothing (2026-09-29). */
+    @Test
+    void cancellingAPreviewGivesTheButtonsBackAndArmsNothing() throws Exception {
+        open();
+        hold = new java.util.concurrent.CountDownLatch(1);
+        assertFalse(tab.cancelButton().isVisible(), "no Cancel while nothing runs");
+        clickOn(tab.previewButton());
+        assertTrue(tab.cancelButton().isVisible());
+        assertTrue(tab.previewButton().isDisabled());
+
+        clickOn(tab.cancelButton());
+        WaitForAsyncUtils.waitForFxEvents();
+        assertFalse(tab.previewButton().isDisabled(), "Preview is back before the work has unwound");
+        assertFalse(tab.cancelButton().isVisible());
+        hold.countDown();
+        WaitForAsyncUtils.sleep(300, TimeUnit.MILLISECONDS);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(tab.executeButton().isDisabled(), "the cancelled preview's plan arms nothing");
+        String said = lookup(".status-line").queryAs(Label.class).getText();
+        assertTrue(said.startsWith("Preview cancelled"), said);
+        hold = null;
     }
 
     @Test

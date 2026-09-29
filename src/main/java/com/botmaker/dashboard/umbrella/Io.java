@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -22,7 +23,7 @@ import java.util.function.Supplier;
  * {@link Proc}'s cap on processes running at once.
  *
  * <p>Tabs that serialise on purpose keep their own single thread: the Releases tab's verdict polls (a rate
- * limit, not speed) and the Changelog tab's drafts and saves (a save commits).
+ * limit, not speed) and the Changelog tab's reads and saves (a save commits).
  */
 public final class Io {
 
@@ -38,6 +39,81 @@ public final class Io {
     /** {@code supplyAsync} on {@link #EXECUTOR}. */
     public static <T> CompletableFuture<T> async(Supplier<T> work) {
         return CompletableFuture.supplyAsync(work, EXECUTOR);
+    }
+
+    /**
+     * Work a Cancel button can stop.
+     *
+     * <p><b>A cancel is an interrupt of the thread doing the work</b>, because what these tasks wait on is a
+     * process: this module's {@link Proc} and the release library's {@code Proc} both destroy the command an
+     * interrupt lands in, and answer at once for every command after it, so a preview or a clean-room resolve
+     * unwinds in a second instead of running on for minutes. {@code CompletableFuture.cancel} interrupts
+     * nothing, which is why this is not one.
+     *
+     * <p>{@link #future()} fails with a {@link CancellationException} the moment {@link #cancel()} is called, so
+     * the window gets its buttons back at once; what the work was doing when the interrupt landed finishes in
+     * the background and its answer is dropped.
+     */
+    public static final class Task<T> {
+
+        private final CompletableFuture<T> future = new CompletableFuture<>();
+        private volatile Thread thread;
+        private volatile boolean cancelled;
+
+        private Task() {
+        }
+
+        public CompletableFuture<T> future() {
+            return future;
+        }
+
+        public boolean cancelled() {
+            return cancelled;
+        }
+
+        public void cancel() {
+            cancelled = true;
+            // Failed before the interrupt: work that catches the interrupt and returns at once would otherwise
+            // complete the future first, and a cancelled preview would arm.
+            future.completeExceptionally(new CancellationException("cancelled"));
+            Thread running = thread;
+            if (running != null) {
+                running.interrupt();
+            }
+        }
+
+        private void run(Supplier<T> work) {
+            // Set before cancelled is read, and cancel sets cancelled before it reads this: one of the two
+            // always sees the other, so a cancel that lands as the task starts is never lost.
+            thread = Thread.currentThread();
+            try {
+                if (!cancelled) {
+                    future.complete(work.get());
+                }
+            } catch (Throwable e) {
+                future.completeExceptionally(e);
+            } finally {
+                thread = null;
+                Thread.interrupted();
+            }
+        }
+    }
+
+    /** {@code work} on {@link #EXECUTOR}, as a {@link Task} a Cancel button can stop. */
+    public static <T> Task<T> cancellable(Supplier<T> work) {
+        Task<T> task = new Task<>();
+        EXECUTOR.execute(() -> task.run(work));
+        return task;
+    }
+
+    /** Whether a future failed because it was cancelled, however deeply the exception was wrapped. */
+    public static boolean wasCancelled(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof CancellationException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

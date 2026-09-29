@@ -97,12 +97,12 @@ public final class ReleaseLauncher {
 
         /** The model of it right now: the output, and the release log the output names once it exists. */
         public ReleaseProgress progress(Instant now) {
-            return progress(ReleaseProgress.Line.parseAll(output()), now);
+            return progress(ProgressLine.parseAll(output()), now);
         }
 
         /** The model over lines already read — a {@link JobTail}'s, so the output is not read a second time. */
-        public ReleaseProgress progress(List<ReleaseProgress.Line> lines, Instant now) {
-            Optional<ReleaseLog> log = ReleaseProgress.logName(lines)
+        public ReleaseProgress progress(List<ProgressLine> lines, Instant now) {
+            Optional<ReleaseLog> log = ProgressLine.logName(lines)
                     .map(name -> umbrella.resolve("releases").resolve(name))
                     .filter(Files::isRegularFile)
                     .flatMap(file -> {
@@ -172,7 +172,8 @@ public final class ReleaseLauncher {
         Job job = new Job(umbrella, stamp);
         Files.createDirectories(running(umbrella));
 
-        boolean setsid = System.getProperty("os.name", "").toLowerCase().contains("linux") && onPath("setsid");
+        boolean setsid = System.getProperty("os.name", "").toLowerCase().contains("linux")
+                && com.botmaker.cli.release.Proc.onPath("setsid");
         String classPath = classPath(System.getProperty("java.class.path"), System.getProperty("jdk.module.path"));
         List<String> argv = argv(setsid, Path.of(System.getProperty("java.home")), classPath, umbrella, stamp, spec);
 
@@ -278,12 +279,6 @@ public final class ReleaseLauncher {
         } catch (RuntimeException e) {
             return false;
         }
-    }
-
-    private static boolean onPath(String program) {
-        String path = System.getenv("PATH");
-        return path != null && Stream.of(path.split(File.pathSeparator))
-                .anyMatch(dir -> Files.isExecutable(Path.of(dir, program)));
     }
 
     private static boolean isWindows() {

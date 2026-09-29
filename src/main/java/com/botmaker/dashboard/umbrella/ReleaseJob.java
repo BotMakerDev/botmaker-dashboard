@@ -19,7 +19,7 @@ import java.util.List;
  *
  * <p><b>It is {@link ReleaseRun#go} and nothing else.</b> Same library call, same {@code why}, same way of
  * turning a refusal into a value — the only differences are where the lines go (stdout, stamped, which the
- * launcher sends to a file) and that the outcome is an {@link ReleaseProgress.Ending} line and an exit code
+ * launcher sends to a file) and that the outcome is an {@link ProgressLine.Ending} line and an exit code
  * rather than a record handed back to a caller. The preview stays in the window's own process, since it writes
  * nothing and a crash there costs nothing.
  *
@@ -50,7 +50,7 @@ public final class ReleaseJob {
         try {
             spec = ReleaseSpec.parse(flags);
         } catch (IllegalArgumentException e) {
-            say(out, ReleaseProgress.Ending.STOPPED.line(e.getMessage()));
+            say(out, ProgressLine.Ending.STOPPED.line(e.getMessage()));
             System.exit(2);
             return;
         }
@@ -60,19 +60,19 @@ public final class ReleaseJob {
         // A rehearsal is ReleaseRun.go with execute=false — the dry Runner, exactly what Preview uses.
         ReleaseRun run = ReleaseRun.go(umbrella, spec, !dryRun, line -> say(out, line));
 
-        ReleaseProgress.Ending ending;
+        ProgressLine.Ending ending;
         String detail = "";
         if (run.error().isPresent()) {
-            ending = ReleaseProgress.Ending.STOPPED;
+            ending = ProgressLine.Ending.STOPPED;
             detail = run.error().get();
         } else if (run.refused()) {
-            ending = ReleaseProgress.Ending.REFUSED;
+            ending = ProgressLine.Ending.REFUSED;
             detail = run.refusals().size() + " gate(s)";
         } else {
-            ending = run.pushesOk() ? ReleaseProgress.Ending.DONE : ReleaseProgress.Ending.UNPUSHED;
+            ending = run.pushesOk() ? ProgressLine.Ending.DONE : ProgressLine.Ending.UNPUSHED;
         }
         say(out, ending.line(detail));
-        System.exit(ending == ReleaseProgress.Ending.DONE ? 0 : 1);
+        System.exit(ending == ProgressLine.Ending.DONE ? 0 : 1);
     }
 
     /**
@@ -81,7 +81,7 @@ public final class ReleaseJob {
      */
     private static void say(PrintStream out, String line) {
         for (String part : line.split("\n", -1)) {
-            out.println(ReleaseProgress.Line.format(Instant.now(), part));
+            out.println(ProgressLine.format(Instant.now(), part));
         }
         out.flush();
     }

@@ -55,6 +55,9 @@ public final class ChangelogDrafts {
     /** The one line a re-release with no source changes says about itself. */
     static final String NO_CHANGES = "No source changes since %s; re-released for updated upstream pins.";
 
+    /** What a module the loop never reached says, after a cancel. */
+    static final String CANCELLED = "cancelled — not started";
+
     private ChangelogDrafts() {
     }
 
@@ -83,11 +86,19 @@ public final class ChangelogDrafts {
     /**
      * Writes a section for each of {@code modules}, copying or drafting as the commits decide, and commits
      * each one. One result per module, in order; a failure does not stop the rest.
+     *
+     * <p><b>A cancel does</b> — an interrupt of this thread ({@code Io.Task}). The module being drafted loses its
+     * Claude process, a draft that came back is not committed, and every module after it is reported as not
+     * started. A commit already running finishes ({@link Proc#runToTheEnd}).
      */
     public static List<Result> draftAll(Path umbrella, List<String> modules, Drafter drafter,
                                         Consumer<String> progress) {
         List<Result> out = new ArrayList<>();
         for (String module : modules) {
+            if (Thread.currentThread().isInterrupted()) {
+                out.add(new Result(module, Outcome.FAILED, CANCELLED));
+                continue;
+            }
             progress.accept("Reading " + module + " …");
             out.add(one(umbrella, module, drafter, progress));
         }
@@ -122,6 +133,9 @@ public final class ChangelogDrafts {
                 line -> progress.accept(module + ": " + line));
         if (!draft.drafted()) {
             return new Result(module, Outcome.FAILED, draft.message());
+        }
+        if (Thread.currentThread().isInterrupted()) {
+            return new Result(module, Outcome.FAILED, "cancelled — the draft came back and was not committed");
         }
         ChangelogEdit.Saved saved = ChangelogEdit.save(umbrella, module, doc, draft.text());
         return saved.committed()

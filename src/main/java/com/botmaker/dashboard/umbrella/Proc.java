@@ -76,6 +76,19 @@ public record Proc(int exit, String out) {
     }
 
     /**
+     * {@link #run}, on a thread no Cancel reaches, and waited for whatever happens to the caller's.
+     *
+     * <p>For a {@code git commit}: a Cancel is an interrupt ({@link Io.Task}), and a commit killed halfway
+     * leaves {@code index.lock} behind, so the next commit in that repository is refused until somebody deletes
+     * it by hand. {@code join} is not interruptible, which is the point.
+     */
+    public static Proc runToTheEnd(Path dir, Duration timeout, String... command) {
+        return java.util.concurrent.CompletableFuture
+                .supplyAsync(() -> run(dir, timeout, List.of(command), null), Io.EXECUTOR)
+                .join();
+    }
+
+    /**
      * How many commands may run at once.
      *
      * <p>Callers run in parallel since 2026-09-29 ({@link Io}), on virtual threads that cost nothing to hold;

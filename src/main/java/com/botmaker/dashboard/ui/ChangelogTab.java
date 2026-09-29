@@ -5,6 +5,7 @@ import com.botmaker.cli.release.Tags;
 import com.botmaker.dashboard.umbrella.ChangelogDrafts;
 import com.botmaker.dashboard.umbrella.ChangelogEdit;
 import com.botmaker.dashboard.umbrella.ClaudeDraft;
+import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
@@ -81,7 +82,8 @@ public final class ChangelogTab extends BorderPane {
     private final Button draftAll = new Button("Draft all…");
 
     /**
-     * One thread, because both things it runs are exclusive: a draft takes minutes and a save commits.
+     * One thread for reads and saves, because a save commits. A draft runs as an {@code Io.Task} instead, so
+     * Cancel can stop it; the tab is busy meanwhile, so nothing else is queued behind or beside it.
      * Daemon, so a draft nobody is waiting for any more does not hold the window open.
      */
     private final ExecutorService work = Executors.newSingleThreadExecutor(runnable -> {
@@ -90,10 +92,19 @@ public final class ChangelogTab extends BorderPane {
         return thread;
     });
 
+    /** Stops the draft or Draft all running; shown only while one is. */
+    private final Button cancel = new Button("Cancel");
+
     private Path umbrella;
     private String selected;
     private ChangelogEdit.Doc opened;
     private boolean owner;
+
+    /** {@code claude} and {@code cswap} are on {@code PATH} — false until the one scan answers. */
+    private boolean claude;
+
+    /** The draft running, which Cancel stops; {@code null} when none is. */
+    private Io.Task<?> drafting;
 
     /** The list selection is being put back after the operator kept unsaved text. */
     private boolean reverting;
@@ -149,13 +160,25 @@ public final class ChangelogTab extends BorderPane {
         draftAll.setOnAction(e -> draftAll());
         draftAll.setTooltip(new Tooltip("Write and commit an [Unreleased] section for every module that has "
                 + "none: copied forward where nothing changed since the tag, drafted with Claude otherwise."));
+        cancel.setOnAction(e -> {
+            if (drafting != null) {
+                status.setText("Cancelling …");
+                drafting.cancel();
+            }
+        });
+        showCancel(false);
         save.setDisable(true);
         draft.setDisable(true);
         showDraftButton(false);
+        // Scanned once, off this thread; the button waits for the answer.
+        ClaudeDraft.availability().thenAccept(found -> Platform.runLater(() -> {
+            claude = found;
+            showDraftButton(owner);
+        }));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, reload, save, draft, draftAll, spacer, status);
+        HBox bar = new HBox(10, reload, save, draft, draftAll, cancel, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -342,16 +365,25 @@ public final class ChangelogTab extends BorderPane {
         String module = selected;
         Path root = umbrella;
         setBusy(true, "Asking cswap which account to draft with …");
-        CompletableFuture
-                .supplyAsync(() -> {
-                    Read read = read(root, module);
-                    ClaudeDraft.Request request = new ClaudeDraft.Request(module,
-                            preamble(read.doc().text()), read.lastStamped(), read.commits(),
-                            read.diffStat());
-                    return ClaudeDraft.draft(root, request,
-                            line -> Platform.runLater(() -> status.setText(line)));
-                }, work)
-                .whenComplete((result, error) -> Platform.runLater(() -> {
+        Io.Task<ClaudeDraft.Result> task = Io.cancellable(() -> {
+            Read read = read(root, module);
+            ClaudeDraft.Request request = new ClaudeDraft.Request(module,
+                    preamble(read.doc().text()), read.lastStamped(), read.commits(),
+                    read.diffStat());
+            return ClaudeDraft.draft(root, request,
+                    line -> Platform.runLater(() -> {
+                        if (drafting != null && !drafting.cancelled()) {
+                            status.setText(line);
+                        }
+                    }));
+        });
+        drafting(task);
+        task.future().whenComplete((result, error) -> Platform.runLater(() -> {
+                    drafting(null);
+                    if (Io.wasCancelled(error)) {
+                        setBusy(false, "Draft cancelled — the editor is as it was.");
+                        return;
+                    }
                     if (error != null) {
                         setBusy(false, "The draft failed: " + error.getMessage());
                         return;
@@ -402,22 +434,35 @@ public final class ChangelogTab extends BorderPane {
         ask.setHeaderText("Write and commit an [Unreleased] section in " + needing.size() + " module(s)?");
         ask.setContentText(String.join("\n", needing) + "\n\nA module with no commits since its tag gets its "
                 + "previous section carried forward; the rest are drafted with Claude"
-                + (ClaudeDraft.available() ? "." : " — which is not on this machine, so those are skipped.")
+                + (claude ? "." : " — which is not on this machine, so those are skipped.")
                 + "\nEach section is committed in its module. Nothing is pushed.");
         Themed.dialog(ask, getScene() == null ? null : getScene().getWindow());
         return ask.showAndWait().filter(button -> button == ButtonType.OK).isPresent();
     }
 
     private void runDraftAll(Path root, List<String> needing) {
-        ChangelogDrafts.Drafter drafter = ClaudeDraft.available()
+        ChangelogDrafts.Drafter drafter = claude
                 ? ClaudeDraft::draft
                 : (where, request, progress) -> new ClaudeDraft.Result("", "",
                         "Claude is not on this machine");
         setBusy(true, "Writing " + needing.size() + " section(s) …");
-        CompletableFuture
-                .supplyAsync(() -> ChangelogDrafts.draftAll(root, needing, drafter,
-                        line -> Platform.runLater(() -> status.setText(line))), work)
-                .whenComplete((results, error) -> Platform.runLater(() -> {
+        // Cancel stops at the module being drafted: its Claude process is killed, and a commit already
+        // running finishes (ChangelogDrafts.draftAll). What was committed before stays committed.
+        Io.Task<List<ChangelogDrafts.Result>> task = Io.cancellable(() -> ChangelogDrafts.draftAll(root,
+                needing, drafter, line -> Platform.runLater(() -> {
+                    if (drafting != null && !drafting.cancelled()) {
+                        status.setText(line);
+                    }
+                })));
+        drafting(task);
+        task.future().whenComplete((results, error) -> Platform.runLater(() -> {
+                    drafting(null);
+                    if (Io.wasCancelled(error)) {
+                        setBusy(false, "Draft all cancelled — sections committed before it stay; the rest "
+                                + "were not written.");
+                        open(selected);
+                        return;
+                    }
                     if (error != null) {
                         setBusy(false, "Draft all failed: " + error.getMessage());
                         return;
@@ -445,6 +490,16 @@ public final class ChangelogTab extends BorderPane {
     /** Everything above the first {@code ## } heading: what the module says about itself. */
     private static String preamble(String text) {
         return ChangelogDrafts.preamble(text);
+    }
+
+    private void drafting(Io.Task<?> task) {
+        drafting = task;
+        showCancel(task != null);
+    }
+
+    private void showCancel(boolean shown) {
+        cancel.setVisible(shown);
+        cancel.setManaged(shown);
     }
 
     private void setBusy(boolean busy, String sentence) {
@@ -491,7 +546,7 @@ public final class ChangelogTab extends BorderPane {
      * because the copy rule needs no model.
      */
     private void showDraftButton(boolean isOwner) {
-        boolean single = isOwner && ClaudeDraft.available();
+        boolean single = isOwner && claude;
         draft.setVisible(single);
         draft.setManaged(single);
         draftAll.setVisible(isOwner);

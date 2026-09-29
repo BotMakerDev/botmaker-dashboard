@@ -21,8 +21,8 @@ class JobTailTest {
         Files.writeString(file, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
-    private static List<String> texts(List<ReleaseProgress.Line> lines) {
-        return lines.stream().map(ReleaseProgress.Line::text).toList();
+    private static List<String> texts(List<ProgressLine> lines) {
+        return lines.stream().map(ProgressLine::text).toList();
     }
 
     @Test

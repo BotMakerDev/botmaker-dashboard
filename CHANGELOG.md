@@ -10,6 +10,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Cancel buttons** for the Release tab's Preview, the Releases tab's Deep check, Draft with Claude and
+  Draft all, and the template preview in the Catalog tab. Cancel stops the running command at once and arms
+  nothing. Draft all keeps the sections it already committed, and a commit already running finishes.
+
 ### Fixed
 
 - **A preview no longer arms Execute for another checkout.** A preview still running when you picked a
@@ -53,6 +59,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   answers without spending the rate limit.
 - A running release's output is read from where the last read stopped instead of whole, twice a second.
   Finished release jobs' files are deleted after a week.
+- **The template preview in the Catalog tab shows its output as it runs**, not all at once at the end.
+- **The Modules tab's tag column follows the release's own rule.** Only `x.y.z` tags count, compared as
+  versions, so a tag like `demo-2026` or `1.2.0-rc1` no longer shows as a module's newest release.
+- Whether Claude is installed is checked once, in the background, instead of on every account change.
 
 ## [0.0.10] — 2026-09-27
 

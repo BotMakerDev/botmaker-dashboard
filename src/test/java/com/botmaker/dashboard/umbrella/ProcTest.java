@@ -40,6 +40,39 @@ class ProcTest {
     }
 
     @Test
+    void anInterruptKillsTheCommandAndTheNextOneStartsNothing() throws Exception {
+        // A Cancel is an interrupt (Io.Task): the command it lands in dies, and whatever the work tries next
+        // answers at once instead of running.
+        java.util.concurrent.atomic.AtomicReference<Proc> first = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<Proc> second = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread worker = Thread.ofVirtual().start(() -> {
+            first.set(Proc.run(dir, Duration.ofSeconds(30), "sleep", "30"));
+            second.set(Proc.run(dir, Duration.ofSeconds(30), "sh", "-c", "echo ran"));
+        });
+        Thread.sleep(300);
+        worker.interrupt();
+        worker.join(Duration.ofSeconds(5));
+
+        assertEquals(Proc.TIMED_OUT, first.get().exit());
+        assertEquals(Proc.TIMED_OUT, second.get().exit());
+        assertTrue(!second.get().out().contains("ran"), second.get().out());
+    }
+
+    @Test
+    void aCommitRunsToTheEndThroughAnInterrupt() throws Exception {
+        // A git commit killed halfway leaves index.lock; runToTheEnd is how a commit outlives a Cancel.
+        java.util.concurrent.atomic.AtomicReference<Proc> answer = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread worker = Thread.ofVirtual().start(() ->
+                answer.set(Proc.runToTheEnd(dir, Duration.ofSeconds(10), "sh", "-c", "sleep 1; echo done")));
+        Thread.sleep(200);
+        worker.interrupt();
+        worker.join(Duration.ofSeconds(5));
+
+        assertTrue(answer.get().ok(), answer.get().out());
+        assertEquals("done\n", answer.get().out());
+    }
+
+    @Test
     void aProcessThatNeverReadsItsInputStillFinishes() {
         Proc proc = Proc.run(dir, Duration.ofSeconds(10), List.of("sh", "-c", "exit 3"), "x".repeat(1 << 20));
 

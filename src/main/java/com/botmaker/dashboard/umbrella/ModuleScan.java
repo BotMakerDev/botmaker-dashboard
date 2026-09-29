@@ -4,6 +4,8 @@ import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Plan;
 import com.botmaker.cli.release.ReleaseRefusal;
 import com.botmaker.cli.release.Requested;
+import com.botmaker.cli.release.Tags;
+import com.botmaker.cli.release.Version;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -147,12 +149,24 @@ public final class ModuleScan {
      * refs in this constellation and only one of them exists in any given repository.
      */
     private static Optional<String> latestTag(Path dir) {
-        Proc p = Proc.run(dir, GIT_TIMEOUT, "git", "tag", "--list", "--sort=-v:refname");
-        if (!p.ok()) {
-            return Optional.empty();
-        }
-        String first = p.firstLine();
-        return first.isEmpty() ? Optional.empty() : Optional.of(first);
+        Proc p = Proc.run(dir, GIT_TIMEOUT, "git", "tag", "--list");
+        return p.ok() ? newestTag(p.out().lines().toList()) : Optional.empty();
+    }
+
+    /**
+     * Which of these tag names is the newest release, by the release library's reading.
+     *
+     * <p>{@link Tags#highest} decides, which is the release's {@code latest_version}: only {@code x.y.z} tags
+     * count, compared as versions. This was git's {@code --sort=-v:refname} until 2026-09-29, which is a
+     * second answer to the same question and a different one — a {@code demo-2026} tag, or an
+     * {@code 1.2.0-rc1}, sorts above {@code v1.1.6} there, and the row then disagreed with the arrow the
+     * Release tab computes. Local tags only: the scan is the fast pass, and the Release tab fetches.
+     */
+    static Optional<String> newestTag(List<String> names) {
+        List<String> tags = names.stream().map(String::strip).filter(name -> !name.isEmpty()).toList();
+        return Tags.highest(tags).flatMap(newest -> tags.stream()
+                .filter(name -> Version.parse(name).filter(newest::equals).isPresent())
+                .findFirst());
     }
 
     /** How many commits HEAD is past that tag. 0 when the tag is HEAD, or when git could not say. */
