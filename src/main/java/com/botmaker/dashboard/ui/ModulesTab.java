@@ -1,6 +1,7 @@
 package com.botmaker.dashboard.ui;
 
 import com.botmaker.dashboard.umbrella.CiStatus;
+import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.dashboard.umbrella.Links;
 import com.botmaker.dashboard.umbrella.ModuleRow;
 import com.botmaker.dashboard.umbrella.ModuleScan;
@@ -26,7 +27,6 @@ import javafx.util.Duration;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -132,8 +132,7 @@ public final class ModulesTab extends BorderPane {
         Path root = umbrella;
         refresh.setDisable(true);
         status.setText("Reading " + root + " and running the decide pass…");
-        CompletableFuture
-                .supplyAsync(() -> ModuleScan.scan(root))
+        Io.async(() -> ModuleScan.scan(root))
                 .whenComplete((scan, error) -> Platform.runLater(() -> {
                     refresh.setDisable(false);
                     if (error != null) {

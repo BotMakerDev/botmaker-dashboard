@@ -97,7 +97,11 @@ public final class ReleaseLauncher {
 
         /** The model of it right now: the output, and the release log the output names once it exists. */
         public ReleaseProgress progress(Instant now) {
-            List<ReleaseProgress.Line> lines = ReleaseProgress.Line.parseAll(output());
+            return progress(ReleaseProgress.Line.parseAll(output()), now);
+        }
+
+        /** The model over lines already read — a {@link JobTail}'s, so the output is not read a second time. */
+        public ReleaseProgress progress(List<ReleaseProgress.Line> lines, Instant now) {
             Optional<ReleaseLog> log = ReleaseProgress.logName(lines)
                     .map(name -> umbrella.resolve("releases").resolve(name))
                     .filter(Files::isRegularFile)
@@ -163,6 +167,7 @@ public final class ReleaseLauncher {
      */
     public static Launched launch(Path umbrella, ReleaseSpec spec) throws IOException {
         refuseIfLive(live(umbrella));
+        prune(umbrella, LocalDateTime.now());
         String stamp = STAMP.format(LocalDateTime.now());
         Job job = new Job(umbrella, stamp);
         Files.createDirectories(running(umbrella));
@@ -207,6 +212,44 @@ public final class ReleaseLauncher {
             throw new IOException("a release started at " + job.startedAt().toLocalTime() + " is still running"
                     + job.pid().stream().mapToObj(pid -> " (process " + pid + ")").findFirst().orElse("")
                     + " — wait for it, or stop it, before cutting another");
+        }
+    }
+
+    /** How long a finished job's two files are kept. The release log in {@code releases/} is the record. */
+    static final java.time.Duration KEEP = java.time.Duration.ofDays(7);
+
+    /**
+     * Deletes the files of jobs that finished more than {@link #KEEP} ago, keeping the newest job whatever
+     * its age.
+     *
+     * <p>Nothing removed them before 2026-09-29, so {@code releases/.running/} grew by two files a release and
+     * {@link #latest} listed them all on every reattach. A live job is never touched. Best effort.
+     */
+    static void prune(Path umbrella, LocalDateTime now) {
+        Path dir = running(umbrella);
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        Optional<Job> newest = latest(umbrella);
+        try (Stream<Path> files = Files.list(dir)) {
+            files.map(p -> p.getFileName().toString())
+                    .filter(name -> name.endsWith(".pid"))
+                    .map(name -> name.substring(0, name.length() - ".pid".length()))
+                    .filter(ReleaseLauncher::isStamp)
+                    .map(stamp -> new Job(umbrella, stamp))
+                    .filter(job -> newest.map(n -> !n.equals(job)).orElse(true))
+                    .filter(job -> job.startedAt().isBefore(now.minus(KEEP)))
+                    .filter(job -> !job.alive())
+                    .forEach(job -> {
+                        try {
+                            Files.deleteIfExists(job.out());
+                            Files.deleteIfExists(job.pidFile());
+                        } catch (IOException e) {
+                            // Left for the next launch.
+                        }
+                    });
+        } catch (IOException e) {
+            // Nothing to prune today.
         }
     }
 

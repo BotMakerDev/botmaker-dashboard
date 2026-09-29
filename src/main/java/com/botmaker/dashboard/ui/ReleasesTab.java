@@ -4,6 +4,7 @@ import com.botmaker.cli.release.Actions;
 import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Version;
 import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
+import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.dashboard.umbrella.ReleaseHistory;
 import com.botmaker.dashboard.umbrella.ReleaseLog;
 import com.botmaker.dashboard.umbrella.ReleaseProgress;
@@ -33,7 +34,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -220,7 +220,7 @@ public final class ReleasesTab extends BorderPane {
         // One cache for the tab's life: a fresh load per reload left a queued poll saving the old one, and the
         // two saves overwrote each other's answers (2026-09-29). The file is not per checkout, so nothing to drop.
         VerdictCache known = cache;
-        CompletableFuture.supplyAsync(() -> {
+        Io.async(() -> {
             List<ReleaseHistory.TagRow> tags = backend.tags(root, false);
             return new Read(known != null ? known : backend.cache(), tags,
                     ReleaseHistory.releases(tags, backend.logs(root)));
@@ -241,7 +241,7 @@ public final class ReleasesTab extends BorderPane {
     }
 
     private void fetchThenRelist(Path root, List<?> before) {
-        CompletableFuture.supplyAsync(() -> {
+        Io.async(() -> {
             List<ReleaseHistory.TagRow> tags = backend.tags(root, true);
             return tags.equals(before) ? null : ReleaseHistory.releases(tags, backend.logs(root));
         }).whenComplete((found, error) -> Platform.runLater(() -> {
@@ -473,8 +473,7 @@ public final class ReleasesTab extends BorderPane {
         Path root = umbrella;
         writeBack.setDisable(true);
         say("Re-polling " + file.getFileName() + " — resolving artifacts and polling Actions…");
-        CompletableFuture
-                .supplyAsync(() -> backend.repoll(root, file, line -> Platform.runLater(() -> say(line.strip()))))
+        Io.async(() -> backend.repoll(root, file, line -> Platform.runLater(() -> say(line.strip()))))
                 .whenComplete((polled, error) -> Platform.runLater(() -> {
                     writeBack.setDisable(false);
                     if (error != null) {

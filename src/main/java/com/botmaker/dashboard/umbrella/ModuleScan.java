@@ -57,19 +57,27 @@ public final class ModuleScan {
     private ModuleScan() {
     }
 
+    /** One module's pass-one answers. */
+    private record Git(Optional<String> tag, int ahead, boolean dirty) {
+    }
+
     public static Scan scan(Path umbrella) {
         List<String> modules = Umbrella.modules(read(umbrella.resolve(".gitmodules")).orElse(""));
 
-        // Pass one: git, per module. The tags map is what makes a sibling's pin judgeable.
+        // Pass one: git, per module, every module at once (three processes each, which were the tab's whole
+        // start-up time one after another). The tags map is what makes a sibling's pin judgeable.
+        List<Git> read = Io.parallel(modules, module -> {
+            Path dir = umbrella.resolve(module);
+            Optional<String> tag = latestTag(dir);
+            return new Git(tag, tag.map(t -> commitsSince(dir, t)).orElse(0), isDirty(dir));
+        });
         Map<String, Optional<String>> tags = new LinkedHashMap<>();
         Map<String, Integer> ahead = new LinkedHashMap<>();
         Map<String, Boolean> dirty = new LinkedHashMap<>();
-        for (String module : modules) {
-            Path dir = umbrella.resolve(module);
-            Optional<String> tag = latestTag(dir);
-            tags.put(module, tag);
-            ahead.put(module, tag.map(t -> commitsSince(dir, t)).orElse(0));
-            dirty.put(module, isDirty(dir));
+        for (int i = 0; i < modules.size(); i++) {
+            tags.put(modules.get(i), read.get(i).tag());
+            ahead.put(modules.get(i), read.get(i).ahead());
+            dirty.put(modules.get(i), read.get(i).dirty());
         }
         Map<String, String> latestTags = new LinkedHashMap<>();
         tags.forEach((module, tag) -> tag.ifPresent(t -> latestTags.put(module, t)));

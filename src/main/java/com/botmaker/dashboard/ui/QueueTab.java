@@ -116,8 +116,9 @@ public final class QueueTab extends BorderPane {
         setTop(bar);
         setCenter(split);
 
+        // No reload here: whoever builds the tab reloads it once it has the admin verdict. Reading here as well
+        // was a second listing of both repositories at every start (2026-09-29).
         gateButtons();
-        reload();
     }
 
     /**

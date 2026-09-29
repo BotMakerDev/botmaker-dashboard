@@ -8,6 +8,46 @@ Format: newest first. Each dated entry has a **Done** list and, when relevant, *
 
 ---
 
+## 2026-09-29 — speed and the rate limit (dashboard pass, phase 3)
+
+**Done**
+- `umbrella/Io`: one `newThreadPerTaskExecutor` of virtual threads for blocking work; `async`, `parallel`
+  (in order) and `inRepository` (a `ReentrantLock` per normalised path, held around every `git fetch` this
+  module starts). Every `supplyAsync`/`runAsync` that had no executor now uses it. `DashboardApp.stop()` shuts
+  it down. The Releases tab's poll thread and the Changelog tab's `work` thread stay single on purpose (a rate
+  limit; a save commits).
+- `Proc`: a `Semaphore(8)` over running processes. Threads are free now, so processes are what is bounded.
+- In parallel:
+  - `ModuleScan` pass one;
+  - `ReleaseHistory.tags` (the fetch holds its repository's lock);
+  - `ReleaseTab.loadLatest` (each row fills in as its fetch answers, under the same lock).
+- `ui/LazyTab`: Releases, Changelog, Queue and Catalog are built when first selected, from the current
+  `umbrella` and `admin`. `umbrellaChosen` and `refreshAdmin` go through `ifBuilt`. Modules and Release are
+  built at start, because Release's badge shows a running release from every tab. Queue and Catalog no longer
+  `reload()` in their constructors; their builder and `refreshAdmin` do, once each.
+- `ChangelogTab.tagRefs`: `Tags.latest`/`existingRef` once per module per session. Reload drops the module on
+  screen, and a new checkout drops all.
+- Shared `GitHubClient`: ETag cache (LRU of 512, keyed by token and URL) under `get` and `getOrFail`. A 304 does
+  not count against the rate limit, so reloads of an unchanged Catalog, Queue or Latest column are free.
+- `umbrella/JobTail`: the watcher reads appended bytes up to the last newline byte (a newline byte never sits
+  inside a UTF-8 character), parses those lines once, and passes them to the new `Job.progress(lines, now)`.
+- `ReleaseLauncher.prune`: at each launch, deletes `.out`/`.pid` of jobs started over 7 days ago that are not
+  alive, never the newest.
+- Tests:
+  - `IoTest`: parallel order, one repository never overlaps, another does not wait;
+  - `JobTailTest`: appended reads, a split UTF-8 character, a replaced file, pruning;
+  - shared `ConditionalGetTest`.
+
+**Deferred / not done**
+- **Catalog via the Git Trees API plus raw files was not done.** The ETag cache already makes a reload cost
+  nothing, and `raw.githubusercontent.com` at `main` is CDN-cached for minutes, so the Catalog could show an
+  entry that was just edited as its old self. Reading raw at a commit sha avoids that, but costs a ref call
+  and a second read path beside `Contents`. Revisit if a signed-out first load of a larger catalog hits the
+  limit.
+- The signed-in login lookup was already cached in `GitHubAuth.login`, so it was left as it is.
+
+---
+
 ## 2026-09-29 — robustness (dashboard pass, phase 2)
 
 **Done**

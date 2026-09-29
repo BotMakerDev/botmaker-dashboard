@@ -10,6 +10,8 @@ import com.botmaker.dashboard.ui.widgets.LiveBadge;
 import com.botmaker.dashboard.ui.widgets.ReleaseBoard;
 import com.botmaker.dashboard.umbrella.ChangelogDrafts;
 import com.botmaker.dashboard.umbrella.ClaudeDraft;
+import com.botmaker.dashboard.umbrella.Io;
+import com.botmaker.dashboard.umbrella.JobTail;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
 import com.botmaker.dashboard.umbrella.ReleaseProgress;
 import com.botmaker.dashboard.umbrella.ReleaseRun;
@@ -55,7 +57,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -716,12 +717,14 @@ public final class ReleaseTab extends BorderPane {
         board.setManaged(true);
         refreshCommandLine();
 
+        // Read from where the last tick stopped, once per tick: the whole file twice a second grew with the run.
+        JobTail tail = new JobTail(job.out());
         watching = watcher.scheduleWithFixedDelay(() -> {
             // Caught here: a scheduled task that throws is cancelled silently, which left jobRunning true and
             // Preview dead until a restart (2026-09-29). One failed read is reported and the watch goes on.
             try {
-                ReleaseProgress progress = job.progress(Instant.now());
-                List<ReleaseProgress.Line> lines = ReleaseProgress.Line.parseAll(job.output());
+                List<ReleaseProgress.Line> lines = tail.read();
+                ReleaseProgress progress = job.progress(lines, Instant.now());
                 Platform.runLater(() -> showJob(job, progress, lines));
             } catch (RuntimeException e) {
                 Platform.runLater(() -> {
@@ -802,8 +805,7 @@ public final class ReleaseTab extends BorderPane {
         List<String> cut = spec.requested().keySet().stream()
                 .filter(Module::hasChangelog).map(Module::directory).toList();
         Consumer<String> line = text -> Platform.runLater(() -> output.appendText(text + "\n"));
-        CompletableFuture
-                .supplyAsync(() -> {
+        Io.async(() -> {
                     List<ChangelogDrafts.Result> drafted = backend.autoDraft(root, cut, line);
                     for (ChangelogDrafts.Result result : drafted) {
                         line.accept("changelog · " + result.module() + ": " + result.outcome().name()
@@ -931,18 +933,18 @@ public final class ReleaseTab extends BorderPane {
         if (root == null) {
             return;
         }
-        List<Row> reading = List.copyOf(rows);
-        CompletableFuture.runAsync(() -> {
-            for (Row row : reading) {
-                Optional<Version> latest = backend.latest(root, row.getModule());
-                Platform.runLater(() -> {
-                    if (root.equals(umbrella)) {
-                        row.latest = latest;
-                        row.retarget();
-                    }
-                });
-            }
-        });
+        // Every row at once since 2026-09-29, each filling in as its fetch answers; one after another was eleven
+        // fetches in a row. Each holds its repository's lock, so it never races the Releases tab's fetch.
+        for (Row row : List.copyOf(rows)) {
+            Path dir = root.resolve(row.getModule());
+            Io.async(() -> Io.inRepository(dir, () -> backend.latest(root, row.getModule())))
+                    .thenAccept(latest -> Platform.runLater(() -> {
+                        if (root.equals(umbrella)) {
+                            row.latest = latest;
+                            row.retarget();
+                        }
+                    }));
+        }
     }
 
     private void say(String text) {

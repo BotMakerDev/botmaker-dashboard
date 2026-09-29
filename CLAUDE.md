@@ -294,7 +294,8 @@ com.botmaker.dashboard
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
 │   └── EntryFields     an entry, flattened into rows — read from the file, not a schema
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
-│   ├── Proc            one external command, output captured, a timeout that is a result
+│   ├── Proc            one external command, output captured, a timeout that is a result; 8 at once at most
+│   ├── Io              the one executor (virtual threads) for blocking work, parallel(), a lock per repository
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
 │   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
 │   ├── Changelog       is there an [Unreleased] section for a release to stamp
@@ -303,7 +304,9 @@ com.botmaker.dashboard
 │   ├── ReleaseLog      one releases/*.md: the table, the errors, and --status to re-poll it
 │   ├── ReleaseRun      one release, previewed or cut — the only place here that can push a tag
 │   ├── ReleaseJob      main(): ReleaseRun.go in a child process, every line stamped, a last release-job: line
-│   ├── ReleaseLauncher starts ReleaseJob (setsid), and finds a job again from releases/.running/
+│   ├── ReleaseLauncher starts ReleaseJob (setsid), and finds a job again from releases/.running/; refuses a
+│   │                   second while one runs; prunes finished jobs' files after a week
+│   ├── JobTail         a running job's output, read from where the last read stopped
 │   ├── ReleaseProgress where a running release is — lanes, tiles, phase — from its output and its log
 │   ├── ReleaseSpec     what was ticked, as the request Plan.decide takes, as two command lines, and back
 │   ├── VersionTargets  what a level would cut, asked of com.botmaker.cli.release and never computed here
@@ -322,6 +325,8 @@ com.botmaker.dashboard
     ├── AccountBar      the OAuth device-flow control (the flow itself is shared's)
     ├── Browse          open a URL off the FX thread (platform opener, then HostServices) — never AWT
     ├── Themed          the palette on every window's scene root, and the owner on every dialog
+    ├── LazyTab         a tab built when first opened (Releases, Changelog, Queue, Catalog)
+    ├── ReleaseConfirm  the typed-word confirmation both release buttons show
     ├── ModulesTab      the rows, in a table, with a refresh that runs off the FX thread
     ├── ReleasesTab     every release from tags, drawn as a board; write back = ReleaseStatus.repoll
     ├── ReleaseTab      a row per module, Preview in-process, Execute as a child watched on a board

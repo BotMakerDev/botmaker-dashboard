@@ -85,21 +85,23 @@ public final class ReleaseHistory {
      *              network call per module, so the tab reads local tags first and fetches after.
      */
     public static List<TagRow> tags(Path umbrella, boolean fetch) {
-        List<TagRow> rows = new ArrayList<>();
-        for (Module module : Module.values()) {
+        List<Module> present = java.util.Arrays.stream(Module.values())
+                .filter(module -> Files.isDirectory(umbrella.resolve(module.directory())))
+                .toList();
+        // Every module at once, in module order: a fetch per module one after another, thirty seconds each at
+        // worst, was minutes. A fetch holds its repository's lock, so the Release tab's own fetch waits.
+        List<List<TagRow>> each = Io.parallel(present, module -> {
             Path dir = umbrella.resolve(module.directory());
-            if (!Files.isDirectory(dir)) {
-                continue;
-            }
             if (fetch) {
-                Proc.run(dir, Duration.ofSeconds(30), "git", "fetch", "--tags", "--quiet", "origin");
+                Io.inRepository(dir, () ->
+                        Proc.run(dir, Duration.ofSeconds(30), "git", "fetch", "--tags", "--quiet", "origin"));
             }
             Proc listing = Proc.run(dir, Duration.ofSeconds(15), "git", "for-each-ref", "refs/tags",
                     "--format=%(refname:short) %(creatordate:iso-strict)");
-            if (listing.ok()) {
-                rows.addAll(parse(module.directory(), listing.out()));
-            }
-        }
+            return listing.ok() ? parse(module.directory(), listing.out()) : List.<TagRow>of();
+        });
+        List<TagRow> rows = new ArrayList<>();
+        each.forEach(rows::addAll);
         return List.copyOf(rows);
     }
 

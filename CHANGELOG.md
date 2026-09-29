@@ -44,6 +44,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 ### Changed
 
 - The Release and Catalog tabs share one release confirmation dialog.
+- **Faster start and less waiting.** The Releases, Changelog, Queue and Catalog tabs load when first opened,
+  and Queue and Catalog no longer read GitHub twice at start. The Modules scan, the Release tab's version
+  arrows and the Releases tab's tag fetch run every module at once, never two fetches into one repository
+  together. A changelog module click no longer fetches from origin each time; Reload does. Background work
+  no longer shares a small pool, so a slow fetch cannot hold up opening a link.
+- **Fewer GitHub requests.** A repeated read of an unchanged listing is a conditional request, which GitHub
+  answers without spending the rate limit.
+- A running release's output is read from where the last read stopped instead of whole, twice a second.
+  Finished release jobs' files are deleted after a week.
 
 ## [0.0.10] — 2026-09-27
 

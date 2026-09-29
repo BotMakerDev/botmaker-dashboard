@@ -5,12 +5,14 @@ import com.botmaker.dashboard.ui.AccountBar;
 import com.botmaker.dashboard.ui.Browse;
 import com.botmaker.dashboard.ui.CatalogTab;
 import com.botmaker.dashboard.ui.ChangelogTab;
+import com.botmaker.dashboard.ui.LazyTab;
 import com.botmaker.dashboard.ui.ModulesTab;
 import com.botmaker.dashboard.ui.QueueTab;
 import com.botmaker.dashboard.ui.ReleaseTab;
 import com.botmaker.dashboard.ui.ReleasesTab;
 import com.botmaker.dashboard.ui.Themed;
 import com.botmaker.dashboard.ui.UmbrellaBar;
+import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import javafx.application.Application;
@@ -72,15 +74,25 @@ public final class DashboardApp extends Application {
 
     private final Label adminBadge = new Label();
 
-    /** The tabs with content so far. Held because the umbrella picker has to tell them the path moved. */
+    /**
+     * The tabs. Held because the umbrella picker has to tell them the path moved. Modules and Release are built
+     * at start (the first is on screen, the second's badge shows a running release from every tab); the rest
+     * are built when first opened, and read {@link #umbrella} and {@link #admin} then.
+     */
     private ModulesTab modules;
-    private ReleasesTab releases;
     private ReleaseTab release;
-    private ChangelogTab changelog;
+    private LazyTab<ReleasesTab> releases;
+    private LazyTab<ChangelogTab> changelog;
 
     /** The tabs that read GitHub rather than the checkout, and so hear about the admin probe instead. */
-    private QueueTab queue;
-    private CatalogTab catalog;
+    private LazyTab<QueueTab> queue;
+    private LazyTab<CatalogTab> catalog;
+
+    /** The checkout in use, for a tab built after it was chosen. */
+    private Path umbrella;
+
+    /** The newest admin verdict, for a GitHub tab built after it arrived; {@code null} until the first. */
+    private Admin admin;
 
     @Override
     public void start(Stage stage) {
@@ -112,12 +124,19 @@ public final class DashboardApp extends Application {
         top.getStyleClass().add("top-bar");
         top.setPadding(new Insets(8, 12, 8, 12));
 
+        umbrella = remembered;
         modules = new ModulesTab(remembered);
-        releases = new ReleasesTab(remembered);
         release = new ReleaseTab(remembered);
-        changelog = new ChangelogTab(remembered, client, auth);
-        queue = new QueueTab(client, auth);
-        catalog = new CatalogTab(remembered, client, auth);
+        releases = new LazyTab<>("Releases", () -> new ReleasesTab(umbrella));
+        changelog = new LazyTab<>("Changelog", () -> new ChangelogTab(umbrella, client, auth));
+        queue = new LazyTab<>("Queue", () -> {
+            QueueTab built = new QueueTab(client, auth);
+            if (admin != null) {
+                built.setAdmin(admin);
+            }
+            built.reload();
+            return built;
+        });
 
         // Catalog sits beside Queue because they are the two halves of one question — what shipped, and
         // what is waiting — and after it because a queue is usually empty while the catalog never is.
@@ -130,23 +149,26 @@ public final class DashboardApp extends Application {
 
         // Changelog sits beside Release because it is what a refused release sends you to write: the gate
         // refuses a module whose CHANGELOG.md describes neither the version nor an [Unreleased] section.
-        TabPane tabs = new TabPane(
-                new Tab("Modules", modules),
-                new Tab("Releases", releases),
-                releaseTab,
-                new Tab("Changelog", changelog),
-                new Tab("Queue", queue),
-                new Tab("Catalog", catalog));
+        TabPane tabs = new TabPane(new Tab("Modules", modules), releases.tab(), releaseTab, changelog.tab());
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         // A template released from the Catalog tab is a release like any other, so it is watched where
         // releases are watched. Wired here because this is the only place that holds both tabs and the one
         // thing neither of them can do: select the other. Without it the run finished — in about ten
         // seconds — before the operator could switch tabs, and the board they arrived at was empty.
-        catalog.setOnReleaseStarted(job -> {
-            release.attach(job);
-            tabs.getSelectionModel().select(releaseTab);
+        catalog = new LazyTab<>("Catalog", () -> {
+            CatalogTab built = new CatalogTab(umbrella, client, auth);
+            built.setOnReleaseStarted(job -> {
+                release.attach(job);
+                tabs.getSelectionModel().select(releaseTab);
+            });
+            if (admin != null) {
+                built.setAdmin(admin);
+            }
+            built.reload();
+            return built;
         });
+        tabs.getTabs().addAll(queue.tab(), catalog.tab());
 
         BorderPane root = new BorderPane();
         root.setTop(top);
@@ -186,12 +208,19 @@ public final class DashboardApp extends Application {
 
     private void umbrellaChosen(Path root) {
         DashboardConfig.save(DashboardConfig.load().withUmbrella(root));
+        umbrella = root;
         modules.setUmbrella(root);
-        releases.setUmbrella(root);
         release.setUmbrella(root);
-        changelog.setUmbrella(root);
+        releases.ifBuilt(tab -> tab.setUmbrella(root));
+        changelog.ifBuilt(tab -> tab.setUmbrella(root));
         // The Catalog tab releases the templates out of whichever checkout is in use.
-        catalog.setUmbrella(root);
+        catalog.ifBuilt(tab -> tab.setUmbrella(root));
+    }
+
+    /** Stops the background work: a closed window must not leave a fetch or a poll running behind it. */
+    @Override
+    public void stop() {
+        Io.shutdown();
     }
 
     /** The toggle names the palette it switches <i>to</i>, which is the only thing a click would change. */
@@ -217,16 +246,22 @@ public final class DashboardApp extends Application {
             adminBadge.setText(verdict.summary());
             adminBadge.getStyleClass().removeAll("badge--write", "badge--read");
             adminBadge.getStyleClass().add(verdict.canWrite() ? "badge--write" : "badge--read");
+            admin = verdict;
             // The queue's write buttons follow the badge exactly — one probe, one answer, no second list.
-            queue.setAdmin(verdict);
-            queue.reload();
+            // A tab not opened yet reads the verdict when it is built, and reads GitHub then, not twice.
+            queue.ifBuilt(tab -> {
+                tab.setAdmin(verdict);
+                tab.reload();
+            });
             // The catalog's Edit and Unpublish follow the same badge, and it is read with the token when
             // there is one, which lifts the anonymous rate limit — so a sign-in is a reason to read again.
-            catalog.setAdmin(verdict);
-            catalog.reload();
+            catalog.ifBuilt(tab -> {
+                tab.setAdmin(verdict);
+                tab.reload();
+            });
             // The drafter is the owner's, and who is signed in has just changed — so it is asked again
             // rather than left showing what the previous account could do.
-            changelog.signedInChanged(client, auth);
+            changelog.ifBuilt(tab -> tab.signedInChanged(client, auth));
         }));
     }
 

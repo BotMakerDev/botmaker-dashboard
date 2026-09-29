@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -61,6 +62,29 @@ public record Proc(int exit, String out) {
      * a process that never reads it would otherwise block the write, and the wait behind it.
      */
     public static Proc run(Path dir, Duration timeout, List<String> command, String stdin) {
+        try {
+            RUNNING.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Proc(TIMED_OUT, "interrupted");
+        }
+        try {
+            return runNow(dir, timeout, command, stdin);
+        } finally {
+            RUNNING.release();
+        }
+    }
+
+    /**
+     * How many commands may run at once.
+     *
+     * <p>Callers run in parallel since 2026-09-29 ({@link Io}), on virtual threads that cost nothing to hold;
+     * processes are the resource that runs out, so they are what is bounded. Eight is enough to read every
+     * module's git state together without starting forty {@code git} processes on a laptop.
+     */
+    private static final Semaphore RUNNING = new Semaphore(8);
+
+    private static Proc runNow(Path dir, Duration timeout, List<String> command, String stdin) {
         ProcessBuilder pb = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true);
         Process p = null;
         try {

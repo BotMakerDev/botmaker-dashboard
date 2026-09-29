@@ -7,6 +7,7 @@ import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
 import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
+import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.dashboard.umbrella.ReleaseLauncher;
 import com.botmaker.dashboard.umbrella.ReleaseRun;
 import com.botmaker.dashboard.umbrella.ReleaseSpec;
@@ -182,8 +183,9 @@ public final class CatalogTab extends BorderPane {
         setTop(bar);
         setCenter(split);
 
+        // No reload here: whoever builds the tab reloads it once it has the admin verdict. Reading here as well
+        // was a second listing of both repositories at every start (2026-09-29).
         gateButtons();
-        reload();
     }
 
     /**
@@ -508,8 +510,7 @@ public final class CatalogTab extends BorderPane {
         output.setText("");
         Path root = umbrella;
         StringBuilder text = new StringBuilder();
-        CompletableFuture
-                .supplyAsync(() -> ReleaseRun.go(root, spec(module, version), false,
+        Io.async(() -> ReleaseRun.go(root, spec(module, version), false,
                         line -> text.append(line).append('\n')))
                 .whenComplete((run, error) -> Platform.runLater(() -> {
                     button.setDisable(false);

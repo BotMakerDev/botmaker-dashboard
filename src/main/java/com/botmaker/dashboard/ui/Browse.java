@@ -4,7 +4,6 @@ import com.botmaker.shared.platform.Os;
 import javafx.application.HostServices;
 import javafx.application.Platform;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -50,7 +49,8 @@ public final class Browse {
      * sentence that ends in the URL itself.
      */
     public static void open(String url, Consumer<String> failed) {
-        CompletableFuture.supplyAsync(() -> viaPlatformOpener(url)).thenAccept(opened -> {
+        // On the I/O executor: in the common pool it queued behind a tab's 30-second git fetch.
+        com.botmaker.dashboard.umbrella.Io.async(() -> viaPlatformOpener(url)).thenAccept(opened -> {
             if (opened) {
                 return;
             }

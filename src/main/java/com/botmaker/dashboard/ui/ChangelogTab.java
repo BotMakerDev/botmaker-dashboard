@@ -30,8 +30,10 @@ import javafx.scene.layout.VBox;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
@@ -96,6 +98,9 @@ public final class ChangelogTab extends BorderPane {
     /** The list selection is being put back after the operator kept unsaved text. */
     private boolean reverting;
 
+    /** Each module's newest tag name, as read once this session; see {@link #read}. */
+    private final Map<String, Optional<String>> tagRefs = new ConcurrentHashMap<>();
+
     public ChangelogTab(Path umbrella, GitHubClient client, GitHubAuth auth) {
         this.umbrella = umbrella;
 
@@ -133,6 +138,9 @@ public final class ChangelogTab extends BorderPane {
 
         reload.setOnAction(e -> {
             if (mayDiscard()) {
+                if (selected != null) {
+                    tagRefs.remove(selected);
+                }
                 open(selected);
             }
         });
@@ -174,6 +182,7 @@ public final class ChangelogTab extends BorderPane {
     /** Called when the operator picks a different checkout. */
     public void setUmbrella(Path umbrella) {
         this.umbrella = umbrella;
+        tagRefs.clear();
         if (umbrella == null) {
             modules.clear();
             status.setText("No umbrella checkout chosen — pick one in the top bar.");
@@ -227,11 +236,13 @@ public final class ChangelogTab extends BorderPane {
                         Optional<String> lastStamped) {
     }
 
-    private static Read read(Path umbrella, String module) {
+    private Read read(Path umbrella, String module) {
         ChangelogEdit.Doc doc = ChangelogEdit.read(umbrella, module);
-        // The tag name is asked of the release library, which owns what "the newest tag" means here.
-        Optional<String> tag = Module.byDirectory(module)
-                .flatMap(m -> Tags.latest(umbrella, m).flatMap(v -> Tags.existingRef(umbrella, m, v)));
+        // The tag name is asked of the release library, which owns what "the newest tag" means here. Once per
+        // module per session: Tags.latest fetches from origin, and every module click was a network call
+        // (2026-09-29). Reload asks again for the module on screen; a new checkout asks again for all.
+        Optional<String> tag = tagRefs.computeIfAbsent(module, key -> Module.byDirectory(module)
+                .flatMap(m -> Tags.latest(umbrella, m).flatMap(v -> Tags.existingRef(umbrella, m, v))));
         return new Read(doc, tag,
                 ChangelogEdit.commitsSince(umbrella, module, tag),
                 ChangelogEdit.diffStat(umbrella, module, tag),
