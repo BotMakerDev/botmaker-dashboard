@@ -130,9 +130,25 @@ public final class Links {
                 new Link("Actions", actionsOn(slug)),
                 new Link("Releases", releasesOf(slug))));
         if (onJitpack) {
-            links.add(2, new Link("JitPack", jitpackPageOf(slug)));
+            links.add(2, new Link("JitPack", jitpackPageOf(jitpackSlugOf(slug))));
         }
         return List.copyOf(links);
+    }
+
+    /**
+     * The slug JitPack knows a repository by. Somebody else's is its own; one of our modules is published as
+     * {@code com.github.LiQiyeDev:<module>} while its repository lives under BotMakerDev, so its page is the
+     * coordinate owner's — the plugin rows of the Catalog linked BotMakerDev's, a project JitPack never built.
+     */
+    static String jitpackSlugOf(String slug) {
+        int slash = slug.indexOf('/');
+        if (slash > 0 && slug.substring(0, slash).equalsIgnoreCase(com.botmaker.cli.release.CleanRoom.OWNER)) {
+            String name = slug.substring(slash + 1);
+            if (Module.byDirectory(name).isPresent()) {
+                return coordinateSlugOf(name);
+            }
+        }
+        return slug;
     }
 
     /**

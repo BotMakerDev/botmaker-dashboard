@@ -1,13 +1,10 @@
 package com.botmaker.dashboard.ui;
 
-import com.botmaker.cli.release.Module;
 import com.botmaker.dashboard.github.Admin;
 import com.botmaker.dashboard.github.Catalog;
 import com.botmaker.dashboard.github.EntryFields;
 import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
-import com.botmaker.dashboard.umbrella.ReleaseLauncher;
-import com.botmaker.dashboard.umbrella.ReleaseRun;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import javafx.application.Platform;
@@ -30,11 +27,9 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -59,12 +54,11 @@ import java.util.function.Function;
  * changes {@code main}: {@link CatalogDialogs} asks, this tab opens the pull request, and a human merges or
  * does not.
  *
- * <p><b>The one button that is not about a data repository is {@code Update template…}</b> (2026-09-21): a
- * template this project maintains is listed here as the bot it is published as, so this is where its release
- * lives — {@link TemplateReleaseDialog}, which previews through {@link ReleaseRun}, the same library and the
- * same call the Release tab makes. <b>Releasing is not vetting</b>: {@code Vet…} is still what moves
- * {@code vettedVersion}, and the {@code Latest} column beside the tier is what makes a vetting left behind
- * visible at all.
+ * <p>Every button is about a data repository. {@code Update template…} cut a template's release from here
+ * between 2026-09-21 and 2026-10-01, when the maintainer took it out: a template is released like any module,
+ * by {@code release.sh --gamebot} or the Release tab. <b>Releasing is not vetting</b>: {@code Vet…} is what
+ * moves {@code vettedVersion}, and the {@code Latest} column beside the tier is what makes a vetting left
+ * behind visible at all.
  */
 public final class CatalogTab extends BorderPane {
 
@@ -88,7 +82,6 @@ public final class CatalogTab extends BorderPane {
     private final Button unpublish = new Button("Unpublish…");
     private final Button vet = new Button("Vet…");
     private final Button revoke = new Button("Revoke vetting…");
-    private final Button update = new Button("Update template…");
 
     /**
      * The newest release GitHub reports per entry path, filled after the listing lands.
@@ -100,23 +93,8 @@ public final class CatalogTab extends BorderPane {
     private final Map<String, SimpleStringProperty> latest = new HashMap<>();
 
     private Admin admin = new Admin(false, "not checked yet");
-    private Path umbrella;
 
-    /**
-     * Where a release started from this tab is handed to, so the operator sees it running.
-     *
-     * <p><b>A handoff rather than a field of type {@code ReleaseTab}.</b> The board, the lanes and the
-     * reattach are that tab's, and this one has no business knowing they exist — what it knows is that it
-     * started a job and that somebody else draws jobs. {@code DashboardApp} is where the two are wired,
-     * which is also the only place that can select a tab.
-     *
-     * <p>Does nothing by default, so a test constructing this tab alone starts a release without a window
-     * to show it in.
-     */
-    private Consumer<ReleaseLauncher.Job> onReleaseStarted = job -> { };
-
-    public CatalogTab(Path umbrella, GitHubClient client, GitHubAuth auth) {
-        this.umbrella = umbrella;
+    public CatalogTab(GitHubClient client, GitHubAuth auth) {
         this.client = client;
         this.auth = auth;
         this.dialogs = new CatalogDialogs(client, auth, this::window, status::setText);
@@ -134,11 +112,10 @@ public final class CatalogTab extends BorderPane {
                 .ifPresent(running -> propose(entry, "Vet", running))));
         revoke.setOnAction(e -> withSelected(entry -> dialogs.revoke(entry)
                 .ifPresent(running -> propose(entry, "Revoke", running))));
-        update.setOnAction(e -> withSelected(this::updateTemplate));
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, refresh, edit, unpublish, vet, revoke, update, spacer, status);
+        HBox bar = new HBox(10, refresh, edit, unpublish, vet, revoke, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -289,47 +266,6 @@ public final class CatalogTab extends BorderPane {
         gateButtons();
     }
 
-    /** Called when the operator picks a different checkout — the templates are released out of that one. */
-    public void setUmbrella(Path umbrella) {
-        this.umbrella = umbrella;
-        gateButtons();
-    }
-
-    /**
-     * What to do with a release this tab starts: show it, wherever releases are shown.
-     *
-     * <p>Set by {@code DashboardApp} to hand the job to the Release tab and select it. See
-     * {@link #onReleaseStarted} for why it is a callback and not that tab.
-     */
-    public void setOnReleaseStarted(Consumer<ReleaseLauncher.Job> onReleaseStarted) {
-        this.onReleaseStarted = onReleaseStarted == null ? job -> { } : onReleaseStarted;
-    }
-
-    /**
-     * Which release module a listed entry <b>is</b>, when it is one this project maintains.
-     *
-     * <p>Matched on the repository <b>name</b> against {@link Module#directory}, never on the entry's
-     * {@code template} tag: that tag is a gallery idea any submission can claim, and this button cuts a tag.
-     * The answer is the release library's own list, so a template that stops being a module stops having a
-     * button rather than having a broken one.
-     *
-     * <p><b>The owner is dropped, deliberately.</b> What the button releases is the {@code botmaker-gamebot}
-     * submodule of the umbrella in use — never the repository the entry names — so the question is which
-     * module of this checkout the row is about. This project's own repositories do not agree on one owner
-     * anyway (the gallery's entries are {@code BotMakerDev}'s, the registry is {@code LiQiyeDev}'s), so an
-     * owner in the match would be a second list to keep.
-     */
-    static Optional<Module> releasable(Catalog.Entry entry) {
-        if (entry == null || entry.repo().isEmpty()) {
-            return Optional.empty();
-        }
-        String repo = entry.repo().substring(entry.repo().indexOf('/') + 1);
-        return java.util.Arrays.stream(Module.values())
-                .filter(Module::template)
-                .filter(module -> module.directory().equals(repo))
-                .findFirst();
-    }
-
     /**
      * Which buttons are live.
      *
@@ -347,19 +283,6 @@ public final class CatalogTab extends BorderPane {
         boolean bot = row && selected.kind() == Catalog.Kind.BOT && selected.readable();
         vet.setDisable(!bot || !admin.canWrite());
         revoke.setDisable(!bot || !admin.canWrite() || selected.vetted() == null);
-        // Not gated on admin.canWrite(): that probe asks about the two data repositories this tab proposes
-        // pull requests against, and a release pushes tags to the module's own repository with git's
-        // credentials. A permission answered about the wrong repository is worse than none.
-        update.setDisable(umbrella == null || releasable(selected).isEmpty());
-    }
-
-    /** {@code Update template…}: see {@link TemplateReleaseDialog}. */
-    private void updateTemplate(Catalog.Entry entry) {
-        Module module = releasable(entry).orElse(null);
-        if (module == null || umbrella == null) {
-            return;
-        }
-        new TemplateReleaseDialog(umbrella, window(), status::setText, onReleaseStarted).show(entry, module);
     }
 
     /**

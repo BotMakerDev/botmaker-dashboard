@@ -152,16 +152,8 @@ public final class DashboardApp extends Application {
         TabPane tabs = new TabPane(new Tab("Modules", modules), releases.tab(), releaseTab, changelog.tab());
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // A template released from the Catalog tab is a release like any other, so it is watched where
-        // releases are watched. Wired here because this is the only place that holds both tabs and the one
-        // thing neither of them can do: select the other. Without it the run finished — in about ten
-        // seconds — before the operator could switch tabs, and the board they arrived at was empty.
         catalog = new LazyTab<>("Catalog", () -> {
-            CatalogTab built = new CatalogTab(umbrella, client, auth);
-            built.setOnReleaseStarted(job -> {
-                release.attach(job);
-                tabs.getSelectionModel().select(releaseTab);
-            });
+            CatalogTab built = new CatalogTab(client, auth);
             if (admin != null) {
                 built.setAdmin(admin);
             }
@@ -213,8 +205,6 @@ public final class DashboardApp extends Application {
         release.setUmbrella(root);
         releases.ifBuilt(tab -> tab.setUmbrella(root));
         changelog.ifBuilt(tab -> tab.setUmbrella(root));
-        // The Catalog tab releases the templates out of whichever checkout is in use.
-        catalog.ifBuilt(tab -> tab.setUmbrella(root));
     }
 
     /** Stops the background work: a closed window must not leave a fetch or a poll running behind it. */

@@ -74,4 +74,13 @@ class LinksTest {
         assertEquals("https://jitpack.io/#someone/plugin",
                 Links.forRepository("someone/plugin", true).get(2).url());
     }
+
+    /** Our plugins' repositories are BotMakerDev's and their coordinates LiQiyeDev's; JitPack knows the second. */
+    @Test
+    void ourOwnPluginsJitPackPageIsTheCoordinateOwners() {
+        List<Links.Link> links = Links.forRepository("BotMakerDev/botmaker-sdk", true);
+        assertEquals("https://github.com/BotMakerDev/botmaker-sdk", links.get(0).url());
+        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-sdk", links.get(2).url());
+        assertEquals("BotMakerDev/not-a-module", Links.jitpackSlugOf("BotMakerDev/not-a-module"));
+    }
 }

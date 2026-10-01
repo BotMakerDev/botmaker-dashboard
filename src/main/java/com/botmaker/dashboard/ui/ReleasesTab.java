@@ -152,6 +152,9 @@ public final class ReleasesTab extends BorderPane {
 
     /** The poll for the release on screen; a new selection cancels it. */
     private Future<?> currentPoll;
+    /** What {@link #currentPoll} is asking about, so a poll it already covers does not cancel it. */
+    private Instant currentPollStart;
+    private boolean currentPollAll;
 
     /** The deep check running, which only its own Cancel stops — a selection change does not. */
     private Future<?> currentDeep;
@@ -336,9 +339,17 @@ public final class ReleasesTab extends BorderPane {
         VerdictCache polling = cache;
         // Arrowing through the history queued a full poll per release passed over; only the one on screen
         // matters. A poll already running stops at its next tag, and what it answered is kept.
-        if (currentPoll != null) {
+        // A running poll of the same release that asks at least as much covers this one. Cancelling it was what
+        // Refresh did to itself (2026-10-01): its relist reselected the release, the reselect's poll interrupted
+        // the Refresh mid-request, and the interrupted answers read "no run" and "unknown (interrupted)".
+        if (currentPoll != null && !currentPoll.isDone()) {
+            if (release.start().equals(currentPollStart) && (currentPollAll || !all)) {
+                return;
+            }
             currentPoll.cancel(true);
         }
+        currentPollStart = release.start();
+        currentPollAll = all;
         currentPoll = polls.submit(() -> guarded("The poll", () -> {
             int asked = 0;
             try {
@@ -385,6 +396,11 @@ public final class ReleasesTab extends BorderPane {
             if (actionsDue) {
                 Actions.Poll answer = backend.actions(module.get(), version.get());
                 entry = entry.withActions(answer.verdict(), answer.error(), answer.url(), Instant.now());
+            }
+            // A request the cancel cut short answers about the cancel, not the tag: an interrupted gh reads as
+            // "no run", which the lane shows as Failed. Nothing it said is kept.
+            if (Thread.currentThread().isInterrupted()) {
+                return asked;
             }
             polling.put(tag.module(), tag.tag(), entry);
             redraw(release);

@@ -342,8 +342,8 @@ com.botmaker.dashboard
     ├── ChangelogTab    write the [Unreleased] section, commit it in the submodule, optionally draft it
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
     ├── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
-    ├── CatalogDialogs  edit, unpublish, vet, revoke — each asks, and answers the pull request it opens
-    └── TemplateReleaseDialog  Update template…: preview (streamed, cancellable), arm by value, cut
+    └── CatalogDialogs  edit, unpublish, vet, revoke — each asks, and answers the pull request it opens
+                        (Update template… and its dialog left on 2026-10-01: a template is cut with --gamebot)
 ```
 
 **`--dry-run` is not a checkbox, and it is not a flag this module can spell at all.** `ReleaseSpec` appended

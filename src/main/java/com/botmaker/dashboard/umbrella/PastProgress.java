@@ -35,6 +35,23 @@ public final class PastProgress {
      * <p>A lane's elapsed time is the gap since the previous tag: what the timeline is for is where the minutes
      * went, and for a finished release that is the time between tags.
      */
+    /**
+     * Whether a polled verdict outranks the log's cell. It is newer, so it does — except where it is no answer
+     * (still pending, unknown, or {@code no run on …}) and the log recorded a green one. A finished tag's run
+     * does not disappear, so that pair is a poll that failed, and a cache that kept it showed a release that
+     * succeeded as Failed until the cache aged out (2026-10-01).
+     */
+    static boolean outranks(String cached, String logged) {
+        if (cached.isBlank()) {
+            return false;
+        }
+        if (logged.isBlank() || ReleaseLog.Health.of(logged) != ReleaseLog.Health.OK) {
+            return true;
+        }
+        return ReleaseLog.Health.of(cached) != ReleaseLog.Health.PENDING
+                && !cached.toLowerCase().startsWith("no run");
+    }
+
     public static ReleaseProgress of(ReleaseHistory.Release release, VerdictCache cache, Instant now) {
         Optional<ReleaseLog> log = release.log();
         List<ReleaseLog.Row> rows = new ArrayList<>();
@@ -56,13 +73,16 @@ public final class PastProgress {
             boolean onJitpack = Module.byDirectory(tag.module())
                     .map(com.botmaker.cli.release.ReleaseLog::onJitpack).orElse(true);
 
+            String loggedJitpack = logged.map(ReleaseLog.Row::jitpack).orElse("");
+            String loggedActions = logged.map(ReleaseLog.Row::actions).orElse("");
+            boolean cachedJitpack = outranks(entry.jitpack(), loggedJitpack);
+            boolean cachedActions = outranks(entry.actions(), loggedActions);
             String jitpack = !onJitpack ? "n/a (not a Maven artifact)"
-                    : !entry.jitpack().isBlank() ? entry.jitpack()
-                    : logged.map(ReleaseLog.Row::jitpack).filter(s -> !s.isBlank()).orElse("pending");
-            String actions = !entry.actions().isBlank() ? entry.actions()
-                    : logged.map(ReleaseLog.Row::actions).filter(s -> !s.isBlank()).orElse("pending");
+                    : cachedJitpack ? entry.jitpack()
+                    : !loggedJitpack.isBlank() ? loggedJitpack : "pending";
+            String actions = cachedActions ? entry.actions() : !loggedActions.isBlank() ? loggedActions : "pending";
             // The cached poll's run outranks the log's, for the same reason its verdict does: it is newer.
-            String actionsUrl = !entry.actionsUrl().isBlank() ? entry.actionsUrl()
+            String actionsUrl = cachedActions && !entry.actionsUrl().isBlank() ? entry.actionsUrl()
                     : logged.map(ReleaseLog.Row::actionsUrl).orElse("");
             String stage = logged.map(ReleaseLog.Row::stage).filter(s -> !s.isBlank()).orElse("tagged");
             // The tag exists, so whatever the log last said about how far it got, it got at least this far.
@@ -75,7 +95,7 @@ public final class PastProgress {
 
             for (String kind : List.of("jitpack", "actions")) {
                 String cached = kind.equals("jitpack") ? entry.jitpackError() : entry.actionsError();
-                boolean polled = kind.equals("jitpack") ? !entry.jitpack().isBlank() : !entry.actions().isBlank();
+                boolean polled = kind.equals("jitpack") ? cachedJitpack : cachedActions;
                 if (polled) {
                     if (!cached.isBlank()) {
                         problems.add(new ReleaseLog.Problem(tag.module(), kind, cached));
@@ -86,9 +106,9 @@ public final class PastProgress {
                 }
             }
             ages.put(key, "jitpack: " + jitpack
-                    + (onJitpack && !entry.jitpack().isBlank() ? ", " + VerdictCache.age(entry.jitpackTime(), now) : "")
+                    + (onJitpack && cachedJitpack ? ", " + VerdictCache.age(entry.jitpackTime(), now) : "")
                     + " · actions: " + actions
-                    + (!entry.actions().isBlank() ? ", " + VerdictCache.age(entry.actionsTime(), now) : ""));
+                    + (cachedActions ? ", " + VerdictCache.age(entry.actionsTime(), now) : ""));
         }
         // What the log names and no tag carries: the module that failed and those never reached.
         log.ifPresent(l -> {
