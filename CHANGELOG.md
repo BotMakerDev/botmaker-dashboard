@@ -16,6 +16,12 @@ No source changes since v0.1.4; re-released for updated upstream pins.
 
 No source changes since v0.1.3; re-released for updated upstream pins.
 
+### Added
+
+- The Release tab has a **Stop** button while a release runs. The release ends before its next module, or at
+  once in a JitPack wait, and never cuts a git command short; it writes its log and commits the tagged
+  pointers locally, as a failed module does. A board lane shows a JitPack build that failed as failed.
+
 ### Fixed
 
 - A release that succeeded no longer reads as Failed ("jitpack: unknown (interrupted) · actions: no run on …")

@@ -34,6 +34,24 @@ class ReleaseLauncherTest {
     }
 
     @Test
+    void stopIsAFileTheJobReadsAndPruningTakesItAway(@TempDir Path umbrella) throws Exception {
+        ReleaseLauncher.Job old = new ReleaseLauncher.Job(umbrella, "2026-09-01-100000");
+        ReleaseLauncher.Job newest = new ReleaseLauncher.Job(umbrella, "2026-10-05-211800");
+        Files.createDirectories(old.pidFile().getParent());
+        Files.writeString(old.pidFile(), "999999999");
+        Files.writeString(newest.pidFile(), "999999998");
+        assertFalse(newest.stopRequested());
+
+        newest.requestStop();
+        old.requestStop();
+
+        assertTrue(newest.stopRequested());
+        ReleaseLauncher.prune(umbrella, java.time.LocalDateTime.of(2026, 10, 5, 22, 0));
+        assertFalse(old.stopRequested());
+        assertTrue(newest.stopRequested());
+    }
+
+    @Test
     void withoutSetsidTheJavaCommandLeads() {
         List<String> argv = ReleaseLauncher.argv(false, Path.of("/jdk"), "cp", Path.of("/u"), "s", SPEC);
 

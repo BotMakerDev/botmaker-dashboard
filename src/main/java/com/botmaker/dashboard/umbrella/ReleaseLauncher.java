@@ -20,7 +20,8 @@ import java.util.stream.Stream;
  *
  * <p><b>Everything a running release is, is two files</b> under {@code releases/.running/} — gitignored in the
  * umbrella, so the pointer commit's {@code git add releases} never picks them up:
- * {@code <stamp>.out}, the child's stamped stdout and stderr, and {@code <stamp>.pid}. The window keeps no
+ * {@code <stamp>.out}, the child's stamped stdout and stderr, and {@code <stamp>.pid}. A third,
+ * {@code <stamp>.stop}, exists only once the operator pressed Stop. The window keeps no
  * state about a job, which is what lets it be closed mid-release and reattach when it is opened again: the
  * newest {@code .pid} whose process is alive is the release in progress.
  *
@@ -55,6 +56,25 @@ public final class ReleaseLauncher {
 
         public Path pidFile() {
             return ReleaseLauncher.pidFile(umbrella, stamp);
+        }
+
+        /**
+         * The file whose existence asks the job to stop — how the window reaches a process it did not keep a
+         * handle on. The job reads it between modules and in each JitPack wait, never during a git command.
+         */
+        public Path stopFile() {
+            return running(umbrella).resolve(stamp + ".stop");
+        }
+
+        /** Asks the job to stop before its next step. Idempotent. */
+        public void requestStop() throws IOException {
+            Files.createDirectories(stopFile().getParent());
+            Files.writeString(stopFile(), Instant.now().toString());
+        }
+
+        /** Whether a stop was asked for. */
+        public boolean stopRequested() {
+            return Files.exists(stopFile());
         }
 
         public LocalDateTime startedAt() {
@@ -245,6 +265,7 @@ public final class ReleaseLauncher {
                         try {
                             Files.deleteIfExists(job.out());
                             Files.deleteIfExists(job.pidFile());
+                            Files.deleteIfExists(job.stopFile());
                         } catch (IOException e) {
                             // Left for the next launch.
                         }

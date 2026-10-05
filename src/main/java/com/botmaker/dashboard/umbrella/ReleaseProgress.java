@@ -371,6 +371,7 @@ public record ReleaseProgress(Phase phase, List<Lane> lanes, Instant started, Du
                     NodeState jitpack = !onJitpack ? NodeState.SKIPPED
                             : segment.has("JitPack build of " + row.module()) ? NodeState.OK
                             : segment.has("not built on JitPack after") ? NodeState.FAILED
+                            : segment.has("JitPack failed to build " + row.module()) ? NodeState.FAILED
                             : segment.has("waiting for JitPack to build " + row.module()) ? NodeState.RUNNING
                             : NodeState.PENDING;
                     steps.put(Step.COMMIT, commit);

@@ -58,7 +58,9 @@ public final class ReleaseJob {
                 + " — process " + ProcessHandle.current().pid());
 
         // A rehearsal is ReleaseRun.go with execute=false — the dry Runner, exactly what Preview uses.
-        ReleaseRun run = ReleaseRun.go(umbrella, spec, !dryRun, line -> say(out, line));
+        // The window's Stop writes the job's stop file; the library reads it between steps.
+        ReleaseLauncher.Job job = new ReleaseLauncher.Job(umbrella, stamp);
+        ReleaseRun run = ReleaseRun.go(umbrella, spec, !dryRun, line -> say(out, line), job::stopRequested);
 
         ProgressLine.Ending ending;
         String detail = "";

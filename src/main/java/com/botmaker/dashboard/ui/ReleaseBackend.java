@@ -37,6 +37,11 @@ interface ReleaseBackend {
 
     Optional<ReleaseLauncher.Job> latestJob(Path umbrella);
 
+    /** Asks a running release to stop before its next step — its stop file, which the process reads. */
+    default void stop(ReleaseLauncher.Job job) throws IOException {
+        job.requestStop();
+    }
+
     ReleaseBackend REAL = new ReleaseBackend() {
         @Override
         public ReleaseRun preview(Path umbrella, ReleaseSpec spec, Consumer<String> line) {

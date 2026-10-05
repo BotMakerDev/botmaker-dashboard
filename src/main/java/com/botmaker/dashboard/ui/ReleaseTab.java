@@ -99,6 +99,7 @@ public final class ReleaseTab extends BorderPane {
     private final Button preview = new Button("Preview");
     private final Button cancel = new Button("Cancel");
     private final Button execute = new Button("Execute…");
+    private final Button stop = new Button("Stop");
     private final Label status = new Label();
     private final TextField commandLine = new TextField();
     private final TextArea output = new TextArea();
@@ -149,10 +150,13 @@ public final class ReleaseTab extends BorderPane {
         execute.getStyleClass().add("danger");
         execute.setDisable(true);
         execute.setOnAction(e -> confirmThenExecute());
+        stop.getStyleClass().add("danger");
+        stop.setOnAction(e -> stopRelease());
+        showStop(false);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, preview, cancel, execute, status, spacer);
+        HBox bar = new HBox(10, preview, cancel, execute, stop, status, spacer);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -178,6 +182,7 @@ public final class ReleaseTab extends BorderPane {
     public void setUmbrella(Path umbrella) {
         this.umbrella = umbrella;
         watcher.stop();
+        showStop(false);
         output.clear();
         hideBanner();
         board.setVisible(false);
@@ -370,6 +375,7 @@ public final class ReleaseTab extends BorderPane {
 
             @Override
             public void ended(ReleaseProgress progress) {
+                showStop(false);
                 ReleaseTab.this.ended(progress);
             }
 
@@ -378,6 +384,7 @@ public final class ReleaseTab extends BorderPane {
                 say(sentence);
             }
         });
+        showStop(true);
         refreshCommandLine();
     }
 
@@ -498,6 +505,36 @@ public final class ReleaseTab extends BorderPane {
     private void showCancel(boolean shown) {
         cancel.setVisible(shown);
         cancel.setManaged(shown);
+    }
+
+    /** Stop is there while a release is watched, and dead once it was pressed for that job. */
+    private void showStop(boolean shown) {
+        stop.setVisible(shown);
+        stop.setManaged(shown);
+        stop.setDisable(!shown || watcher.job().map(ReleaseLauncher.Job::stopRequested).orElse(true));
+    }
+
+    /**
+     * Asks the release process to stop before its next step.
+     *
+     * <p>No confirmation: stopping is the safe direction. It never cuts a git command short — a tag half
+     * pushed is worse than one more tag — so the process ends at the next module or at once in a JitPack
+     * wait, writes the log and commits the tagged pointers locally, as a failed module does.
+     */
+    private void stopRelease() {
+        Optional<ReleaseLauncher.Job> job = watcher.job();
+        if (job.isEmpty()) {
+            return;
+        }
+        try {
+            backend.stop(job.get());
+            stop.setDisable(true);
+            say("Stop asked. A release still tagging ends before its next module, or at once in a JitPack "
+                    + "wait; a git command already running finishes first. Once every tag is out, the release "
+                    + "still records and pushes what it tagged.");
+        } catch (IOException e) {
+            say("Could not ask the release to stop: " + e.getMessage());
+        }
     }
 
     /** A preview, or the modules whose changelog stopped it from running. */

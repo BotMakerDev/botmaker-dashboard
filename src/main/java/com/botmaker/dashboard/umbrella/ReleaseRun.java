@@ -9,6 +9,7 @@ import com.botmaker.cli.release.Runner;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -58,12 +59,23 @@ public record ReleaseRun(boolean executed, String output, Optional<Plan> plan, L
      *             caller, and the CLI's sink has no thread to hop to.
      */
     public static ReleaseRun go(Path umbrella, ReleaseSpec spec, boolean execute, Consumer<String> line) {
+        return go(umbrella, spec, execute, line, () -> false);
+    }
+
+    /**
+     * The same, stoppable.
+     *
+     * @param stop whether the operator pressed Stop — the library reads it between modules and in each
+     *             JitPack wait, and stops the way a failed module does
+     */
+    public static ReleaseRun go(Path umbrella, ReleaseSpec spec, boolean execute, Consumer<String> line,
+                                BooleanSupplier stop) {
         StringBuilder whole = new StringBuilder();
         Consumer<String> sink = text -> {
             whole.append(text).append('\n');
             line.accept(text);
         };
-        Runner runner = new Runner(!execute, sink);
+        Runner runner = new Runner(!execute, sink, stop);
         try {
             // `why` is on, which is the one place this differs from `botmaker release`'s default. That flag
             // is off in the CLI so the port's output can be diffed against the script's byte for byte; no

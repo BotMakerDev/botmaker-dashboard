@@ -87,6 +87,11 @@ final class ReleaseWatcher {
         }
     }
 
+    /** The job being watched, if any. */
+    java.util.Optional<ReleaseLauncher.Job> job() {
+        return java.util.Optional.ofNullable(watched);
+    }
+
     /** Whether a job is being watched — a live one, until its last line. */
     boolean watching() {
         return watched != null;

@@ -46,6 +46,28 @@ class ReleaseProgressTest {
     }
 
     @Test
+    void aJitpackBuildThatFailedIsAFailedNodeBeforeAndAfterTheLogSaysSo() {
+        List<Object> failing = List.of(
+                90, "Releasing botmaker-studio-api v0.1.0",
+                91, "    $ git -C /u/botmaker-studio-api commit -am 'release: studio-api v0.1.0'",
+                92, "    $ git -C /u/botmaker-studio-api tag v0.1.0",
+                92, "    $ git -C /u/botmaker-studio-api push origin HEAD",
+                93, "    $ git -C /u/botmaker-studio-api push origin v0.1.0",
+                94, "waiting for JitPack to build botmaker-studio-api:v0.1.0 ...",
+                150, "JitPack failed to build botmaker-studio-api:v0.1.0: No build artifacts found.");
+
+        ReleaseProgress pending = ReleaseProgress.of(join(head(), failing),
+                log("| botmaker-studio-api | 0.1.0 | v0.1.0 | pending | — | pending | pending |"), true, at(151));
+        assertEquals(NodeState.FAILED, pending.lanes().getFirst().state(Step.JITPACK));
+
+        ReleaseProgress logged = ReleaseProgress.of(join(head(), failing),
+                log("| botmaker-studio-api | 0.1.0 | v0.1.0 | jitpack failed | stamped | BROKEN | pending |"),
+                false, at(160));
+        assertEquals(List.of(NodeState.OK, NodeState.OK, NodeState.FAILED, NodeState.PENDING),
+                states(logged.lanes().getFirst()));
+    }
+
+    @Test
     void midChainTheLogWinsForAFinishedModuleAndTheOutputFillsInTheOneStillGoing() {
         ReleaseProgress progress = ReleaseFixtures.midChain();
 
