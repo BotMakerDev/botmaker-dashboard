@@ -87,8 +87,8 @@ class ModuleLaneTest extends FxHeadless {
         clickOn(lane.chip());
         assertEquals(List.of(
                 "https://github.com/BotMakerDev/botmaker-plugin-host/actions?query=branch%3Av0.1.0",
-                // JitPack keeps the old owner: the coordinates did not move with the repositories.
-                "https://jitpack.io/#LiQiyeDev/botmaker-plugin-host/v0.1.0",
+                // JitPack's page is the coordinate owner's, BotMakerDev since 2026-10-05.
+                "https://jitpack.io/#BotMakerDev/botmaker-plugin-host/v0.1.0",
                 "https://github.com/BotMakerDev/botmaker-plugin-host/releases/tag/v0.1.0"), opened);
     }
 

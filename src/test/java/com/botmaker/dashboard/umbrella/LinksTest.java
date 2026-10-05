@@ -13,10 +13,8 @@ class LinksTest {
     void namesTheThreePlacesAReleaseCanBeWrong() {
         assertEquals("https://github.com/BotMakerDev/botmaker-cli/releases/tag/v0.0.8",
                 Links.release("botmaker-cli", "v0.0.8"));
-        // The JitPack page keeps the OLD owner, and that is not an oversight: the repositories moved to the
-        // organization on 2026-09-18 and the Maven coordinates deliberately did not, so the builds a consumer
-        // resolves are still com.github.LiQiyeDev:<module>.
-        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-cli/v0.0.8",
+        // The JitPack page is the coordinate owner's, which is the organization's since 2026-10-05.
+        assertEquals("https://jitpack.io/#BotMakerDev/botmaker-cli/v0.0.8",
                 Links.jitpack("botmaker-cli", "v0.0.8"));
         // branch, not tag: a tag-triggered run records the tag in headBranch, which is the same filter
         // poll_actions uses.
@@ -51,7 +49,7 @@ class LinksTest {
                         new Links.Link("GitHub", "https://github.com/BotMakerDev/botmaker-sdk"),
                         new Links.Link("Actions",
                                 "https://github.com/BotMakerDev/botmaker-sdk/actions?query=branch%3Amain"),
-                        new Links.Link("JitPack", "https://jitpack.io/#LiQiyeDev/botmaker-sdk"),
+                        new Links.Link("JitPack", "https://jitpack.io/#BotMakerDev/botmaker-sdk"),
                         new Links.Link("Releases", "https://github.com/BotMakerDev/botmaker-sdk/releases"),
                         new Links.Link("Changes since v1.1.6",
                                 "https://github.com/BotMakerDev/botmaker-sdk/compare/v1.1.6...main")),
@@ -75,12 +73,12 @@ class LinksTest {
                 Links.forRepository("someone/plugin", true).get(2).url());
     }
 
-    /** Our plugins' repositories are BotMakerDev's and their coordinates LiQiyeDev's; JitPack knows the second. */
+    /** Our plugins' JitPack page is the coordinate owner's — BotMakerDev, like their repositories. */
     @Test
     void ourOwnPluginsJitPackPageIsTheCoordinateOwners() {
         List<Links.Link> links = Links.forRepository("BotMakerDev/botmaker-sdk", true);
         assertEquals("https://github.com/BotMakerDev/botmaker-sdk", links.get(0).url());
-        assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-sdk", links.get(2).url());
+        assertEquals("https://jitpack.io/#BotMakerDev/botmaker-sdk", links.get(2).url());
         assertEquals("BotMakerDev/not-a-module", Links.jitpackSlugOf("BotMakerDev/not-a-module"));
     }
 }

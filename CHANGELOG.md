@@ -16,6 +16,10 @@ No source changes since v0.1.4; re-released for updated upstream pins.
 
 No source changes since v0.1.3; re-released for updated upstream pins.
 
+### Changed
+
+- JitPack links open `jitpack.io/#BotMakerDev/…`, the coordinate owner since the move from `LiQiyeDev`.
+
 ### Added
 
 - The Release tab has a **Stop** button while a release runs. The release ends before its next module, or at

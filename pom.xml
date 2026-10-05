@@ -22,7 +22,7 @@
           release build resolves them from source. The `dist` profile also bakes that file into the jar
           (META-INF/botmaker/.deps.env), which is how the installed app knows which cli it carries.
     -->
-    <groupId>com.github.LiQiyeDev</groupId>
+    <groupId>com.github.BotMakerDev</groupId>
     <artifactId>botmaker-dashboard</artifactId>
     <version>0.0.0-SNAPSHOT</version>
 
@@ -71,7 +71,7 @@
           module specifically.
         -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-shared</artifactId>
             <version>${botmaker.shared.version}</version>
         </dependency>
@@ -95,16 +95,16 @@
           ever needs one of them, that is a compile error here rather than a silent new dependency edge.
         -->
         <dependency>
-            <groupId>com.github.LiQiyeDev</groupId>
+            <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-cli</artifactId>
             <version>${botmaker.cli.version}</version>
             <exclusions>
                 <exclusion>
-                    <groupId>com.github.LiQiyeDev</groupId>
+                    <groupId>com.github.BotMakerDev</groupId>
                     <artifactId>botmaker-studio-api</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>com.github.LiQiyeDev</groupId>
+                    <groupId>com.github.BotMakerDev</groupId>
                     <artifactId>botmaker-plugin-host</artifactId>
                 </exclusion>
             </exclusions>

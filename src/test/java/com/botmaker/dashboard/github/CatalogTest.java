@@ -34,7 +34,7 @@ class CatalogTest {
     void aPluginEntryIsReadThroughTheRegistrysOwnRecord() {
         Catalog.Entry entry = plugin("""
                 {"id": "com.botmaker.sdk", "name": "BotMaker SDK",
-                 "coordinate": "com.github.LiQiyeDev:botmaker-sdk",
+                 "coordinate": "com.github.BotMakerDev:botmaker-sdk",
                  "description": "The palette and the bot runtime.", "tags": ["sdk", "official"]}
                 """);
         assertTrue(entry.readable());

@@ -48,9 +48,7 @@ public final class Links {
      * and caches the result, so a failed build is permanent and only a new tag repairs it.
      */
     public static String jitpack(String module, String tag) {
-        // The COORDINATE owner, not the repository's: the artifacts are published as
-        // com.github.LiQiyeDev:<module> and the repositories moved to BotMakerDev without them (see
-        // CleanRoom.COORDINATE_OWNER), so this page is the one holding the builds a consumer resolves.
+        // The COORDINATE owner (CleanRoom.COORDINATE_OWNER): this page holds the builds a consumer resolves.
         return jitpackPageOf(coordinateSlugOf(module)) + "/" + tag;
     }
 
@@ -81,9 +79,8 @@ public final class Links {
 
     /** The JitPack project page: every tag it has built, and whether each build passed. */
     public static String jitpackPage(String module) {
-        // Keyed on the COORDINATE owner, like every other JitPack link here: one of our modules is published
-        // as com.github.LiQiyeDev:<module> and its repository lives under BotMakerDev. A repository somebody
-        // else owns (forRepository) is its own slug either way.
+        // Keyed on the COORDINATE owner, like every other JitPack link here. A repository somebody else owns
+        // (forRepository) is its own slug either way.
         return jitpackPageOf(coordinateSlugOf(module));
     }
 
@@ -136,9 +133,9 @@ public final class Links {
     }
 
     /**
-     * The slug JitPack knows a repository by. Somebody else's is its own; one of our modules is published as
-     * {@code com.github.LiQiyeDev:<module>} while its repository lives under BotMakerDev, so its page is the
-     * coordinate owner's — the plugin rows of the Catalog linked BotMakerDev's, a project JitPack never built.
+     * The slug JitPack knows a repository by. Somebody else's is its own; one of our modules' page is the
+     * coordinate owner's ({@code CleanRoom.COORDINATE_OWNER}). From 2026-09-18 to 2026-10-05 that differed
+     * from the repository owner; since then both are BotMakerDev.
      */
     static String jitpackSlugOf(String slug) {
         int slash = slug.indexOf('/');

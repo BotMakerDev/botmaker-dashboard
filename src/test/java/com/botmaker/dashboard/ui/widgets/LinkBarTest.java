@@ -26,7 +26,7 @@ class LinkBarTest extends FxHeadless {
 
         clickOn("JitPack");
         clickOn("Releases");
-        assertEquals(List.of("https://jitpack.io/#LiQiyeDev/botmaker-sdk",
+        assertEquals(List.of("https://jitpack.io/#BotMakerDev/botmaker-sdk",
                 "https://github.com/BotMakerDev/botmaker-sdk/releases"), opened);
     }
 
