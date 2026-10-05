@@ -8,6 +8,28 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.1.4; re-released for updated upstream pins.
+
+No source changes since v0.1.3; re-released for updated upstream pins.
+
+### Fixed
+
+- A release that succeeded no longer reads as Failed ("jitpack: unknown (interrupted) · actions: no run on …")
+  in the Releases tab. Refresh relisted the history, the relist reselected the release, and the reselect's
+  poll interrupted the Refresh's own poll mid-request; the interrupted answers were then cached and outranked
+  the log. A poll that a running one already covers no longer cancels it, an interrupted answer is never
+  cached, and a cached non-answer gives way to a green cell in the release log, which also heals a cache that
+  already holds one.
+- The Catalog's JitPack link for one of our plugins opens the coordinate owner's page
+  (`jitpack.io/#LiQiyeDev/<module>`), where JitPack builds it, instead of the repository owner's.
+
+### Removed
+
+- *Update template…* in the Catalog tab, with its dialog. A template is released like any other module, with
+  `--gamebot` in the Release tab or `release.sh`.
+
 ## [0.1.4] — 2026-10-05
 
 No source changes since v0.1.3; re-released for updated upstream pins.
