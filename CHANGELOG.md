@@ -10,9 +10,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-No source changes since v0.2.0; re-released for updated upstream pins.
+### Changed
 
-No source changes since v0.1.4; re-released for updated upstream pins.
+- The pom carries a real version and names its upstreams' versions instead of `0.0.0-SNAPSHOT`, and the
+  module's `.deps.env` is gone (umbrella `docs/refactor/43-real-versions.md`).
 
 No source changes since v0.1.3; re-released for updated upstream pins.
 

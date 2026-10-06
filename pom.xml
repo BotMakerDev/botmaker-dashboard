@@ -24,7 +24,9 @@
     -->
     <groupId>com.github.BotMakerDev</groupId>
     <artifactId>botmaker-dashboard</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
+    <!-- Real: -SNAPSHOT on main, the release version on a tag; only the release moves it (umbrella
+         docs/refactor/43-real-versions.md). -->
+    <version>0.2.1-SNAPSHOT</version>
 
     <name>BotMaker Dashboard</name>
     <description>
@@ -39,11 +41,11 @@
         <javafx.version>25.0.4</javafx.version>
         <junit.version>5.10.2</junit.version>
         <jackson.version>2.17.0</jackson.version>
-        <!-- The reactor/offline value. An umbrella `mvn install` resolves shared from the reactor; a
-             standalone build here resolves the 0.0.0-SNAPSHOT a local `mvn -pl botmaker-shared install`
-             leaves in ~/.m2. There is no released-tag injection because there is no published build. -->
-        <botmaker.shared.version>0.0.0-SNAPSHOT</botmaker.shared.version>
-        <botmaker.cli.version>0.0.0-SNAPSHOT</botmaker.cli.version>
+        <!-- Each upstream's main version. An umbrella `mvn install` resolves them from the reactor; a
+             standalone build here resolves what a local `mvn -pl botmaker-shared install` leaves in ~/.m2.
+             A release commit sets the released versions (doc 43). -->
+        <botmaker.shared.version>0.1.3-SNAPSHOT</botmaker.shared.version>
+        <botmaker.cli.version>0.2.1-SNAPSHOT</botmaker.cli.version>
         <!-- Numeric-only version for jpackage (it rejects -SNAPSHOT). The package job passes the tag's
              number as -Dapp.version; a local `-Pdist package` gets this placeholder. -->
         <app.version>1.0.0</app.version>
