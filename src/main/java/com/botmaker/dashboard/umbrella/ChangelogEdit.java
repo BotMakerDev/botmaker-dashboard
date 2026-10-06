@@ -1,9 +1,12 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.PomVersions;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -169,11 +172,22 @@ public final class ChangelogEdit {
      */
     public static String commitsSince(Path umbrella, String module, Optional<String> latestTag) {
         Path dir = umbrella.resolve(module);
-        List<String> command = latestTag
+        List<String> command = new ArrayList<>(latestTag
                 .map(tag -> List.of("git", "log", tag + "..HEAD", "--no-merges", "--format=%h %s%n%b"))
-                .orElse(List.of("git", "log", "--no-merges", "-40", "--format=%h %s%n%b"));
+                .orElse(List.of("git", "log", "--no-merges", "-40", "--format=%h %s%n%b")));
+        command.addAll(notBookkeeping());
         Proc log = Proc.run(dir, GIT_TIMEOUT, command);
         return log.ok() ? log.out().strip() : "";
+    }
+
+    /**
+     * The {@code git log}/{@code rev-list} options that leave out the release's own commits after a tag (its
+     * back to snapshot, a dependent's pin): they move versions and nothing a changelog would say.
+     */
+    static List<String> notBookkeeping() {
+        List<String> options = new ArrayList<>(List.of("--invert-grep"));
+        PomVersions.BOOKKEEPING_SUBJECTS.forEach(subject -> options.add("--grep=" + subject));
+        return options;
     }
 
     /** {@code git diff --stat} over the same span — what moved, without the diff itself. */

@@ -65,7 +65,9 @@ public final class ReleaseFixtures {
     public static List<Object> hostWaitingOnJitpack() {
         return List.of(
                 200, "Releasing botmaker-plugin-host v0.1.0",
-                201, "    $ cat > /u/botmaker-plugin-host/.deps.env <<'DEPS_EOF' … DEPS_EOF",
+                201, "    $ mvn -B -q -f /u/botmaker-plugin-host/pom.xml"
+                        + " org.codehaus.mojo:versions-maven-plugin:2.18.0:set -DnewVersion=0.1.0"
+                        + " -DgenerateBackupPoms=false",
                 202, "    $ git -C /u/botmaker-plugin-host commit -am 'release: plugin-host v0.1.0'",
                 203, "    $ git -C /u/botmaker-plugin-host tag v0.1.0",
                 203, "    $ git -C /u/botmaker-plugin-host push origin HEAD",

@@ -1,12 +1,17 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.Version;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 
 /**
  * Which {@code botmaker-cli} this build carries, against which one the checkout is at.
@@ -19,15 +24,16 @@ import java.util.Optional;
  * this morning is in the checkout and not in the app until the next package. That is not an error, but it
  * is a fact the operator must see before trusting a preview, so it is a notice in the top bar.
  *
- * <p>The build's own cli is read from {@code META-INF/botmaker/.deps.env}, which the {@code dist} profile
- * bakes from the module's {@code .deps.env} at package time. A development run (the reactor, {@code
- * javafx:run}) has no such resource, and rightly says nothing: there the cli on the classpath <i>is</i> the
- * checkout's.
+ * <p>The build's own cli is read from {@code META-INF/botmaker/built-with.properties}, which the {@code dist}
+ * profile filters from the pom's {@code botmaker.cli.version} at package time — on a tag, the cli release
+ * the release commit pinned. It was baked from a {@code .deps.env} until 2026-10-06. A development run (the
+ * reactor, {@code javafx:run}) has no such resource, and rightly says nothing: there the cli on the
+ * classpath <i>is</i> the checkout's.
  */
 public final class BuiltWith {
 
-    /** Where the {@code dist} profile puts the module's {@code .deps.env} inside the jar. */
-    public static final String RESOURCE = "/META-INF/botmaker/.deps.env";
+    /** Where the {@code dist} profile puts the filtered properties inside the jar. */
+    public static final String RESOURCE = "/META-INF/botmaker/built-with.properties";
 
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(10);
 
@@ -46,17 +52,28 @@ public final class BuiltWith {
         }
     }
 
-    /** The {@code CLI_TAG} pin in a {@code .deps.env}, or empty when the file does not carry one. */
-    public static Optional<String> cliTag(String depsEnv) {
-        return DepsEnv.parse(depsEnv, Map.of()).stream()
-                .filter(pin -> pin.key().equals("CLI_TAG"))
-                .map(DepsEnv.Pin::ref)
-                .findFirst();
+    /**
+     * The {@code cli.version} in the baked properties, as {@code git describe} spells a tag
+     * ({@code 0.2.1} → {@code v0.2.1}); a {@code -SNAPSHOT} (a dispatch build from a branch) as it is. Empty
+     * when the file carries none or it was never filtered.
+     */
+    public static Optional<String> cliTag(String properties) {
+        Properties read = new Properties();
+        try {
+            read.load(new StringReader(properties));
+        } catch (IOException e) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(read.getProperty("cli.version"))
+                .map(String::strip)
+                .filter(version -> !version.isEmpty() && !version.contains("${"))
+                .map(version -> Version.parse(version).map(Version::tag).orElse(version));
     }
 
     /**
      * What the checkout's {@code botmaker-cli} is at, as {@code git describe --tags} spells it: the tag
-     * itself when HEAD is tagged, {@code v0.0.13-3-g5af261c} when it has moved past one. Empty when git
+     * itself when HEAD is tagged or past it by the release's own commits only, {@code v0.0.13-3-g5af261c} when
+     * it has moved past one. Empty when git
      * cannot say (no submodule, no tag yet). Never call on the FX thread.
      */
     public static Optional<String> checkoutCli(Path umbrella) {
@@ -67,6 +84,17 @@ public final class BuiltWith {
         Proc p = Proc.run(cli, GIT_TIMEOUT, "git", "describe", "--tags", "--always");
         if (!p.ok() || p.firstLine().isEmpty()) {
             return Optional.empty();
+        }
+        // Every release lands its back-to-snapshot commit right after the tag, so HEAD is never on it: a
+        // checkout whose only commits since the tag are the release's own is at that tag.
+        Proc tag = Proc.run(cli, GIT_TIMEOUT, "git", "describe", "--tags", "--abbrev=0");
+        if (tag.ok() && !tag.firstLine().isEmpty()) {
+            List<String> count = new ArrayList<>(List.of("git", "rev-list", "--count", tag.firstLine() + "..HEAD"));
+            count.addAll(ChangelogEdit.notBookkeeping());
+            Proc since = Proc.run(cli, GIT_TIMEOUT, count);
+            if (since.ok() && since.firstLine().equals("0")) {
+                return Optional.of(tag.firstLine());
+            }
         }
         return Optional.of(p.firstLine());
     }

@@ -17,10 +17,11 @@
         * STILL NO flatten-maven-plugin. Flatten exists to bake a property-driven BotMaker upstream into
           the pom a CONSUMER downloads. This module has such properties (botmaker.shared.version,
           botmaker.cli.version) and no consumer, so there is no published pom for a -D to be missing from.
-        * A .deps.env, like Studio's: the `package` job checks the four upstreams out at the refs it names
-          and `mvn install`s them at 0.0.0-SNAPSHOT — the value the properties below default to — so the
-          release build resolves them from source. The `dist` profile also bakes that file into the jar
-          (META-INF/botmaker/.deps.env), which is how the installed app knows which cli it carries.
+        * Real pins, like Studio's (umbrella docs/refactor/43-real-versions.md): on a tag the properties
+          below name the released shared and cli, and the `package` job resolves them from JitPack. The
+          `dist` profile also bakes botmaker.cli.version into the jar
+          (META-INF/botmaker/built-with.properties), which is how the installed app knows which cli it
+          carries.
     -->
     <groupId>com.github.BotMakerDev</groupId>
     <artifactId>botmaker-dashboard</artifactId>
@@ -289,22 +290,20 @@
                         <artifactId>maven-resources-plugin</artifactId>
                         <version>3.3.1</version>
                         <executions>
-                            <!-- The module's .deps.env, into the jar: the installed app reads CLI_TAG out
-                                 of it to say when the checkout's botmaker-cli has moved past the cli this
-                                 build calls (umbrella/BuiltWith). Only under -Pdist, so a development run —
-                                 whose cli IS the checkout's — has no resource and says nothing. -->
+                            <!-- botmaker.cli.version, into the jar: the installed app reads it to say when
+                                 the checkout's botmaker-cli has moved past the cli this build calls
+                                 (umbrella/BuiltWith). Only under -Pdist, so a development run — whose cli IS
+                                 the checkout's — has no resource and says nothing. -->
                             <execution>
-                                <id>bake-deps-env</id>
+                                <id>bake-built-with</id>
                                 <phase>generate-resources</phase>
                                 <goals><goal>copy-resources</goal></goals>
                                 <configuration>
-                                    <outputDirectory>${project.build.outputDirectory}/META-INF/botmaker</outputDirectory>
+                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                     <resources>
                                         <resource>
-                                            <directory>${project.basedir}</directory>
-                                            <includes>
-                                                <include>.deps.env</include>
-                                            </includes>
+                                            <directory>${project.basedir}/src/dist/resources</directory>
+                                            <filtering>true</filtering>
                                         </resource>
                                     </resources>
                                 </configuration>

@@ -20,7 +20,7 @@ com.botmaker.dashboard
 │   ├── Io              the one executor (virtual threads) for blocking work, parallel(), a lock per repository,
 │   │                   Task: what a Cancel button stops (fail the future, then interrupt)
 │   ├── Umbrella        the module list, read from .gitmodules and never kept here
-│   ├── DepsEnv         the pins, plus the one question the file cannot ask: is this one stale?
+│   ├── Pins            the latest tag's pom pins, plus the one question the pom cannot ask: is this one stale?
 │   ├── Changelog       is there an [Unreleased] section for a release to stamp
 │   ├── ModuleRow       one module as a row
 │   ├── ModuleScan      git per module, then Plan.decide once, into rows
@@ -43,7 +43,7 @@ com.botmaker.dashboard
 │   ├── ChangelogDrafts every module with no section: copied forward or drafted, each committed; Drafter is a seam
 │   ├── CswapAccounts   cswap list as slots and 5h usage — a slot, never an address
 │   ├── ClaudeDraft     the prompt, the argv and the rotation; it fills the editor and saves nothing
-│   ├── BuiltWith       the cli this build was packaged with (baked .deps.env) against the checkout's
+│   ├── BuiltWith       the cli this build was packaged with (baked built-with.properties) against the checkout's
 │   └── Links           a tag's three pages (Release, JitPack, Actions), and a repository's four
 └── ui/
     ├── UmbrellaBar     the checkout in use, the picker that refuses a wrong directory, the stale-cli notice

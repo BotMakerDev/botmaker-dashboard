@@ -63,7 +63,7 @@ class ReleaseRunTest {
 
         ReleaseRun.go(umbrella, everything(), false, line -> { });
 
-        assertFalse(Files.exists(sdk.resolve(".deps.env")));
+        assertFalse(Files.exists(sdk.resolve("pom.xml")));
         assertFalse(Files.exists(sdk.resolve("CHANGELOG.md")));
     }
 }

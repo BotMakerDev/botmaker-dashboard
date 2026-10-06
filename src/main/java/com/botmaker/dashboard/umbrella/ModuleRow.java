@@ -7,11 +7,14 @@ import java.util.Optional;
 
 /**
  * One module, as the Modules tab shows it: where its tag is, whether HEAD has moved past it, what
- * {@code release.sh} would decide about that movement, where its pins sit, and whether its changelog is
- * ready.
+ * {@code release.sh} would decide about that movement, the version its pom carries, where its latest tag's
+ * pins sit, and whether its changelog is ready.
  *
  * <p>Every field is either a fact of the checkout (git, a file's contents) or the release library's own
  * verdict quoted back. Nothing here is computed from a rule this module owns — see {@link ModuleScan}.
+ *
+ * @param pomVersion the version HEAD's pom carries — {@code main}'s {@code -SNAPSHOT}; empty with no pom
+ * @param pins       the pins of the latest tag's pom ({@link Pins})
  */
 public record ModuleRow(
         String name,
@@ -19,7 +22,8 @@ public record ModuleRow(
         int ahead,
         boolean dirty,
         Optional<Plan.Decision> plan,
-        List<DepsEnv.Pin> pins,
+        Optional<String> pomVersion,
+        List<Pins.Pin> pins,
         ChangelogState changelog) {
 
     /** Whether this module's {@code CHANGELOG.md} is ready for a release to stamp a version onto. */
@@ -75,13 +79,17 @@ public record ModuleRow(
 
     /** True when any pin names something other than its upstream's newest tag. */
     public boolean anyStalePin() {
-        return pins.stream().anyMatch(DepsEnv.Pin::stale);
+        return pins.stream().anyMatch(Pins.Pin::stale);
     }
 
     public String pinsLabel() {
         if (pins.isEmpty()) {
             return "—";
         }
-        return String.join("   ", pins.stream().map(DepsEnv.Pin::toString).toList());
+        return String.join("   ", pins.stream().map(Pins.Pin::toString).toList());
+    }
+
+    public String pomVersionLabel() {
+        return pomVersion.orElse("—");
     }
 }

@@ -2,6 +2,7 @@ package com.botmaker.dashboard.umbrella;
 
 import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Plan;
+import com.botmaker.cli.release.PomVersions;
 import com.botmaker.cli.release.ReleaseRefusal;
 import com.botmaker.cli.release.Requested;
 import com.botmaker.cli.release.Tags;
@@ -23,7 +24,7 @@ import java.util.Optional;
  *
  * <p>The order of the work is the interesting part. Git is asked first, in every module, because those
  * answers are local, fast and needed twice — once for the module's own tag and again as the <i>upstream</i>
- * tag a sibling's {@code .deps.env} pin is judged against. The decide pass runs once, for the whole
+ * tag a sibling's pin is judged against. The decide pass runs once, for the whole
  * constellation, because it covers every module in a single call and ten separate calls would be ten times
  * the work for the same answer.
  *
@@ -59,8 +60,8 @@ public final class ModuleScan {
     private ModuleScan() {
     }
 
-    /** One module's pass-one answers. */
-    private record Git(Optional<String> tag, int ahead, boolean dirty) {
+    /** One module's pass-one answers; {@code tagPom} is the latest tag's {@code pom.xml}, its pins' source. */
+    private record Git(Optional<String> tag, int ahead, boolean dirty, Optional<String> tagPom) {
     }
 
     public static Scan scan(Path umbrella) {
@@ -71,15 +72,18 @@ public final class ModuleScan {
         List<Git> read = Io.parallel(modules, module -> {
             Path dir = umbrella.resolve(module);
             Optional<String> tag = latestTag(dir);
-            return new Git(tag, tag.map(t -> commitsSince(dir, t)).orElse(0), isDirty(dir));
+            return new Git(tag, tag.map(t -> commitsSince(dir, t)).orElse(0), isDirty(dir),
+                    tag.flatMap(t -> pomAt(dir, t)));
         });
         Map<String, Optional<String>> tags = new LinkedHashMap<>();
         Map<String, Integer> ahead = new LinkedHashMap<>();
         Map<String, Boolean> dirty = new LinkedHashMap<>();
+        Map<String, Optional<String>> tagPoms = new LinkedHashMap<>();
         for (int i = 0; i < modules.size(); i++) {
             tags.put(modules.get(i), read.get(i).tag());
             ahead.put(modules.get(i), read.get(i).ahead());
             dirty.put(modules.get(i), read.get(i).dirty());
+            tagPoms.put(modules.get(i), read.get(i).tagPom());
         }
         Map<String, String> latestTags = new LinkedHashMap<>();
         tags.forEach((module, tag) -> tag.ifPresent(t -> latestTags.put(module, t)));
@@ -103,16 +107,17 @@ public final class ModuleScan {
         List<ModuleRow> rows = new ArrayList<>();
         for (String module : modules) {
             Path dir = umbrella.resolve(module);
-            List<DepsEnv.Pin> pins = read(dir.resolve(".deps.env"))
-                    .map(text -> DepsEnv.parse(text, latestTags))
+            List<Pins.Pin> pins = Module.byDirectory(module)
+                    .flatMap(known -> tagPoms.get(module).map(pom -> Pins.read(known, pom, latestTags)))
                     .orElse(List.of());
+            Optional<String> pomVersion = read(dir.resolve("pom.xml")).flatMap(ModuleScan::projectVersion);
             ModuleRow.ChangelogState changelog = read(dir.resolve("CHANGELOG.md"))
                     .map(text -> Changelog.hasUnreleased(text)
                             ? ModuleRow.ChangelogState.UNRELEASED
                             : ModuleRow.ChangelogState.NONE)
                     .orElse(ModuleRow.ChangelogState.ABSENT);
             rows.add(new ModuleRow(module, tags.get(module), ahead.get(module), dirty.get(module),
-                    decisionFor(plan, module), pins, changelog));
+                    decisionFor(plan, module), pomVersion, pins, changelog));
         }
         return new Scan(List.copyOf(rows), plan, output, error);
     }
@@ -169,9 +174,26 @@ public final class ModuleScan {
                 .findFirst());
     }
 
-    /** How many commits HEAD is past that tag. 0 when the tag is HEAD, or when git could not say. */
+    /** {@code pom.xml} as that tag has it, or empty: no pom there, or git could not say. */
+    private static Optional<String> pomAt(Path dir, String tag) {
+        Proc p = Proc.run(dir, GIT_TIMEOUT, "git", "show", tag + ":pom.xml");
+        return p.ok() ? Optional.of(p.out()) : Optional.empty();
+    }
+
+    /** The pom's own version, or empty — one the release library refuses to read (a parent) included. */
+    private static Optional<String> projectVersion(String pom) {
+        try {
+            return PomVersions.projectVersion(pom);
+        } catch (ReleaseRefusal refused) {
+            return Optional.empty();
+        }
+    }
+
+    /** How many commits HEAD is past that tag, the release's own back to snapshot and pins left out. 0 when the tag is HEAD, or when git could not say. */
     private static int commitsSince(Path dir, String tag) {
-        Proc p = Proc.run(dir, GIT_TIMEOUT, "git", "rev-list", "--count", tag + "..HEAD");
+        List<String> command = new ArrayList<>(List.of("git", "rev-list", "--count", tag + "..HEAD"));
+        command.addAll(ChangelogEdit.notBookkeeping());
+        Proc p = Proc.run(dir, GIT_TIMEOUT, command);
         if (!p.ok()) {
             return 0;
         }

@@ -20,7 +20,7 @@ there unchanged on 2026-10-05).
 | the Tier column, `Vetting`, the Auto-merge column | `tiers-and-vetting.md` |
 | the package tree, `ReleaseSpec`, `dashboard.css`, `Themed`, `Browse` | `layout.md` |
 | `AccountBar`, the stylesheet, anything copied from Studio | `duplication-from-studio.md` |
-| `-Pdist`, the rpm/deb, `BuiltWith`, `.deps.env` | `packaging.md` |
+| `-Pdist`, the rpm/deb, `BuiltWith`, `Pins`, the pom's pins | `packaging.md` |
 
 ## What it is, and the two things it is not
 

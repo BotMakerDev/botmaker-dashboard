@@ -14,8 +14,8 @@ import java.util.function.Consumer;
  *
  * <p><b>Two ways a section gets written, decided by the commits.</b> A module with commits since its newest
  * tag has something to say, and Claude drafts it ({@link ClaudeDraft}) from those commits. A module with
- * <em>no</em> commits since its tag is being re-released only because an upstream moved — its
- * {@code .deps.env} pins will change and nothing else — and there is nothing to draft: the section is one
+ * <em>no</em> commits since its tag is being re-released only because an upstream moved — its pom's pins
+ * will change and nothing else — and there is nothing to draft: the section is one
  * line saying so, followed by the previous section, so a reader of the release notes sees what the module
  * does rather than an empty heading. No model is asked for that; a model would be asked to invent.
  *

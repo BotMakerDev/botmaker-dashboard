@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - The pom carries a real version and names its upstreams' versions instead of `0.0.0-SNAPSHOT`, and the
   module's `.deps.env` is gone (umbrella `docs/refactor/43-real-versions.md`).
+- A tagged build resolves shared and the cli its pom pins from JitPack instead of building them from source.
+  The installed app learns which cli it carries from the pom's pin, baked in at package time.
+- The Modules tab shows each module's pom version on HEAD, and the pins read from its latest tag's pom (*Tag's
+  pins*, was *.deps.env pins*). The release's own back-to-snapshot and pin commits no longer count as
+  commits since the tag, there or when drafting a changelog.
 
 No source changes since v0.1.3; re-released for updated upstream pins.
 

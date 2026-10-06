@@ -211,6 +211,7 @@ public final class ModulesTab extends BorderPane {
         table.getColumns().setAll(
                 column("Module", 200, ModuleRow::name),
                 column("Latest tag", 140, ModuleRow::tagLabel),
+                column("pom on HEAD", 130, ModuleRow::pomVersionLabel),
                 column("Working tree", 110, r -> r.dirty() ? "dirty" : "clean"),
                 ciColumn(),
                 planColumn(),
@@ -335,9 +336,9 @@ public final class ModulesTab extends BorderPane {
         return col;
     }
 
-    /** The pins, marked when one is not its upstream's newest tag. */
+    /** The latest tag's pins, marked when one is not its upstream's newest tag. */
     private static TableColumn<ModuleRow, String> pinsColumn() {
-        TableColumn<ModuleRow, String> col = column(".deps.env pins", 380, ModuleRow::pinsLabel);
+        TableColumn<ModuleRow, String> col = column("Tag's pins", 380, ModuleRow::pinsLabel);
         col.setCellFactory(c -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {

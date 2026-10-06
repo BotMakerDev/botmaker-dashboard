@@ -39,7 +39,7 @@ read from there — `.gitmodules`, each submodule's git, the committed `releases
 
 | Tab | What it answers |
 |---|---|
-| **Modules** | Each module's latest tag, whether HEAD has moved past it, whether that movement is release-relevant, and where its `.deps.env` pins sit. |
+| **Modules** | Each module's latest tag, whether HEAD has moved past it, whether that movement is release-relevant, its pom version, and where its latest tag's pins sit. |
 | **Releases** | The committed `releases/*.md` logs, newest first, with a re-poll that re-reads JitPack and Actions. |
 | **Release** | What `./release.sh --dry-run` decides for a set of flags: the version per module, what is skipped or forced, the tag order, the gates. |
 | **Queue** | Open pull requests on `botmaker-plugin-registry` and `botmaker-gallery`, the one entry file each adds, and the gate's own verdict. |
