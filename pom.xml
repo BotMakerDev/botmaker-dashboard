@@ -45,7 +45,7 @@
         <!-- Each upstream's main version. An umbrella `mvn install` resolves them from the reactor; a
              standalone build here resolves what a local `mvn -pl botmaker-shared install` leaves in ~/.m2.
              A release commit sets the released versions (doc 43). -->
-        <botmaker.shared.version>0.2.3-SNAPSHOT</botmaker.shared.version>
+        <botmaker.shared.version>0.2.4-SNAPSHOT</botmaker.shared.version>
         <botmaker.cli.version>0.3.2-SNAPSHOT</botmaker.cli.version>
         <!-- Numeric-only version for jpackage (it rejects -SNAPSHOT). The package job passes the tag's
              number as -Dapp.version; a local `-Pdist package` gets this placeholder. -->
