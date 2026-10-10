@@ -62,6 +62,16 @@ public final class Links {
         return GITHUB + OWNER + "/" + module + "/actions?query=branch%3A" + tag;
     }
 
+    /**
+     * The commit a tag points at — the release commit that moved the version.
+     *
+     * <p>By the tag rather than a hash: GitHub resolves a ref in {@code /commit/}, and the release log records
+     * the tag, not the commit under it.
+     */
+    public static String commit(String module, String tag) {
+        return GITHUB + slugOf(module) + "/commit/" + tag;
+    }
+
     /** A module's repository. The directory name is the repository name for every submodule here. */
     public static String repo(String module) {
         return GITHUB + slugOf(module);
@@ -155,7 +165,7 @@ public final class Links {
      * an APK, Studio is packaged per OS by its own CI, and the gallery, the registry and this window are not
      * released at all. A button offering a JitPack page for any of them opens a page about nothing.
      */
-    private static boolean onJitpack(String module) {
+    public static boolean onJitpack(String module) {
         return Module.byDirectory(module)
                 .map(com.botmaker.cli.release.ReleaseLog::onJitpack)
                 .orElse(false);

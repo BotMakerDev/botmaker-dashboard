@@ -20,6 +20,9 @@ class LinksTest {
         // poll_actions uses.
         assertEquals("https://github.com/BotMakerDev/botmaker-cli/actions?query=branch%3Av0.0.8",
                 Links.actions("botmaker-cli", "v0.0.8"));
+        // The release commit, by the tag: GitHub resolves a ref in /commit/.
+        assertEquals("https://github.com/BotMakerDev/botmaker-cli/commit/v0.0.8",
+                Links.commit("botmaker-cli", "v0.0.8"));
     }
 
     @Test

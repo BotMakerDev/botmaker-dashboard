@@ -46,6 +46,10 @@ public final class ModuleLane extends VBox {
 
     private final Label module = new Label();
     private final Hyperlink chip = new Hyperlink();
+    /** <b>Commit ↗</b> — the release commit under the tag, the stepper's first node. */
+    private final Hyperlink commitChip = new Hyperlink("Commit ↗");
+    /** <b>JitPack ↗</b> — the tag's build log, on a lane whose module is resolved from JitPack. */
+    private final Hyperlink jitpackChip = new Hyperlink("JitPack ↗");
     /** <b>Actions ↗</b> — the run this tag fired, on every lane that has a tag and not only a failed one. */
     private final Hyperlink actionsChip = new Hyperlink("Actions ↗");
     private final Label stage = new Label();
@@ -75,6 +79,18 @@ public final class ModuleLane extends VBox {
         chip.setOnAction(e -> {
             if (lane != null) {
                 open.accept(Links.release(lane.module(), lane.tag()));
+            }
+        });
+        commitChip.getStyleClass().add("tag-chip");
+        commitChip.setOnAction(e -> {
+            if (lane != null) {
+                open.accept(Links.commit(lane.module(), lane.tag()));
+            }
+        });
+        jitpackChip.getStyleClass().add("tag-chip");
+        jitpackChip.setOnAction(e -> {
+            if (lane != null) {
+                open.accept(Links.jitpack(lane.module(), lane.tag()));
             }
         });
         actionsChip.getStyleClass().add("tag-chip");
@@ -123,7 +139,8 @@ public final class ModuleLane extends VBox {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, module, chip, actionsChip, stepper, spacer, stage, elapsed);
+        HBox header = new HBox(10, module, chip, commitChip, jitpackChip, actionsChip, stepper, spacer, stage,
+                elapsed);
         header.setAlignment(Pos.CENTER_LEFT);
 
         errorText.setEditable(false);
@@ -159,10 +176,12 @@ public final class ModuleLane extends VBox {
         module.setText(lane.module());
         chip.setText(lane.tag());
         // A lane with no tag has no run to open: the release never got that far, and the repository's run
-        // list filtered by a tag that does not exist is an empty page.
+        // list filtered by a tag that does not exist is an empty page. The same holds for its commit and its
+        // JitPack build; a module JitPack never builds (an APK, Studio) has no build page at all.
         boolean tagged = !lane.tag().isBlank();
-        actionsChip.setVisible(tagged);
-        actionsChip.setManaged(tagged);
+        showChip(commitChip, tagged);
+        showChip(jitpackChip, tagged && Links.onJitpack(lane.module()));
+        showChip(actionsChip, tagged);
         stage.setText(lane.stage());
         elapsed.setText(lane.elapsed().map(ReleaseProgress::clock).orElse(""));
 
@@ -222,6 +241,19 @@ public final class ModuleLane extends VBox {
 
     Hyperlink actionsChip() {
         return actionsChip;
+    }
+
+    Hyperlink commitChip() {
+        return commitChip;
+    }
+
+    Hyperlink jitpackChip() {
+        return jitpackChip;
+    }
+
+    private static void showChip(Hyperlink chip, boolean show) {
+        chip.setVisible(show);
+        chip.setManaged(show);
     }
 
     /** Whether the running node may pulse. The owner turns it off while the lane cannot be seen. */

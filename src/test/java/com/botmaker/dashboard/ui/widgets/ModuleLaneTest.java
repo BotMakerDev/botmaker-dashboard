@@ -120,6 +120,31 @@ class ModuleLaneTest extends FxHeadless {
                 opened, "with no polled run, the repository's runs filtered by the tag");
     }
 
+    /** The stepper's other two pages are one click too: the tag's commit and its JitPack build. */
+    @Test
+    void everyTaggedLaneOffersItsCommitAndJitpackBuild() {
+        draw(ReleaseFixtures.midChain().lanes().get(1));
+
+        assertTrue(lane.commitChip().isVisible());
+        assertTrue(lane.jitpackChip().isVisible());
+        clickOn(lane.commitChip());
+        clickOn(lane.jitpackChip());
+        assertEquals(List.of(
+                "https://github.com/BotMakerDev/botmaker-plugin-host/commit/v0.1.0",
+                "https://jitpack.io/#BotMakerDev/botmaker-plugin-host/v0.1.0"), opened);
+    }
+
+    /** A module JitPack never builds has no build page to offer. */
+    @Test
+    void aModuleOffJitpackOffersNoBuildPage() {
+        ReleaseProgress.Lane model = ReleaseFixtures.midChain().lanes().get(1);
+        draw(new ReleaseProgress.Lane("botmaker-pilot", model.tag(), model.stage(), model.steps(),
+                model.errors(), model.elapsed()));
+
+        assertTrue(lane.commitChip().isVisible());
+        assertFalse(lane.jitpackChip().isVisible());
+    }
+
     /** A polled run is one click, not one page away. */
     @Test
     void aLaneThatKnowsItsRunGoesStraightToIt() {

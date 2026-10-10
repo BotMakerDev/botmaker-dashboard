@@ -12,6 +12,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- A release lane (the Release and Releases tabs) links every stepper page: *Commit ↗* (the tag's commit) and
+  *JitPack ↗* (the tag's build, for a module JitPack builds) beside the tag and *Actions ↗*.
 - The pom carries a real version and names its upstreams' versions instead of `0.0.0-SNAPSHOT`, and the
   module's `.deps.env` is gone (umbrella `docs/refactor/43-real-versions.md`).
 - A tagged build resolves shared and the cli its pom pins from JitPack instead of building them from source.
