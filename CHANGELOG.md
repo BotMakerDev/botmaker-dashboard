@@ -8,6 +8,50 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+No source changes since v0.3.0; re-released for updated upstream pins.
+
+### Changed
+
+- A release lane (the Release and Releases tabs) links every stepper page: *Commit ↗* (the tag's commit) and
+  *JitPack ↗* (the tag's build, for a module JitPack builds) beside the tag and *Actions ↗*.
+- The pom carries a real version and names its upstreams' versions instead of `0.0.0-SNAPSHOT`, and the
+  module's `.deps.env` is gone (umbrella `docs/refactor/43-real-versions.md`).
+- A tagged build resolves shared and the cli its pom pins from JitPack instead of building them from source.
+  The installed app learns which cli it carries from the pom's pin, baked in at package time.
+- The Modules tab shows each module's pom version on HEAD, and the pins read from its latest tag's pom (*Tag's
+  pins*, was *.deps.env pins*). The release's own back-to-snapshot and pin commits no longer count as
+  commits since the tag, there or when drafting a changelog.
+
+No source changes since v0.1.3; re-released for updated upstream pins.
+
+### Changed
+
+- JitPack links open `jitpack.io/#BotMakerDev/…`, the coordinate owner since the move from `LiQiyeDev`.
+
+### Added
+
+- The Release tab has a **Stop** button while a release runs. The release ends before its next module, or at
+  once in a JitPack wait, and never cuts a git command short; it writes its log and commits the tagged
+  pointers locally, as a failed module does. A board lane shows a JitPack build that failed as failed.
+
+### Fixed
+
+- A release that succeeded no longer reads as Failed ("jitpack: unknown (interrupted) · actions: no run on …")
+  in the Releases tab. Refresh relisted the history, the relist reselected the release, and the reselect's
+  poll interrupted the Refresh's own poll mid-request; the interrupted answers were then cached and outranked
+  the log. A poll that a running one already covers no longer cancels it, an interrupted answer is never
+  cached, and a cached non-answer gives way to a green cell in the release log, which also heals a cache that
+  already holds one.
+- The Catalog's JitPack link for one of our plugins opens the coordinate owner's page
+  (`jitpack.io/#LiQiyeDev/<module>`), where JitPack builds it, instead of the repository owner's.
+
+### Removed
+
+- *Update template…* in the Catalog tab, with its dialog. A template is released like any other module, with
+  `--gamebot` in the Release tab or `release.sh`.
+
 ## [0.3.0] — 2026-10-10
 
 ### Changed
