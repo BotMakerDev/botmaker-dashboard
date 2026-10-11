@@ -15,13 +15,8 @@ sudo dnf install botmaker-dashboard
 
 Later versions arrive with `sudo dnf upgrade`. Debian / Ubuntu: the
 [repository page](https://botmakerdev.github.io/botmaker-dashboard/) prints the apt line. x86-64 only; each
-version's rpm and deb are also on the Releases page.
-
-**The next release signs itself.** The three signing secrets are set on the `BotMakerDev` organization,
-which this repository joined on 2026-09-18, so `GPG_KEY_ID` is no longer empty here. v0.0.3 was published
-unsigned — with `gpgcheck` off in its `.repo` and the repository page saying so, rather than implying a
-check nobody performed. The key is the one `botmaker-cli`'s repository publishes; the umbrella's
-`tools/signing-secret.sh` is how it got there.
+version's rpm and deb are also on the Releases page. The packages are signed with the key `botmaker-cli`'s
+repository publishes.
 
 ## From a checkout
 
@@ -32,24 +27,28 @@ mvn -pl botmaker-dashboard javafx:run
 ```
 
 It asks for the **umbrella checkout** on first run and remembers it. Everything it shows about releases is
-read from there — `.gitmodules`, each submodule's git, the committed `releases/*.md` logs, and
-`./release.sh` itself — which is why this is a desktop window and not a page.
+read from there — `.gitmodules`, each submodule's git, the committed `releases/*.md` logs — which is why this
+is a desktop window and not a page.
 
-## Four tabs
+## Six tabs
 
 | Tab | What it answers |
 |---|---|
 | **Modules** | Each module's latest tag, whether HEAD has moved past it, whether that movement is release-relevant, its pom version, and where its latest tag's pins sit. |
 | **Releases** | The committed `releases/*.md` logs, newest first, with a re-poll that re-reads JitPack and Actions. |
-| **Release** | What `./release.sh --dry-run` decides for a set of flags: the version per module, what is skipped or forced, the tag order, the gates. |
+| **Release** | **Preview** decides a set of flags: the version per module, what is skipped or forced, the tag order, the gates. **Execute…** cuts it, and **Stop** halts it before its next step. |
+| **Changelog** | Writes a module's `## [Unreleased]` section — the one the changelog gate refuses a release without — and commits that one file in the submodule. *Draft with Claude* fills the editor. |
 | **Queue** | Open pull requests on `botmaker-plugin-registry` and `botmaker-gallery`, the one entry file each adds, and the gate's own verdict. |
+| **Catalog** | What is published: every merged plugin entry and every published bot, templates marked, read from github.com. |
 
 ## Two rules it is built on
 
-**It never reimplements a decision `release.sh` owns.** The decide pass, the bump arithmetic, the forcing
-rules, the tag order and the gates have exactly one implementation. This app shells to it and reads its
-output. A second implementation would diverge on the first rule added and be discovered by a bad tag, which
-cannot be edited.
+**It never reimplements a decision the release library owns.** The decide pass, the bump arithmetic, the
+forcing rules, the tag order and the gates have one implementation, `com.botmaker.cli.release` in
+`botmaker-cli`, the same one `release.sh` and `botmaker release` run. The preview calls it in the window's
+own process. An executed release runs it in a process of its own, so it survives the window being closed;
+the window reads its progress and can be reopened while it runs. A second implementation would diverge on
+the first rule added and be discovered by a bad tag, which cannot be edited.
 
 **Admin is `permissions.push` on the plugin registry, read from the GitHub API.** There is no allowlist and
 no role table: the power already exists on github.com, and a second list of who holds it is a list that goes
@@ -58,5 +57,5 @@ wrong. This window reveals a power GitHub enforces regardless — it never grant
 ## Not a library
 
 No JitPack build and no flatten: it is an application, and nothing resolves it as a dependency. It is
-tagged by the umbrella release (`--dashboard`), which builds the rpm and deb, the GitHub Release and the
-dnf/apt repository above.
+tagged by the umbrella release (`--dashboard`, which a `--cli` release forces), which builds
+the rpm and deb, the GitHub Release and the dnf/apt repository above.
