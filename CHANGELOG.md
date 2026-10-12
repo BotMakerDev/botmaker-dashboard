@@ -8,6 +8,17 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- **The Modules tab says whether each newest tag built on JitPack.** A *Tag on JitPack* column (built, never
+  built, not built yet; hover a broken one for JitPack's message), and a red banner over the table when a tag
+  never built, naming each one and the `./release.sh` flags that cut their next patch. Studio's and the
+  dashboard's tags count as broken when they pin a tag that is.
+- **The Changelog tab's *Never built*** asks JitPack about the module's newest tag and, when it never built, adds
+  the repair release's entry under `### Fixed` in the editor. Nothing is saved until Save.
+
 ## [0.3.2] — 2026-10-12
 
 ### Fixed

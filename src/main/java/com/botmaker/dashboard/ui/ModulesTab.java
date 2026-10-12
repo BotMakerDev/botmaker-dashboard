@@ -1,12 +1,17 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.cli.release.Jitpack;
+import com.botmaker.cli.release.Module;
 import com.botmaker.dashboard.umbrella.CiStatus;
 import com.botmaker.dashboard.umbrella.Io;
 import com.botmaker.dashboard.umbrella.Links;
 import com.botmaker.dashboard.umbrella.ModuleRow;
 import com.botmaker.dashboard.umbrella.ModuleScan;
+import com.botmaker.dashboard.umbrella.TagBuilds;
+import com.botmaker.dashboard.ui.widgets.CopyButton;
 import com.botmaker.dashboard.ui.widgets.LinkBar;
 import javafx.application.Platform;
+import javafx.geometry.Pos;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -22,11 +27,14 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -60,6 +68,18 @@ public final class ModulesTab extends BorderPane {
 
     /** The newest CI batch asked for. Read and written on the FX thread only. */
     private int ciBatch;
+
+    /** What JitPack said about each module's newest tag, filled in like {@link #ci}. */
+    private final Map<String, TagBuilds.Build> builds = new ConcurrentHashMap<>();
+
+    /** Each module's newest tag, as the last scan read it: the banner names them. FX thread only. */
+    private final Map<String, String> tags = new HashMap<>();
+
+    /** The newest JitPack batch asked for. FX thread only. */
+    private int buildBatch;
+
+    /** Over the table while a newest tag never built, naming the release that repairs it; hidden otherwise. */
+    private final VBox banner = new VBox(4);
 
     /**
      * Four threads, because every check is a {@code gh} process waiting on the network.
@@ -100,7 +120,11 @@ public final class ModulesTab extends BorderPane {
             return row;
         });
 
-        setTop(bar);
+        banner.getStyleClass().add("refusal-banner");
+        banner.setPadding(new Insets(8, 12, 8, 12));
+        showBanner(Optional.empty());
+
+        setTop(new VBox(bar, banner));
         setCenter(table);
 
         if (umbrella != null) {
@@ -137,6 +161,7 @@ public final class ModulesTab extends BorderPane {
                     refresh.setDisable(false);
                     if (error != null) {
                         rows.clear();
+                        showBanner(Optional.empty());     // the previous checkout's tags are not this one's
                         status.setText("Scan failed: " + error.getMessage());
                         return;
                     }
@@ -144,7 +169,60 @@ public final class ModulesTab extends BorderPane {
                     status.setText(summary(scan));
                     showOutput(scan.output());
                     askCi(scan.rows());
+                    askJitpack(scan.rows());
                 }));
+    }
+
+    /**
+     * Asks JitPack about each module's newest tag, beside the CI badges and the same way: off the scan, numbered
+     * batches, an older batch's answer dropped. The banner is recomputed as each answer lands.
+     */
+    private void askJitpack(List<ModuleRow> scanned) {
+        builds.clear();
+        tags.clear();
+        showBanner(Optional.empty());
+        int batch = ++buildBatch;
+        for (ModuleRow row : scanned) {
+            Optional<Module> module = Module.byDirectory(row.name());
+            if (module.isEmpty() || row.latestTag().isEmpty()) {
+                continue;
+            }
+            String tag = row.latestTag().get();
+            tags.put(row.name(), tag);
+            checks.submit(() -> {
+                TagBuilds.Build answer = TagBuilds.of(module.get(), tag, row.pins(), Jitpack.Probe.real());
+                Platform.runLater(() -> {
+                    if (current(batch, buildBatch)) {
+                        builds.put(row.name(), answer);
+                        table.refresh();
+                        showBanner(TagBuilds.banner(tags, builds));
+                    }
+                });
+            });
+        }
+    }
+
+    private void showBanner(Optional<TagBuilds.Banner> shown) {
+        banner.getChildren().clear();
+        banner.setVisible(shown.isPresent());
+        banner.setManaged(shown.isPresent());
+        shown.ifPresent(b -> {
+            Label title = new Label(b.title());
+            title.getStyleClass().add("refusal-title");
+            banner.getChildren().add(title);
+            for (String line : b.lines()) {
+                Label label = new Label(line);
+                label.getStyleClass().add("refusal-line");
+                label.setWrapText(true);
+                banner.getChildren().add(label);
+            }
+            Label command = new Label("Repair: " + b.command()
+                    + "   (each needs a changelog entry: the Changelog tab's Never built)");
+            command.getStyleClass().add("refusal-line");
+            HBox repair = new HBox(10, command, new CopyButton("Copy", b::command));
+            repair.setAlignment(Pos.CENTER_LEFT);
+            banner.getChildren().add(repair);
+        });
     }
 
     /**
@@ -211,6 +289,7 @@ public final class ModulesTab extends BorderPane {
         table.getColumns().setAll(
                 column("Module", 200, ModuleRow::name),
                 column("Latest tag", 140, ModuleRow::tagLabel),
+                jitpackColumn(),
                 column("pom on HEAD", 130, ModuleRow::pomVersionLabel),
                 column("Working tree", 110, r -> r.dirty() ? "dirty" : "clean"),
                 ciColumn(),
@@ -258,6 +337,41 @@ public final class ModulesTab extends BorderPane {
                     setTooltip(tip);
                 }
                 setOnMouseClicked(e -> open(Links.actions(module)));
+            }
+        });
+        return col;
+    }
+
+    /** Whether the newest tag built on JitPack; hovering a broken one shows why. */
+    private TableColumn<ModuleRow, String> jitpackColumn() {
+        TableColumn<ModuleRow, String> col = new TableColumn<>("Tag on JitPack");
+        col.setPrefWidth(120);
+        col.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().name()));
+        col.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String module, boolean empty) {
+                super.updateItem(module, empty);
+                getStyleClass().removeAll("cell--ok", "cell--broken", "cell--dim");
+                setTooltip(null);
+                if (empty || module == null) {
+                    setText(null);
+                    return;
+                }
+                TagBuilds.Build answer = builds.get(module);
+                if (answer == null) {
+                    setText(tags.containsKey(module) ? "asking…" : "—");
+                    getStyleClass().add("cell--dim");
+                    return;
+                }
+                setText(answer.state().label());
+                getStyleClass().add(answer.state().styleClass());
+                if (!answer.detail().isBlank()) {
+                    Tooltip tip = new Tooltip(answer.detail());
+                    tip.setShowDuration(Duration.minutes(2));
+                    tip.setWrapText(true);
+                    tip.setMaxWidth(700);
+                    setTooltip(tip);
+                }
             }
         });
         return col;

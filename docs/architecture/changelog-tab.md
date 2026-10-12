@@ -45,3 +45,9 @@ the modules the flags would cut (`ReleaseSpec.requested()`, minus the exempt one
 because the decide pass reads the *committed* changelog. A module it could not write is a refusal of the
 preview by name — `preview refused: … need a changelog and none could be written` — and Execute stays dead.
 The default `autoDraft` does nothing, which is what a test backend over a fixture wants.
+
+**Never built asks JitPack and fills the editor only** (2026-10-12). It asks `TagBuilds` about the module's newest
+tag; a broken one adds the repair's bullet under `### Fixed` (`TagBuilds.withEntry`, which adds the heading when
+the section has none), worded like the 2026-10-12 repairs: the version, why it never built (JitPack's message
+without its log path, or the pin that never built), and that this release is that version as it was meant to
+resolve. A tag that built, or is still building, gets a status line and no entry. Save commits it as usual.

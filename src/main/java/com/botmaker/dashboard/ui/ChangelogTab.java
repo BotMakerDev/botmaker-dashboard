@@ -1,11 +1,14 @@
 package com.botmaker.dashboard.ui;
 
+import com.botmaker.cli.release.Jitpack;
 import com.botmaker.cli.release.Module;
 import com.botmaker.cli.release.Tags;
 import com.botmaker.dashboard.umbrella.ChangelogDrafts;
 import com.botmaker.dashboard.umbrella.ChangelogEdit;
 import com.botmaker.dashboard.umbrella.ClaudeDraft;
 import com.botmaker.dashboard.umbrella.Io;
+import com.botmaker.dashboard.umbrella.ModuleScan;
+import com.botmaker.dashboard.umbrella.TagBuilds;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
@@ -80,6 +83,11 @@ public final class ChangelogTab extends BorderPane {
     private final Button save = new Button("Save and commit");
     private final Button draft = new Button("Draft with Claude");
     private final Button draftAll = new Button("Draft all…");
+    /** Asks JitPack whether the newest tag built, and adds the repair's entry to the editor when it did not. */
+    private final Button neverBuilt = new Button("Never built");
+
+    /** The newest tag of the module on screen, from its last {@link #read}; empty when it has none. */
+    private Optional<String> openedTag = Optional.empty();
 
     /**
      * One thread for reads and saves, because a save commits. A draft runs as an {@code Io.Task} instead, so
@@ -160,6 +168,10 @@ public final class ChangelogTab extends BorderPane {
         draftAll.setOnAction(e -> draftAll());
         draftAll.setTooltip(new Tooltip("Write and commit an [Unreleased] section for every module that has "
                 + "none: copied forward where nothing changed since the tag, drafted with Claude otherwise."));
+        neverBuilt.setOnAction(e -> neverBuilt());
+        neverBuilt.setTooltip(new Tooltip("Ask JitPack whether this module's newest tag built. If it never did, add "
+                + "the repair release's entry under ### Fixed in the editor; nothing is saved."));
+        neverBuilt.setDisable(true);
         cancel.setOnAction(e -> {
             if (drafting != null) {
                 status.setText("Cancelling …");
@@ -178,7 +190,7 @@ public final class ChangelogTab extends BorderPane {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, reload, save, draft, draftAll, cancel, spacer, status);
+        HBox bar = new HBox(10, reload, save, draft, draftAll, neverBuilt, cancel, spacer, status);
         bar.getStyleClass().add("tab-bar");
         bar.setPadding(new Insets(10, 12, 10, 12));
 
@@ -233,6 +245,8 @@ public final class ChangelogTab extends BorderPane {
         // Forgotten first: until the read comes back, the document on screen is not this module's, and a Save
         // that ran meanwhile would pass the old module's document with the new module's name.
         opened = null;
+        openedTag = Optional.empty();
+        neverBuilt.setDisable(true);
         if (module == null || umbrella == null) {
             return;
         }
@@ -274,6 +288,8 @@ public final class ChangelogTab extends BorderPane {
 
     private void show(Read read) {
         opened = read.doc();
+        openedTag = read.tag();
+        neverBuilt.setDisable(!read.doc().exists() || read.tag().isEmpty());
         editor.setText(read.doc().unreleased().strip());
         commits.setText(read.commits().isBlank() ? "(no commits since the tag)" : read.commits());
         style.setText(read.lastStamped().orElse("(this changelog has no stamped section yet)"));
@@ -492,6 +508,42 @@ public final class ChangelogTab extends BorderPane {
         return ChangelogDrafts.preamble(text);
     }
 
+    /**
+     * Asks JitPack about the newest tag of the module on screen, and adds the repair's entry to the editor when it
+     * never built. Only the editor changes: Save commits it like any typed section.
+     */
+    private void neverBuilt() {
+        Optional<Module> module = Module.byDirectory(selected);
+        if (module.isEmpty() || openedTag.isEmpty() || umbrella == null) {
+            return;
+        }
+        String asked = selected;
+        String tag = openedTag.get();
+        Path root = umbrella;
+        setBusy(true, "Asking JitPack about " + asked + " " + tag + " …");
+        CompletableFuture.supplyAsync(() -> TagBuilds.of(module.get(), tag,
+                        ModuleScan.pinsAt(root, module.get(), tag), Jitpack.Probe.real()), work)
+                .whenComplete((build, error) -> Platform.runLater(() -> {
+                    setBusy(false, "");
+                    if (!asked.equals(selected)) {
+                        return;                    // the operator moved on while JitPack answered
+                    }
+                    if (error != null) {
+                        status.setText("Could not ask JitPack: " + error.getMessage());
+                        return;
+                    }
+                    status.setText(switch (build.state()) {
+                        case BROKEN -> {
+                            editor.setText(TagBuilds.withEntry(editor.getText(), TagBuilds.entry(tag, build)));
+                            yield tag + " never built — its repair entry is under ### Fixed. Save to commit it.";
+                        }
+                        case BUILT -> tag + " built on JitPack: nothing to repair.";
+                        case PENDING -> "JitPack has not built " + tag + " yet, and has not failed it either.";
+                        case NOT_ON_JITPACK -> asked + " is not a JitPack build, and nothing " + tag + " pins is broken.";
+                    });
+                }));
+    }
+
     private void drafting(Io.Task<?> task) {
         drafting = task;
         showCancel(task != null);
@@ -507,6 +559,7 @@ public final class ChangelogTab extends BorderPane {
         save.setDisable(busy || opened == null || !opened.exists() || opened.dirty());
         draft.setDisable(busy || opened == null || !opened.exists());
         draftAll.setDisable(busy || umbrella == null);
+        neverBuilt.setDisable(busy || opened == null || !opened.exists() || openedTag.isEmpty());
         editor.setDisable(busy);
         // A click during a minutes-long draft queued the next module's read behind it, then Save woke up with
         // one module's document under another's name. The list waits with everything else.

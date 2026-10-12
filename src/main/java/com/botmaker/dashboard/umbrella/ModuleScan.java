@@ -174,6 +174,16 @@ public final class ModuleScan {
                 .findFirst());
     }
 
+    /**
+     * The pins {@code module}'s {@code tag} carries, staleness unjudged; empty when git cannot show its pom. For a
+     * caller holding one module rather than a scan: the Changelog tab's <i>Never built</i>.
+     */
+    public static List<Pins.Pin> pinsAt(Path umbrella, Module module, String tag) {
+        return pomAt(umbrella.resolve(module.directory()), tag)
+                .map(pom -> Pins.read(module, pom, Map.of()))
+                .orElse(List.of());
+    }
+
     /** {@code pom.xml} as that tag has it, or empty: no pom there, or git could not say. */
     private static Optional<String> pomAt(Path dir, String tag) {
         Proc p = Proc.run(dir, GIT_TIMEOUT, "git", "show", tag + ":pom.xml");

@@ -68,6 +68,14 @@ always `false` here: forcing belongs to a release being cut, and a badge that we
 ticked `--force` elsewhere would be reporting an intention rather than a build. A module the release never
 cuts is asked nothing at all, which is also why no `ci.yml` is ever requested from `botmaker-gallery`.
 
+**The *Tag on JitPack* column asks the release's own probe (2026-10-12).** `umbrella/TagBuilds` asks
+`Jitpack.Probe` — the build API the release's wait reads, with its reading of `Error` — about each module's
+newest tag. Studio and the dashboard are not JitPack builds, so their tag is broken when a pin it carries is
+(their package jobs resolve those pins from JitPack). Any broken tag puts a banner over the table naming each one
+and `./release.sh` with their flags, in tag order. The flags are the broken modules and nothing else: what they
+force is the decide pass's answer, and a banner that added it would be a second forcing table. Shared v0.2.4
+never built that day, SDK v1.4.3, Studio v1.4.3 and dashboard v0.3.1 pinned it, and this window said nothing.
+
 The same rule covers the queue. A submission's verdict is **the registry CI's check run**, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact. Read that verdict; validate nothing here. *The check
 that refuses a pull request must be the one its author already ran* — the whole reason that validator is a
