@@ -8,6 +8,13 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **0.3.1 never packaged.** It pinned botmaker-shared v0.2.4, a tag JitPack never built (Maven Central's 429), so
+  its rpm and deb jobs could not resolve it. This release pins shared 0.2.5 and is 0.3.1 otherwise.
+
 ## [0.3.1] — 2026-10-12
 
 No source changes since v0.3.0; re-released for updated upstream pins.
