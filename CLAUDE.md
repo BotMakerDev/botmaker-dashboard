@@ -70,7 +70,7 @@ the JavaFX classes hold no rules. Keep it that way — a rule that can only be t
 rule that will not be tested.
 
 **Drawing is tested too, since 2026-09-16**, with TestFX over Monocle's Headless platform (Studio's pairing:
-monocle 21.0.2 on JavaFX 25; Surefire sets the properties, `ui/FxHeadless` repeats them for an IDE run). Those
+monocle 21.0.2 on JavaFX 27; Surefire sets the properties, `ui/FxHeadless` repeats them for an IDE run). Those
 tests assert what a model *looks like* — node style classes, a banner's words, a click that ticks a row —
 never a rule; the rule they draw was already tested without a window.
 

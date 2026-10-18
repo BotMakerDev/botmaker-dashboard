@@ -16,6 +16,10 @@ No source changes since v0.3.4; re-released for updated upstream pins.
 
 No source changes since v0.3.3; re-released for updated upstream pins.
 
+### Changed
+
+- **JavaFX 27** (2026-10-18), from 25.0.4, with the rest of the platform. JavaFX 27 needs Java 25.
+
 ### Added
 
 - **The Modules tab says whether each newest tag built on JitPack.** A *Tag on JitPack* column (built, never
