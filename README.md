@@ -38,8 +38,8 @@ is a desktop window and not a page.
 | **Releases** | The committed `releases/*.md` logs, newest first, with a re-poll that re-reads JitPack and Actions. |
 | **Release** | **Preview** decides a set of flags: the version per module, what is skipped or forced, the tag order, the gates. **Execute…** cuts it, and **Stop** halts it before its next step. |
 | **Changelog** | Writes a module's `## [Unreleased]` section — the one the changelog gate refuses a release without — and commits that one file in the submodule. *Draft with Claude* fills the editor. |
-| **Queue** | Open pull requests on `botmaker-plugin-registry`, the one entry file each adds, and the gate's own verdict. |
-| **Catalog** | What is published: every merged plugin entry, read from github.com. |
+| **Queue** | Open pull requests on `botmaker-catalog`, the one file each changes with its fields, and the check's own verdict. Read-only: the catalog merges what passes. |
+| **Catalog** | What is published: a grid of bot, plugin and author cards from `catalog.json`, with kind and rank chips and a search. An admin lists another tag, removes an entry or changes an author's rank from a card's panel, each as one pull request. |
 
 ## Two rules it is built on
 
@@ -50,9 +50,9 @@ own process. An executed release runs it in a process of its own, so it survives
 the window reads its progress and can be reopened while it runs. A second implementation would diverge on
 the first rule added and be discovered by a bad tag, which cannot be edited.
 
-**Admin is `permissions.push` on the plugin registry, read from the GitHub API.** There is no allowlist and
-no role table: the power already exists on github.com, and a second list of who holds it is a list that goes
-wrong. This window reveals a power GitHub enforces regardless — it never grants one.
+**Admin is the catalog check's admin**: the signed-in account's id among `admin` in `publishers.json` on the
+catalog's `main`. There is no second list here: the catalog's check decides who may change what, and this
+window only hides edits that check would refuse — it never grants a power.
 
 ## Not a library
 
