@@ -26,7 +26,7 @@ import java.util.Optional;
  */
 public final class Links {
 
-    private static final String OWNER = GitHubConfig.REGISTRY_OWNER;
+    private static final String OWNER = GitHubConfig.CATALOG_OWNER;
     private static final String GITHUB = "https://github.com/";
 
     /** One destination: what the button says and where it goes. */
@@ -162,7 +162,7 @@ public final class Links {
      * Whether a module of this checkout is resolved from JitPack at all.
      *
      * <p>The release library's own answer ({@code ReleaseLog.onJitpack}), not a list kept here: the pilot is
-     * an APK, Studio is packaged per OS by its own CI, and the gallery, the registry and this window are not
+     * an APK, Studio is packaged per OS by its own CI, and the catalog and this window are not
      * released at all. A button offering a JitPack page for any of them opens a page about nothing.
      */
     public static boolean onJitpack(String module) {
@@ -172,7 +172,7 @@ public final class Links {
     }
 
     /**
-     * {@code owner/name} out of whatever a registry entry's {@code repo} holds.
+     * {@code owner/name} out of whatever a {@code repo} field holds.
      *
      * <p>The gate requires the field, not its spelling, so a full URL, one ending in {@code .git} and the
      * bare slug are all accepted here. Anything that does not reduce to exactly two segments is empty: a

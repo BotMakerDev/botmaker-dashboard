@@ -10,11 +10,22 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- **The Catalog and Queue tabs read `botmaker-catalog`**, the one repository for bots and plugins. The Catalog tab
+  lists `catalog.json`, the file Studio reads: both kinds, with each one's rank (Official, Trusted, Community),
+  tag and author. The card grid replaces its table in a later change.
+- **Admin is a catalog admin**: the signed-in account's id in `publishers.json` on the catalog's `main`, the list
+  the catalog's check reads, no longer push access. The badge reads `admin · BotMakerDev/botmaker-catalog`.
+- **The Queue tab is read-only.** The catalog's check decides and its merge job merges what passes, so Approve,
+  Request changes and Merge are gone. A row shows the `validate` check, the one file it changes (an entry or the
+  ranks) and the `waiting` label.
+
 ### Removed
 
-- **Bots, from the Catalog and Queue tabs.** There is no gallery repository any more: a bot is listed by the topic
-  `botmaker-bot` on its own repository, so there is no bot entry to read, edit or merge, no vetting (*Vet…*,
-  *Revoke vetting…*, the Tier and Latest columns) and no Auto-merge column. Both tabs show the plugin registry.
+- *Edit…* (a free-text JSON dialog) and *Unpublish…*, and the field view of an entry. An admin's edits — list
+  another tag, remove an entry, change an author's rank — are pull requests the catalog merges itself, offered in
+  the coming card grid.
 
 ## [0.4.0] — 2026-10-18
 

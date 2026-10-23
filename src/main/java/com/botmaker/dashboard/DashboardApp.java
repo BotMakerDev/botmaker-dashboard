@@ -55,17 +55,14 @@ import java.nio.file.Path;
  * in its strict form: one implementation, and every caller reaches it. That is also why this window can cut
  * a release at all; see {@code ui/ReleaseTab} for the arming and the confirmation that guard it.
  *
- * <p>The same applies to the queue: a submission's verdict is the registry CI's check run, which runs
- * {@code RegistryGate} out of {@code botmaker-cli}'s main artifact. This window reads that verdict and
- * validates nothing itself — the check that refuses a pull request must be the one its author already ran.
- * The Catalog tab is the other half of that: what was already admitted, read from each data repository's
- * {@code main} rather than from the checked-out submodule, whose pointer trails whenever CI regenerates an
- * index.
+ * <p>The same applies to the queue: a pull request's verdict is the catalog's {@code validate} check run, which
+ * runs {@code EntryGate} out of {@code botmaker-cli}'s main artifact, and the catalog merges what passes. This
+ * window reads that verdict and validates nothing itself. The Catalog tab is the other half: what is listed,
+ * read from {@code catalog.json} on the catalog's {@code main}, the file Studio reads.
  *
- * <p><b>Admin is not a role this app grants.</b> The write actions are enabled by
- * {@code permissions.push} on the plugin registry, read from the GitHub API for the signed-in account —
- * see {@link Admin}. There is no allowlist and no role table, because the power already exists on
- * github.com and a second list of who has it is a list that goes wrong.
+ * <p><b>Admin is not a role this app grants.</b> The edits are enabled for an account whose id is an admin in
+ * {@code publishers.json} on the catalog's {@code main}, the list the catalog's check reads — see {@link Admin}.
+ * There is no second list here: the check decides, and an edit it would refuse fails there.
  */
 public final class DashboardApp extends Application {
 
@@ -131,9 +128,6 @@ public final class DashboardApp extends Application {
         changelog = new LazyTab<>("Changelog", () -> new ChangelogTab(umbrella, client, auth));
         queue = new LazyTab<>("Queue", () -> {
             QueueTab built = new QueueTab(client, auth);
-            if (admin != null) {
-                built.setAdmin(admin);
-            }
             built.reload();
             return built;
         });
@@ -153,7 +147,7 @@ public final class DashboardApp extends Application {
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         catalog = new LazyTab<>("Catalog", () -> {
-            CatalogTab built = new CatalogTab(client, auth);
+            CatalogTab built = new CatalogTab(client);
             if (admin != null) {
                 built.setAdmin(admin);
             }
@@ -237,14 +231,10 @@ public final class DashboardApp extends Application {
             adminBadge.getStyleClass().removeAll("badge--write", "badge--read");
             adminBadge.getStyleClass().add(verdict.canWrite() ? "badge--write" : "badge--read");
             admin = verdict;
-            // The queue's write buttons follow the badge exactly — one probe, one answer, no second list.
-            // A tab not opened yet reads the verdict when it is built, and reads GitHub then, not twice.
-            queue.ifBuilt(tab -> {
-                tab.setAdmin(verdict);
-                tab.reload();
-            });
-            // The catalog's Edit and Unpublish follow the same badge, and it is read with the token when
-            // there is one, which lifts the anonymous rate limit — so a sign-in is a reason to read again.
+            // The queue is read with the token when there is one, which lifts the anonymous rate limit — so a
+            // sign-in is a reason to read again. A tab not opened yet reads GitHub when it is built, not twice.
+            queue.ifBuilt(QueueTab::reload);
+            // The catalog's edits follow the same badge — one probe, one answer, no second list.
             catalog.ifBuilt(tab -> {
                 tab.setAdmin(verdict);
                 tab.reload();

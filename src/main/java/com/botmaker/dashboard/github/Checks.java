@@ -8,11 +8,11 @@ import java.util.List;
 /**
  * The gate's verdict on a submission, read from GitHub's check runs and never computed here.
  *
- * <p>The check that refuses a pull request is {@code RegistryGate}, run by the registry's own
- * {@code .github/workflows/validate.yml} out of {@code botmaker-cli}'s main artifact — the same code the
- * submitter ran as {@code botmaker plugin validate}. This app reads the conclusion of that run. It does not
- * resolve the plugin, load it, or repeat one check of it: a second validator would admit submissions the
- * gate then refuses, or refuse ones it admits, and the operator would have no way to tell which was right.
+ * <p>The check that refuses a pull request is {@code EntryGate}, run by the catalog's own
+ * {@code .github/workflows/validate.yml} out of {@code botmaker-cli}'s main artifact, as the {@code validate}
+ * check run. This app reads the conclusion of that run. It does not resolve the plugin, load it, or repeat one
+ * check of it: a second validator would admit submissions the gate then refuses, or refuse ones it admits, and
+ * the operator would have no way to tell which was right.
  *
  * <p><b>{@link #NONE} is a state of its own, and this is where it differs from the release log.</b>
  * {@code ReleaseLog.Health} reads {@code no run on <tag>} as <i>broken</i>, because a tag is finished: if no

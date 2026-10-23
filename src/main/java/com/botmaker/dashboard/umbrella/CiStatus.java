@@ -41,7 +41,7 @@ public record CiStatus(String module, Health health, String text, String detail)
     public static CiStatus check(String directory) {
         Optional<Module> module = Module.byDirectory(directory);
         if (module.isEmpty()) {
-            // The gallery, the plugin registry and this window's own repository: the release never cuts
+            // The catalog and this window's own repository: the release never cuts
             // them, so there is no ci.yml run on main it would have asked about.
             return new CiStatus(directory, Health.UNKNOWN, "not released", "");
         }

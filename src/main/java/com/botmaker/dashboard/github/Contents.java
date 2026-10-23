@@ -3,31 +3,26 @@ package com.botmaker.dashboard.github;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
-import com.botmaker.shared.github.GitHubError;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /**
- * The contents API, which both readers of an entry file go through.
+ * The contents API, which every reader and writer of one catalog file goes through.
  *
- * <p>Two of them exist and they ask about the same bytes at different moments: {@link Queue} reads the entry
- * a pull request <i>adds</i>, at that pull request's own head, because the file does not exist on
- * {@code main} yet; {@link Catalog} reads the entry that is <i>merged</i>, on {@code main}. One ref apart,
- * one decode, so the decode lives here rather than in both.
+ * <p>They ask about the same bytes at different refs: {@link Queue} reads the file a pull request changes, at
+ * its own head; {@link CatalogEdits} and {@link PublishersFile} read it on {@code main}, before changing it. One
+ * ref apart, one decode, so the decode lives here.
  *
- * <p><b>The contents API rather than a raw URL</b>, for the reason it always was: a token still applies, so
- * one code path serves a public read, a rate-limited anonymous read and a private repository, and the
- * response carries the blob {@code sha} — which is what an edit has to send back to prove it is changing
- * the file it read.
+ * <p><b>The contents API rather than a raw URL</b> for those: a token still applies, and the response carries
+ * the blob {@code sha} — which is what an edit has to send back to prove it is changing the file it read. The
+ * Catalog tab's {@code catalog.json} is the exception: it is read whole, as Studio reads it, through the raw URL.
  *
- * <p>The same API writes, which is why {@link #put} and {@link #delete} are here beside the read rather
- * than in {@link Catalog}: one URL builder, so a path that escapes correctly for a read escapes correctly
- * for the write that follows it.
+ * <p>The same API writes, which is why {@link #put} and {@link #delete} are here beside the read: one URL builder,
+ * so a path that escapes correctly for a read escapes correctly for the write that follows it.
  */
 final class Contents {
 
@@ -39,29 +34,6 @@ final class Contents {
                                             String repo, String path, String ref) {
         String url = contentsUrl(repo, path) + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
         return client.get(url, token(auth));
-    }
-
-    /**
-     * A directory's listing at a ref, for a caller that lists: a refusal fails the future with GitHub's
-     * {@link GitHubError}, and only a missing directory (404) is {@code null}.
-     *
-     * <p>{@link #read} answers {@code null} for both, which read a used-up rate limit as an empty catalog and
-     * an empty queue until 2026-09-29. A missing directory is still an empty listing: the registry had no
-     * {@code plugins/} for its whole first week.
-     */
-    static CompletableFuture<JsonNode> listing(GitHubClient client, GitHubAuth auth,
-                                               String repo, String path, String ref) {
-        String url = contentsUrl(repo, path) + "?ref=" + URLEncoder.encode(ref, StandardCharsets.UTF_8);
-        return client.getOrFail(url, token(auth)).exceptionally(Contents::nullWhenMissing);
-    }
-
-    /** {@code null} for a 404, and the failure again for anything else. */
-    static JsonNode nullWhenMissing(Throwable error) {
-        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
-        if (cause instanceof GitHubError refused && refused.status() == 404) {
-            return null;
-        }
-        throw error instanceof CompletionException completion ? completion : new CompletionException(cause);
     }
 
     /**
