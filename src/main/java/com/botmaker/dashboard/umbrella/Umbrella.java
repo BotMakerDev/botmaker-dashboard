@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * needs the window to show it. (This module itself was that eleventh, three days after the tenth.)
  *
  * <p>Nor is there a list of which modules are <i>releasable</i>. That question is answered by whether
- * {@code release.sh --all --dry-run} names the module in its decide pass: {@code botmaker-plugin-registry}
+ * {@code release.sh --all --dry-run} names the module in its decide pass: {@code botmaker-catalog}
  * is data-only and never appears, and neither does this one. See
  * {@link ReleasePlan}.
  */

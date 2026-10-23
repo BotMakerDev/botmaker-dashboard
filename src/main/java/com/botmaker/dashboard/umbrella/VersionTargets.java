@@ -24,7 +24,7 @@ import java.util.Optional;
  * plausible-looking prediction of it.
  *
  * <p><b>A module the release library does not know is not an error.</b> The decide pass names only what it
- * releases, but this window also lists what a checkout holds, and {@code botmaker-plugin-registry} or this
+ * releases, but this window also lists what a checkout holds, and {@code botmaker-catalog} or this
  * repository have no flag and no tag arithmetic. They get {@link #UNKNOWN_MODULE} rather than a refusal.
  */
 public final class VersionTargets {

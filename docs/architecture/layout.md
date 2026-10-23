@@ -89,7 +89,7 @@ that arrives in a `ui/` class is a rule that will not be tested.
 `.gitmodules`' answer (`Umbrella.modules`) — a copy here would be short by exactly one module the day an
 eleventh is added, which is the day it matters. And which modules are *releasable* is the library's
 `Module` enum: the Release tab lists `Order.TAG` before any preview, and `botmaker-gallery`,
-`botmaker-plugin-registry` and this repository are not in it, so the Modules tab says *not released by the
+`botmaker-catalog` and this repository are not in it, so the Modules tab says *not released by the
 release* rather than inventing a category.
 
 `src/main/resources/css/dashboard.css` is the whole look: two palettes of `-bm-*` tokens on
