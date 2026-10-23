@@ -17,9 +17,10 @@ name: CI
 #
 # This pom pins botmaker-shared and botmaker-cli at real versions (umbrella docs/refactor/43-real-versions.md).
 # On main they are each upstream's main -SNAPSHOT, which nothing publishes, so `build` checks out and
-# installs four upstreams from their main branches (it is a gate: it should notice an upstream break
-# early) — shared, the cli, and the cli's own two pins, botmaker-studio-api and botmaker-plugin-host, which
-# this pom excludes from the cli dependency but the cli's own build resolves. On a tag they are the releases
+# installs six upstreams from their main branches (it is a gate: it should notice an upstream break
+# early) — shared, the cli, the cli's own two pins, botmaker-studio-api and botmaker-plugin-host, which
+# this pom excludes from the cli dependency but the cli's own build resolves, and the toolkit and archetype
+# whose zip the cli bundles. On a tag they are the releases
 # the release commit pinned, so `package` resolves them from JitPack; the umbrella release waits for those
 # builds before tagging the dashboard. Until 2026-10-06 `package` checked out the refs a .deps.env named.
 #
@@ -65,18 +66,35 @@ jobs:
           repository: BotMakerDev/botmaker-cli
           path: .deps/botmaker-cli
 
+      # The cli bundles the archetype's `template` zip (`plugin new`), resolved at its main -SNAPSHOT, which
+      # nothing publishes; the archetype builds on the toolkit. Red on main until 2026-10-23 with "Could not
+      # find artifact …botmaker-plugin-archetype:zip:template:…-SNAPSHOT".
+      - name: Check out botmaker-plugin-toolkit
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-plugin-toolkit
+          path: .deps/botmaker-plugin-toolkit
+
+      - name: Check out botmaker-plugin-archetype
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-plugin-archetype
+          path: .deps/botmaker-plugin-archetype
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
           cache: maven
 
-      # Contract and loader first: the cli compiles against both.
-      - name: Install the four upstreams (their main -SNAPSHOT)
+      # Contract and loader first: the cli compiles against both; the archetype before it, for its zip.
+      - name: Install the six upstreams (their main -SNAPSHOT)
         run: |
           source .github/mvn-retry.sh
           mvn_retry mvn -B -q -f .deps/botmaker-studio-api/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-cli/pom.xml install -DskipTests
 
