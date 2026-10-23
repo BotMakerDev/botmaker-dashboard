@@ -39,7 +39,7 @@ class CiStatusTest {
     @Test
     void aModuleTheReleaseNeverCutsIsNotAskedAboutAtAll() {
         // No gh call, so no process and no wrong answer for a repository with no ci.yml.
-        CiStatus status = CiStatus.check("botmaker-gallery");
+        CiStatus status = CiStatus.check("botmaker-plugin-registry");
         assertEquals(CiStatus.Health.UNKNOWN, status.health());
         assertEquals("not released", status.text());
     }

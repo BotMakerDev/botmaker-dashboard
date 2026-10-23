@@ -62,7 +62,7 @@ public record ModuleRow(
      * module already has a column of its own here.
      *
      * <p>A module the pass never named is not "up to date" — it is a module the release does not cut at all,
-     * and saying so is the honest answer for {@code botmaker-gallery}, {@code botmaker-plugin-registry} and
+     * and saying so is the honest answer for {@code botmaker-plugin-registry} and
      * this window's own repository.
      */
     public String planLabel() {

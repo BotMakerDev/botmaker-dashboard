@@ -127,7 +127,7 @@ public final class ModuleScan {
      *
      * <p>Empty covers two cases the Modules tab keeps apart from each other only by what else it shows:
      * the pass refused before deciding anything, and the pass ran and never named this directory — which is
-     * how {@code botmaker-gallery}, {@code botmaker-plugin-registry} and this repository are told apart from
+     * how {@code botmaker-plugin-registry} and this repository are told apart from
      * the eleven, with no list kept here.
      */
     private static Optional<Plan.Decision> decisionFor(Optional<Plan> plan, String directory) {

@@ -116,8 +116,8 @@ final class Contents {
      * Percent-encodes each segment, leaving the separators alone.
      *
      * <p>{@code URLEncoder} on the whole path would turn every {@code /} into {@code %2F} and ask GitHub for
-     * one file with slashes in its name. Entry filenames are ids and slugs — {@code com.botmaker.sdk.json},
-     * {@code BotMakerDev-botmaker-gamebot.json} — so today nothing needs escaping at all; this is here so that
+     * one file with slashes in its name. Entry filenames are plugin ids — {@code com.botmaker.sdk.json} —
+     * so today nothing needs escaping at all; this is here so that
      * the day one does, it is not a 404 nobody can explain.
      */
     private static String encodePath(String path) {
