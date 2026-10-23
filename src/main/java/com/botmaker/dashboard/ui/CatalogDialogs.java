@@ -1,11 +1,9 @@
 package com.botmaker.dashboard.ui;
 
 import com.botmaker.dashboard.github.Catalog;
-import com.botmaker.dashboard.github.Vetting;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
@@ -23,7 +21,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * The Catalog tab's four proposals — edit, unpublish, vet, revoke — as dialogs, and the two that report on one.
+ * The Catalog tab's two proposals — edit, unpublish — as dialogs, and the two that report on one.
  *
  * <p>Out of the tab since 2026-09-29, when it was nine hundred lines. Each asks and, when the operator says
  * yes, answers the pull request it started; the tab runs it and keeps the buttons. Nothing here merges or
@@ -41,63 +39,6 @@ final class CatalogDialogs {
         this.auth = auth;
         this.owner = owner;
         this.status = status;
-    }
-
-    /**
-     * Proposes vetting a bot at one release.
-     *
-     * <p>The version box starts on the newest release, which is almost always the one just looked at, and is
-     * editable because it need not be. Nothing about the release is checked here: the gallery's gate checks
-     * that it downloads, on the pull request this opens.
-     */
-    Optional<CompletableFuture<Catalog.Proposal>> vet(Catalog.Entry entry) {
-        TextField version = new TextField(entry.vetted() == null ? "" : entry.vetted().record().vettedVersion());
-        version.setPromptText("release tag, e.g. v0.1.0");
-        Vetting.latestRelease(client, auth, entry).thenAccept(tag -> Platform.runLater(() -> {
-            if (!tag.isBlank() && version.getText().isBlank()) {
-                version.setText(tag);
-            }
-        }));
-        TextField why = new TextField();
-        why.setPromptText("What you looked at (optional) — goes in the pull request body");
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Vet " + entry.id());
-        dialog.setHeaderText((entry.vetted() == null ? "" : "Vetted now at "
-                + entry.vetted().record().vettedVersion() + ".\n")
-                + "Opens a pull request writing vetted/ in " + entry.kind().repo() + ". Once merged, Studio shows "
-                + entry.id() + " as Vetted and installs exactly this release.\n\nThe release you looked at:");
-        DialogPane pane = dialog.getDialogPane();
-        pane.setContent(new VBox(8, version, why));
-        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        pane.getButtonTypes().setAll(open, ButtonType.CANCEL);
-        pane.lookupButton(open).disableProperty().bind(version.textProperty().isEmpty());
-        if (!confirmed(dialog)) {
-            return Optional.empty();
-        }
-        String tag = version.getText().trim();
-        if (entry.vetted() != null && tag.equals(entry.vetted().record().vettedVersion())) {
-            status.accept(entry.id() + " is already vetted at " + tag + ", so no pull request was opened.");
-            return Optional.empty();
-        }
-        return Optional.of(Vetting.vet(client, auth, entry, tag, why.getText()));
-    }
-
-    /** Proposes removing a bot's vetting; its listing stays. */
-    Optional<CompletableFuture<Catalog.Proposal>> revoke(Catalog.Entry entry) {
-        TextField why = new TextField();
-        why.setPromptText("Why (optional) — goes in the pull request body");
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Revoke vetting of " + entry.id());
-        dialog.setHeaderText("Opens a pull request deleting " + entry.vetted().path() + ".\nOnce merged, "
-                + entry.id() + " is Community again: still listed, installed at its newest release, and gone from "
-                + "the index older Studios read.");
-        dialog.getDialogPane().setContent(new VBox(8, why));
-        ButtonType open = new ButtonType("Open pull request", ButtonType.OK.getButtonData());
-        dialog.getDialogPane().getButtonTypes().setAll(open, ButtonType.CANCEL);
-        return confirmed(dialog)
-                ? Optional.of(Vetting.revoke(client, auth, entry, why.getText()))
-                : Optional.empty();
     }
 
     /**
@@ -126,7 +67,7 @@ final class CatalogDialogs {
 
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Edit " + entry.id());
-        dialog.setHeaderText("Opens a pull request against " + entry.kind().repo()
+        dialog.setHeaderText("Opens a pull request against " + Catalog.REPO
                 + ". Nothing on main changes until somebody merges it.");
         VBox body = new VBox(8, json, parses, why);
         VBox.setVgrow(json, Priority.ALWAYS);
@@ -163,7 +104,7 @@ final class CatalogDialogs {
      * Proposes removing an entry.
      *
      * <p><b>Typing the id, not clicking Yes.</b> Merging this makes a plugin disappear from every user's
-     * Manage Plugins and a bot from the gallery Studio reads — and the id is the one thing that cannot be
+     * Manage Plugins — and the id is the one thing that cannot be
      * recovered by re-submitting, because the file name is the claim. A confirmation somebody can dismiss
      * by reflex is not one.
      */
@@ -176,7 +117,7 @@ final class CatalogDialogs {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Unpublish " + entry.id());
         dialog.setHeaderText("This opens a pull request that deletes " + entry.path() + " from "
-                + entry.kind().repo() + ".\nNothing is removed until somebody merges it. Merging it removes "
+                + Catalog.REPO + ".\nNothing is removed until somebody merges it. Merging it removes "
                 + entry.id() + " for everyone on the next index build.\n\nType the id to confirm:");
         DialogPane pane = dialog.getDialogPane();
         pane.setContent(new VBox(8, typed, why));

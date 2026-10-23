@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /**
- * The Queue tab: open submissions on the plugin registry and the gallery, and the verdict somebody else
+ * The Queue tab: open submissions on the plugin registry, and the verdict somebody else
  * already reached about each one.
  *
  * <p><b>Nothing here validates a submission.</b> The Gate column is the registry CI's own check-run
@@ -132,10 +132,10 @@ public final class QueueTab extends BorderPane {
         gateButtons();
     }
 
-    /** Both repositories' open pull requests, off the FX thread. */
+    /** The registry's open pull requests, off the FX thread. */
     public void reload() {
         refresh.setDisable(true);
-        status.setText("Reading " + String.join(" and ", Queue.REPOS) + " …");
+        status.setText("Reading " + Queue.REGISTRY + " …");
         Queue.open(client, auth).whenComplete((found, error) -> Platform.runLater(() -> {
             refresh.setDisable(false);
             if (error != null) {
@@ -166,17 +166,7 @@ public final class QueueTab extends BorderPane {
         shape.setText(submission.shape());
         shape.getStyleClass().removeAll("cell--broken", "cell--dim");
         shape.getStyleClass().add(submission.wellShaped() ? "cell--dim" : "cell--broken");
-        verdict.setText("Gate: " + submission.checks().text()
-                + (submission.autoMerge().isEmpty() ? "" : "  ·  auto-merge: " + submission.autoMerge()));
-        // The merge job's own sentence — when it will merge, or why it will not — is a comment on the pull
-        // request. Fetched for the selected row only: one request per click, not one per row per reload.
-        if (!submission.autoMerge().isEmpty()) {
-            Queue.listingComment(client, auth, submission).thenAccept(reason -> Platform.runLater(() -> {
-                if (table.getSelectionModel().getSelectedItem() == submission && !reason.isBlank()) {
-                    verdict.setText(verdict.getText() + "\n" + reason);
-                }
-            }));
-        }
+        verdict.setText("Gate: " + submission.checks().text());
 
         if (submission.entryFile().isEmpty()) {
             return;
@@ -286,8 +276,7 @@ public final class QueueTab extends BorderPane {
                 column("Author", 130, s -> "@" + s.author()),
                 column("Title", 260, Submission::title),
                 shapeColumn(),
-                gateColumn(),
-                column("Auto-merge", 170, Submission::autoMerge));
+                gateColumn());
     }
 
     private static TableColumn<Submission, String> column(String title, double width,

@@ -1,7 +1,5 @@
 package com.botmaker.dashboard.github;
 
-import com.botmaker.cli.gallery.GalleryEntry;
-import com.botmaker.cli.registry.Registry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -21,13 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogTest {
 
     private static Catalog.Entry plugin(String json) {
-        return Catalog.read(Catalog.Kind.PLUGIN, "plugins/com.botmaker.sdk.json", "sha1",
-                "com.botmaker.sdk", json);
-    }
-
-    private static Catalog.Entry bot(String json) {
-        return Catalog.read(Catalog.Kind.BOT, "bots/LiQiyeDev-botmaker-gamebot.json", "sha2",
-                "LiQiyeDev-botmaker-gamebot", json);
+        return Catalog.read("plugins/com.botmaker.sdk.json", "sha1", "com.botmaker.sdk", json);
     }
 
     @Test
@@ -41,40 +33,6 @@ class CatalogTest {
         assertEquals("com.botmaker.sdk", entry.id());
         assertEquals("BotMaker SDK", entry.name());
         assertEquals("sdk, official", entry.tagLine());
-        assertEquals("Plugin", entry.kindLabel());
-        assertFalse(entry.template(), "template is a gallery idea; a plugin is never one");
-    }
-
-    @Test
-    void aBotIsIdentifiedByItsSlugAndATemplateSaysSo() {
-        Catalog.Entry entry = bot("""
-                {"name": "gamebot", "owner": "LiQiyeDev", "repo": "botmaker-gamebot",
-                 "description": "A game bot to start from.", "tags": ["game", "template", "vision"]}
-                """);
-        assertTrue(entry.readable());
-        assertEquals("LiQiyeDev/botmaker-gamebot", entry.id());
-        assertEquals("gamebot", entry.name());
-        assertTrue(entry.template());
-        assertEquals("Template", entry.kindLabel(), "the reserved tag is what the Kind column reads");
-    }
-
-    @Test
-    void aBotWithoutTheReservedTagIsNotATemplate() {
-        Catalog.Entry entry = bot("""
-                {"name": "Click", "owner": "LiQiyeDev", "repo": "ClickTest", "tags": []}
-                """);
-        assertFalse(entry.template());
-        assertEquals("Bot", entry.kindLabel());
-    }
-
-    @Test
-    void theReservedTagIsWhateverGalleryEntrySaysItIs() {
-        // Not a literal "template" here: the tag has one owner and a copy of it in this window would be a
-        // second statement of the same fact, in a repository that cannot see the first one change.
-        Catalog.Entry entry = bot("""
-                {"name": "x", "owner": "o", "repo": "r", "tags": ["%s"]}
-                """.formatted(GalleryEntry.TEMPLATE_TAG));
-        assertTrue(entry.template());
     }
 
     @Test
@@ -132,13 +90,9 @@ class CatalogTest {
     }
 
     @Test
-    void eachKindNamesItsOwnRepositoryAndDirectoryFromTheirOwners() {
-        // Three lists this tab does not keep: the repository names are Queue's, and each entries directory
-        // is its own module's constant.
-        assertSame(Queue.REGISTRY, Catalog.Kind.PLUGIN.repo());
-        assertSame(Queue.GALLERY, Catalog.Kind.BOT.repo());
-        assertEquals(Registry.ENTRIES_DIRECTORY, Catalog.Kind.PLUGIN.directory());
-        assertEquals(GalleryEntry.ENTRIES_DIRECTORY, Catalog.Kind.BOT.directory());
+    void theRegistryIsQueuesOwnName() {
+        // A list this tab does not keep: the repository name is Queue's.
+        assertSame(Queue.REGISTRY, Catalog.REPO);
     }
 
     @Test
@@ -158,13 +112,6 @@ class CatalogTest {
         assertEquals("https://github.com/LiQiyeDev/botmaker-sdk", sdk.links().get(0).url());
         assertEquals(sdk.url(), sdk.links().get(4).url());
         assertEquals("https://jitpack.io/#LiQiyeDev/botmaker-sdk", sdk.links().get(2).url());
-
-        // A bot gets no JitPack link: nobody resolves a bot as an artifact, so that page answers nothing.
-        Catalog.Entry gamebot = bot("""
-                {"name": "g", "owner": "LiQiyeDev", "repo": "botmaker-gamebot", "tags": ["template"]}
-                """);
-        assertEquals(List.of("GitHub", "Actions", "Releases", "Entry file"),
-                gamebot.links().stream().map(l -> l.label()).toList());
     }
 
     @Test
@@ -185,12 +132,10 @@ class CatalogTest {
 
     @Test
     void aSlashInAnIdDoesNotBecomeASecondPathSegment() {
-        // A bot's id is `owner/repo`, and a branch named `dashboard/edit-owner/repo-…` is a different ref
-        // from the one the pull request would be opened for.
-        String branch = Catalog.branchFor("unpublish",
-                bot("{\"name\": \"g\", \"owner\": \"LiQiyeDev\", \"repo\": \"botmaker-gamebot\"}"));
+        // A branch named `dashboard/edit-a/b-…` is a different ref from the one the pull request names.
+        String branch = Catalog.branchFor("unpublish", plugin("{\"id\": \"a/b\"}"));
         assertEquals(1, branch.chars().filter(c -> c == '/').count(), branch);
-        assertTrue(branch.startsWith("dashboard/unpublish-LiQiyeDev-botmaker-gamebot-"), branch);
+        assertTrue(branch.startsWith("dashboard/unpublish-a-b-"), branch);
     }
 
     @Test
@@ -208,6 +153,5 @@ class CatalogTest {
         // Optimistic locking rather than last-one-wins: two operators editing one entry is exactly the case
         // one-file-per-entry was shaped to make visible.
         assertEquals("sha1", plugin("{\"id\": \"com.botmaker.sdk\"}").sha());
-        assertEquals("sha2", bot("{\"name\": \"g\", \"owner\": \"o\", \"repo\": \"r\"}").sha());
     }
 }

@@ -7,9 +7,8 @@ com.botmaker.dashboard
 ├── DashboardConfig     the one remembered preference (the umbrella path) + looksLikeUmbrella
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
 │   ├── Admin           permissions.push, and every failure folded into read-only
-│   ├── Queue           the open pull requests on both data repos, and the four writes
-│   ├── Catalog         the MERGED entries on both data repos, their vetted/ records, and two writes (as PRs)
-│   ├── Vetting         vet a bot at a release, or revoke it — vetted/ in the gallery, as a pull request
+│   ├── Queue           the open pull requests on the plugin registry, and the four writes
+│   ├── Catalog         the MERGED registry entries, and two writes (as PRs); bots left with the gallery, 2026-10-23
 │   ├── Contents        the contents API — read, put, delete — shared by Queue (at a head) and Catalog (main)
 │   ├── Submission      one pull request: who, what one file it adds, and what it must not add
 │   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
@@ -62,9 +61,8 @@ com.botmaker.dashboard
     │                   never count
     ├── ChangelogTab    write the [Unreleased] section, commit it in the submodule, optionally draft it
     ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
-    ├── CatalogTab      what is published, counted by kind, with Edit and Unpublish gated on Admin.canWrite
-    └── CatalogDialogs  edit, unpublish, vet, revoke — each asks, and answers the pull request it opens
-                        (Update template… and its dialog left on 2026-10-01: a template is cut with --gamebot)
+    ├── CatalogTab      what is published, with Edit and Unpublish gated on Admin.canWrite
+    └── CatalogDialogs  edit, unpublish — each asks, and answers the pull request it opens
 ```
 
 **`--dry-run` is not a checkbox, and it is not a flag this module can spell at all.** `ReleaseSpec` appended

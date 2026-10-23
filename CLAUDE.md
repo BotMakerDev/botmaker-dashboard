@@ -17,7 +17,6 @@ there unchanged on 2026-10-05).
 | the Queue tab, `Submission`, `Checks`, `EntryFields` | `queue.md` |
 | the Catalog tab, `Catalog`, `Contents` | `catalog.md` |
 | Edit, Unpublish, any write to a data repository | `editing-and-unpublishing.md` |
-| the Tier column, `Vetting`, the Auto-merge column | `tiers-and-vetting.md` |
 | the package tree, `ReleaseSpec`, `dashboard.css`, `Themed`, `Browse` | `layout.md` |
 | `AccountBar`, the stylesheet, anything copied from Studio | `duplication-from-studio.md` |
 | `-Pdist`, the rpm/deb, `BuiltWith`, `Pins`, the pom's pins | `packaging.md` |

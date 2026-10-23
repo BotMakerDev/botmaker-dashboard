@@ -1,5 +1,8 @@
 # The queue — one judgement, and it is about shape
 
+> **2026-10-23: the registry only.** With the gallery repository gone, `bots/` and `vetted/` are no entry files, and
+> the gallery merge job's labels and comment (the Auto-merge column, `Queue.listingComment`) went too.
+
 A submission is a pull request adding **one file**: `plugins/<plugin-id>.json`,
 `bots/<owner>-<repo>.json` or — a maintainer's vetting — `vetted/<owner>-<repo>.json`. Everything about whether it is *good* belongs to the registry's CI, which runs
 `RegistryGate` from `botmaker-cli`'s main artifact — the same code its author ran as

@@ -38,7 +38,7 @@ public final class TagBuilds {
         BROKEN,
         /** Neither yet: queued, building, never asked, or JitPack unreachable. */
         PENDING,
-        /** Not a JitPack build, and nothing it pins is broken: the template, the APKs, remote-server. */
+        /** Not a JitPack build, and nothing it pins is broken: the APKs, remote-server. */
         NOT_ON_JITPACK;
 
         public String label() {

@@ -120,11 +120,6 @@ final class ReleaseRowTable extends TableView<ReleaseRowTable.Row> {
         this.onChange = onChange;
         setItems(rows);
         for (Module module : Order.TAG) {
-            if (module.template()) {
-                // Released from the Catalog tab, where the thing it is published as is listed. See ReleaseTab's
-                // javadoc: this is the one place the rows are not every module the library knows.
-                continue;
-            }
             Row row = new Row(module.directory());
             // A tick changes what a release would do, so the command line follows every one. Not a disarm:
             // arming is a value comparison, so un-ticking puts the button back for the plan actually read.

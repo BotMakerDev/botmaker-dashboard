@@ -16,30 +16,7 @@ class SubmissionTest {
 
     private static Submission with(String repo, String... files) {
         return new Submission(repo, 12, "add a plugin", "someone", "abc123",
-                "https://github.com/x", List.of(files), Checks.unknown(), List.of());
-    }
-
-    @Test
-    void aVettingIsOneFileToo() {
-        Submission vetting = with(Queue.GALLERY, "vetted/someone-a-bot.json");
-        assertTrue(vetting.wellShaped());
-        assertEquals("", vetting.autoMerge(), "only a maintainer merges vetted/, so nothing is promised");
-    }
-
-    @Test
-    void theGallerysMergeJobIsReadOffItsLabels() {
-        JsonNode waiting = json("""
-                {"number": 3, "labels": [{"name": "waiting"}]}
-                """);
-        assertEquals("waiting (rate limit)", Submission.read(Queue.GALLERY, waiting,
-                List.of("bots/a-b.json"), Checks.unknown()).autoMerge());
-        JsonNode manual = json("""
-                {"number": 4, "labels": [{"name": "needs-maintainer"}]}
-                """);
-        assertEquals("needs maintainer", Submission.read(Queue.GALLERY, manual,
-                List.of("README.md"), Checks.unknown()).autoMerge());
-        assertEquals("merges when checks pass", with(Queue.GALLERY, "bots/a-b.json").autoMerge());
-        assertEquals("", with(Queue.REGISTRY, "plugins/x.json").autoMerge());
+                "https://github.com/x", List.of(files), Checks.unknown());
     }
 
     private static JsonNode json(String text) {
@@ -57,9 +34,8 @@ class SubmissionTest {
         assertEquals("com.example.demo", plugin.claimedId().orElseThrow());
         assertEquals("adds plugins/com.example.demo.json", plugin.shape());
 
-        Submission bot = with(Queue.GALLERY, "bots/someone-a-bot.json");
-        assertTrue(bot.wellShaped());
-        assertEquals("someone-a-bot", bot.claimedId().orElseThrow());
+        // The gallery's directories went with it on 2026-10-23: a bot entry is no entry here.
+        assertFalse(with(Queue.REGISTRY, "bots/someone-a-bot.json").wellShaped());
     }
 
     @Test

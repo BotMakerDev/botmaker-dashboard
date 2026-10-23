@@ -20,7 +20,7 @@ import java.util.List;
  *
  * <p>The Release tab and the Catalog tab's template release each built this dialog until 2026-09-29, with the
  * same list, the same word and the same button. One copy, so a change to what a release asks before it runs is
- * made once. The warning stays the caller's: the template release says what it does not move (Vet… does).
+ * made once. The warning stays the caller's.
  *
  * <p>It lists the plan rather than the flags, because a release cuts what the <i>decide pass</i> decided — a
  * forced module is in that list and not in the command line.

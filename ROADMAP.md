@@ -20,8 +20,6 @@ Completed work up to 2026-10-05: see CHANGELOG.md, docs/refactor/, and `git show
   a fake needs an interface over `botmaker-shared`'s concrete `GitHubClient`.
 - **Catalog via the Git Trees API plus raw files at a sha** — revisit if a signed-out first load of a larger
   catalog hits the rate limit.
-- **`Admin` probes push on the plugin registry only**; vetting needs push on the gallery. Add a second probe
-  the day the two repositories have different maintainers.
 - **The Actions node reads `pending` for the whole chain** (Actions is polled after the last tag). A live poll
   per tag is not planned.
 

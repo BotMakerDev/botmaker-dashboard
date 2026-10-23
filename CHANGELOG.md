@@ -8,6 +8,14 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Removed
+
+- **Bots, from the Catalog and Queue tabs.** There is no gallery repository any more: a bot is listed by the topic
+  `botmaker-bot` on its own repository, so there is no bot entry to read, edit or merge, no vetting (*Vet…*,
+  *Revoke vetting…*, the Tier and Latest columns) and no Auto-merge column. Both tabs show the plugin registry.
+
 ## [0.4.0] — 2026-10-18
 
 No source changes since v0.3.5; re-released for updated upstream pins.

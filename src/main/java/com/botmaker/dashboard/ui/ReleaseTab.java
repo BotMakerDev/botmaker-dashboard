@@ -65,12 +65,6 @@ import java.util.function.Consumer;
  * the first preview and meant a level could not be picked before one. {@link Module} is the library's list,
  * not a copy of it here.
  *
- * <p><b>With one exception, and it is a placement rather than an omission</b>: a template
- * ({@link Module#template}) has no row here. {@code --gamebot} works identically through all three doors —
- * one implementation is the house rule — but the thing a template is published as is a <i>bot</i>, listed in
- * the Catalog tab beside the vetted and community ones, and that is where its fast update lives. A row here
- * would put an admin-owned template in the middle of the module chain it is not part of.
- *
  * <p><b>Picking a level or typing a version ticks that row</b>: it did not, and a level chosen on an unticked
  * row changed nothing while Execute stayed armed for the global level — which read as the tab remembering only
  * the preview's settings. Unticking resets nothing.

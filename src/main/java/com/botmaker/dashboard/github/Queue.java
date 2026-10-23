@@ -11,14 +11,14 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * The submission queue: every open pull request on the two data repositories, and the four things an
- * operator does with one.
+ * The submission queue: every open pull request on the plugin registry, and the four things an operator
+ * does with one.
  *
- * <p>Two repositories and no more, named from {@link GitHubConfig} rather than typed here: a plugin is
- * submitted to {@code botmaker-plugin-registry} and a bot to {@code botmaker-gallery}, and those names
- * already have one owner in {@code botmaker-shared}.
+ * <p>The registry is named from {@link GitHubConfig} rather than typed here, since that name already has one
+ * owner in {@code botmaker-shared}. The gallery's half went on 2026-10-23: a bot is listed by a topic on its
+ * own repository, with no pull request anybody reviews.
  *
- * <p><b>Reads work signed out.</b> Both repositories are public, so the queue lists for anyone; the token
+ * <p><b>Reads work signed out.</b> The registry is public, so the queue lists for anyone; the token
  * is passed when there is one, which lifts the anonymous rate limit and is required for the writes. The
  * writes are gated on {@link Admin} — but the gate is a courtesy, since GitHub enforces the same rule and
  * would answer 403. This class therefore never checks a permission itself; it only makes the call.
@@ -31,10 +31,7 @@ public final class Queue {
     /** {@code owner/name} of the plugin registry — where a plugin submission lands. */
     public static final String REGISTRY = GitHubConfig.REGISTRY_OWNER + "/" + GitHubConfig.REGISTRY_REPO;
 
-    /** {@code owner/name} of the gallery — where a published bot's entry lands. */
-    public static final String GALLERY = GitHubConfig.INDEX_OWNER + "/" + GitHubConfig.INDEX_REPO;
-
-    public static final List<String> REPOS = List.of(REGISTRY, GALLERY);
+    public static final List<String> REPOS = List.of(REGISTRY);
 
     private Queue() {
     }
@@ -105,36 +102,6 @@ public final class Queue {
         }
         return Contents.read(client, auth, submission.repo(), path, submission.headSha())
                 .thenApply(Contents::decode);
-    }
-
-    /** The first line of every comment the gallery's merge job writes; it edits that one comment in place. */
-    static final String LISTING_MARKER = "<!-- botmaker-listing -->";
-
-    /**
-     * The gallery merge job's sentence on a pull request — when it merges, or why it will not — or blank.
-     *
-     * <p>Its words verbatim, marker stripped: {@code ListingPolicy} wrote the reason, and a paraphrase here
-     * would be a second statement of a rule this window does not own.
-     */
-    public static CompletableFuture<String> listingComment(GitHubClient client, GitHubAuth auth,
-                                                          Submission submission) {
-        String url = GitHubConfig.API_BASE + "/repos/" + submission.repo()
-                + "/issues/" + submission.number() + "/comments?per_page=100";
-        return client.get(url, token(auth)).thenApply(Queue::listingReason);
-    }
-
-    static String listingReason(JsonNode comments) {
-        if (comments == null || !comments.isArray()) {
-            return "";
-        }
-        String reason = "";
-        for (JsonNode comment : comments) {
-            String body = comment.path("body").asText("");
-            if (body.startsWith(LISTING_MARKER)) {
-                reason = body.substring(LISTING_MARKER.length()).strip();
-            }
-        }
-        return reason;
     }
 
     /** Approve, as a review with no body — the ordinary "this is fine, merge it". */

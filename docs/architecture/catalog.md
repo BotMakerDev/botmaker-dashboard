@@ -1,5 +1,9 @@
 # The catalog — what shipped, which the queue cannot answer
 
+> **2026-10-23: plugins only.** The gallery repository is gone: a bot is listed by the topic `botmaker-bot` on its
+> own repository, so `Catalog.Kind`, bot entries, templates, tiers, vetting (`Vetting`, *Vet…*, *Revoke vetting…*)
+> and the Latest column went. `Catalog.REPO` is the registry. Text below about bots is history.
+
 **The Queue tab lists open pull requests, and that is usually zero.** It is the truthful answer to *what is
 waiting on me* and no answer at all to *what can somebody install*. `Catalog` is the second question: every
 **merged** entry — `plugins/<plugin-id>.json` and `bots/<owner>-<repo>.json` — with the gallery entries

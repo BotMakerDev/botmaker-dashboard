@@ -38,8 +38,8 @@ is a desktop window and not a page.
 | **Releases** | The committed `releases/*.md` logs, newest first, with a re-poll that re-reads JitPack and Actions. |
 | **Release** | **Preview** decides a set of flags: the version per module, what is skipped or forced, the tag order, the gates. **Execute…** cuts it, and **Stop** halts it before its next step. |
 | **Changelog** | Writes a module's `## [Unreleased]` section — the one the changelog gate refuses a release without — and commits that one file in the submodule. *Draft with Claude* fills the editor. |
-| **Queue** | Open pull requests on `botmaker-plugin-registry` and `botmaker-gallery`, the one entry file each adds, and the gate's own verdict. |
-| **Catalog** | What is published: every merged plugin entry and every published bot, templates marked, read from github.com. |
+| **Queue** | Open pull requests on `botmaker-plugin-registry`, the one entry file each adds, and the gate's own verdict. |
+| **Catalog** | What is published: every merged plugin entry, read from github.com. |
 
 ## Two rules it is built on
 
