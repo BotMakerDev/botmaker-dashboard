@@ -1,5 +1,6 @@
 package com.botmaker.dashboard.github;
 
+import com.botmaker.cli.catalog.CatalogJson;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
@@ -79,5 +80,39 @@ public final class Queue {
         }
         return Contents.read(client, auth, submission.repo(), path, submission.headSha())
                 .thenApply(Contents::decode);
+    }
+
+    /** One top-level field of a catalog file, as the Queue tab's detail lists it. */
+    public record Field(String name, String value) {
+    }
+
+    /**
+     * The top-level fields of a catalog file's text, in the file's order: a value as written, a list of accounts
+     * ({@code publishers.json}) as their logins. Empty when the text is not a JSON object — the raw text beside it
+     * still shows; what a field must hold is the check's, so nothing here is refused.
+     */
+    public static List<Field> fields(String text) {
+        JsonNode root;
+        try {
+            root = text == null ? null : CatalogJson.strict().readTree(text);
+        } catch (Exception e) {
+            return List.of();
+        }
+        if (root == null || !root.isObject()) {
+            return List.of();
+        }
+        List<Field> fields = new ArrayList<>();
+        root.properties().forEach(field -> fields.add(new Field(field.getKey(), value(field.getValue()))));
+        return List.copyOf(fields);
+    }
+
+    private static String value(JsonNode node) {
+        if (!node.isArray()) {
+            return node.isValueNode() ? node.asText() : node.toString();
+        }
+        List<String> items = new ArrayList<>();
+        node.forEach(item -> items.add(item.has("login") ? item.path("login").asText()
+                : item.isValueNode() ? item.asText() : item.toString()));
+        return String.join(", ", items);
     }
 }

@@ -1,37 +1,28 @@
-# Editing and unpublishing — pull requests, never `main`
+# An admin's edits — pull requests the catalog merges
 
-**`Catalog.edit` and `Catalog.unpublish` open a pull request and change nothing else.** Branch `main`,
-`PUT` or `DELETE` the entry file on that branch, open the pull request. Merging is somebody's decision,
-made where every other submission is decided.
+> **2026-10-23.** *Edit…* (free-text JSON) and *Unpublish…* went with the human review. The edits are the three the
+> user named: list another tag, remove an entry, change an author's rank.
 
-**Why not a push to `main`.** The entry file is the source of truth and `index.json` is generated from it by
-CI, so a commit straight to `main` leaves an index that disagrees with the entries until the next job runs —
-which is the same hazard as a hand-edited `index.json`, from the other end. And a pull request runs
-`RegistryGate` over the *result*, which is the only way an edit gets the same check a submission gets.
+**`CatalogEdits` opens one pull request per edit and changes nothing else.** The catalog's `validate` check runs
+over it like any other, with the admin exception (`EntryGate --author-id`), and `automerge.yml` merges it. The
+dashboard never merges, so the catalog's history stays a list of pull requests saying who changed what.
 
-**No fork, and that is the difference from `PluginPublishCommand`.** That command forks because a submitter
-usually cannot push to the registry; an operator with `permissions.push` can, so the branch goes straight
-there. Reusing that command's flow would mean shelling to `gh` from a GUI and forking the maintainer's own
-repository, which GitHub refuses anyway.
+- **List this tag** writes the entry file with the new `tag` and every other field kept in its order (`id`, `repo`,
+  `detached`). A blank tag or the tag already listed opens nothing. The check still builds the release: an admin
+  can list only a published tag that passes.
+- **Remove from catalog…** deletes the entry file, after a confirmation (`Themed.dialog`) saying Studio stops
+  listing it once merged and the repository stays.
+- **Rank** + **Save rank** moves the account by **id** in `publishers.json`, read again from `main` first. An
+  author with no id yet is asked of GitHub (`GET /users/<login>`). Community takes the account off both lists. A
+  move that changes nothing, or would leave no admin, is refused before any request.
 
-**The blob `sha` from the listing is sent back with the write.** GitHub then refuses it if the file moved
-since it was read — optimistic locking, not a courtesy: two operators editing one entry is exactly the case
-one-file-per-entry exists to make visible.
+**From a branch or a fork, Studio's `CatalogListing` shape.** An account that can push to the catalog branches
+there; any other forks first. The branch is `dashboard/<verb>-<key>-<UTC stamp>`: without the stamp a second edit
+while the first is open is a 422 naming an existing ref.
 
-**The branch name carries a UTC timestamp**, and the id is reduced to the characters a git ref may hold.
-Without the timestamp a second edit while the first pull request is open is a 422 naming an existing ref,
-which reads as a bug in this window; without the reduction, a bot's `owner/repo` id would put a second
-segment in the branch name.
+**The blob `sha` read on `main` is sent back with the write.** GitHub refuses it if the file moved since —
+optimistic locking: two admins editing one entry is exactly the case one-file-per-entry makes visible.
 
-**Two things the dialogs do that are not gates.** The edit dialog says whether the text parses and does
-**not** refuse it — whether an entry is good is `RegistryGate`'s answer, and a syntax opinion here is the
-first step towards a second gate. An edit that changed nothing opens no pull request, which is arithmetic
-rather than judgement. Unpublish asks the operator to **type the id**, because merging it removes the entry
-for everyone and the id is the one thing re-submitting cannot recover — the filename is the claim.
-
-**It is a text area over the JSON, not a form.** A form shows only the keys it was written to know about,
-so it would silently drop one an entry carries that this window has never heard of. Same rule as
-`EntryFields`.
-
-**The catalog is not reloaded after a proposal**, and that is the honest thing: nothing published has
-changed. The proposal is in the Queue tab now, with the gate's verdict against it.
+**The grid is not reloaded after a proposal**, and that is the honest thing: nothing listed changes until the
+check passes, the merge job merges and the index job regenerates `catalog.json`. The status line and the panel's
+foot name the pull request opened; it is in the Queue tab meanwhile.

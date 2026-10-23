@@ -14,7 +14,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - **The Catalog and Queue tabs read `botmaker-catalog`**, the one repository for bots and plugins. The Catalog tab
   lists `catalog.json`, the file Studio reads: both kinds, with each one's rank (Official, Trusted, Community),
-  tag and author. The card grid replaces its table in a later change.
+  tag and author.
+- **The Catalog tab is a grid of cards**: one per bot, plugin or author, with chips for the kind (All, Bots,
+  Plugins, Authors) and the rank, and a search over name, author and tags. A card shows its kind, rank badge,
+  author, tag, stars and, for a fork, what it is based on; the author's name opens their card. A side panel shows
+  the selected card's details and links.
+- **An admin edits the catalog from the side panel**: *List this tag*, *Remove from catalog…* (asked first), and
+  an author's *Rank* with *Save rank*. Each opens one pull request, named in the status line, that the catalog's
+  check passes and merges.
+- **The Queue's detail lists the file's fields** at the pull request's head above its text.
 - **Admin is a catalog admin**: the signed-in account's id in `publishers.json` on the catalog's `main`, the list
   the catalog's check reads, no longer push access. The badge reads `admin · BotMakerDev/botmaker-catalog`.
 - **The Queue tab is read-only.** The catalog's check decides and its merge job merges what passes, so Approve,
@@ -25,7 +33,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - *Edit…* (a free-text JSON dialog) and *Unpublish…*, and the field view of an entry. An admin's edits — list
   another tag, remove an entry, change an author's rank — are pull requests the catalog merges itself, offered in
-  the coming card grid.
+  the card grid's side panel.
 
 ## [0.4.0] — 2026-10-18
 

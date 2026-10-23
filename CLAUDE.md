@@ -14,9 +14,9 @@ there unchanged on 2026-10-05).
 | anything that previews, cuts or re-polls a release; `ReleaseRun`, `ReleaseJob`, `VersionTargets`, `CiStatus`, `Verdicts` | `release-rule.md` |
 | the Changelog tab, `ChangelogEdit`, `ChangelogDrafts`, Draft with Claude, `CswapAccounts` | `changelog-tab.md` |
 | `Admin`, who may write | `admin.md` |
-| the Queue tab, `Submission`, `Checks`, `EntryFields` | `queue.md` |
-| the Catalog tab, `Catalog`, `Contents` | `catalog.md` |
-| Edit, Unpublish, any write to a data repository | `editing-and-unpublishing.md` |
+| the Queue tab, `Queue`, `Submission`, `Checks` | `queue.md` |
+| the Catalog tab, `Catalog`, `CatalogRow`, `Authors`, `CatalogFilter`, `CatalogCards` | `catalog.md` |
+| `CatalogEdits`, `Contents`, any write to the catalog | `editing-and-unpublishing.md` |
 | the package tree, `ReleaseSpec`, `dashboard.css`, `Themed`, `Browse` | `layout.md` |
 | `AccountBar`, the stylesheet, anything copied from Studio | `duplication-from-studio.md` |
 | `-Pdist`, the rpm/deb, `BuiltWith`, `Pins`, the pom's pins | `packaging.md` |
@@ -43,10 +43,15 @@ happen to hold: the CLI is a plugin host and pins both, this window hosts nothin
 - **Never reimplement a decision the release owns.** Which modules a release cuts, versions, forcing, tag
   order and every gate belong to `com.botmaker.cli.release`; this app calls it. The test for anything new:
   would this window otherwise have to *decide* something? Then it calls the library (`release-rule.md`).
-- **A submission's verdict is the registry CI's check run** (`RegistryGate`); read it, validate nothing here.
-  The one judgement made here is the one-file shape of a pull request (`queue.md`).
-- **Every write to a data repository is a pull request**, never a push to `main` (`editing-and-unpublishing.md`).
-- **Admin is GitHub's `permissions.push`, never a list here**, and a refusal is not a security boundary (`admin.md`).
+- **A pull request's verdict is the catalog's `validate` check run** (`EntryGate`); read it, validate nothing
+  here. The one judgement made here is the one-path shape of a pull request (`queue.md`). Nobody reviews: the
+  Queue is read-only and the catalog's `automerge.yml` merges.
+- **Every write to the catalog is a pull request** from a branch or the account's fork, never a push to `main`,
+  and the dashboard never merges (`editing-and-unpublishing.md`).
+- **Admin is the check's admin**: the signed-in account's **id** in `publishers.json` on the catalog's `main`,
+  never a login and never a list here; a refusal is not a security boundary (`admin.md`).
+- **The grid's filtering and the author roll-up are pure functions over catalog rows** (`CatalogFilter`,
+  `Authors`); `ui/` draws their answer (`catalog.md`).
 - **`umbrella/` and `github/` hold no JavaFX**: a rule in a `ui/` class is a rule that will not be tested.
 - **A colour literal in a CSS rule is a bug**; every `Dialog`/`Alert` goes through `Themed.dialog(dialog,
   owner)`. **Never call `java.awt.Desktop`**: `ui/Browse` is the one way to open a URL (`layout.md`).

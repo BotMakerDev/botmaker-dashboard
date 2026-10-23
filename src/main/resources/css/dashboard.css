@@ -293,7 +293,7 @@
 /* ── the admin badge ─────────────────────────────────────────────────────── */
 
 /*
- * Two states and no third. It says what this account may do on the plugin registry, as GitHub answers it —
+ * Two states and no third. It says what this account may do on the catalog, as its publishers.json answers it —
  * never what role somebody has been given here.
  */
 .badge {
@@ -869,4 +869,111 @@
 .device-code {
     -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
     -fx-font-size: 20px;
+}
+
+/* ── the Catalog tab's grid ──────────────────────────────────────────────────
+   One card per bot, plugin or author (layout A, 2026-10-23), the chips above
+   them, the side panel beside. A rank reads by its badge's colour: Official in
+   the accent, Trusted in ok-green, Community dim. */
+
+.catalog-grid {
+    -fx-background-color: -bm-bg;
+}
+
+.catalog-card {
+    -fx-background-color: -bm-bg-raised;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 6;
+    -fx-padding: 10 12 10 12;
+    -fx-cursor: hand;
+}
+
+.catalog-card:hover {
+    -fx-border-color: -bm-text-dim;
+}
+
+.catalog-card--selected,
+.catalog-card--selected:hover {
+    -fx-background-color: -bm-selection;
+    -fx-border-color: -bm-accent;
+}
+
+.card-kind {
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-size: 11px;
+}
+
+.card-name {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.card-owner,
+.card-owner:visited {
+    -fx-text-fill: -bm-accent;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+}
+
+.card-meta,
+.card-description {
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-size: 12px;
+}
+
+.rank-badge {
+    -fx-padding: 1 8 1 8;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-font-size: 11px;
+}
+
+.rank--admin {
+    -fx-text-fill: -bm-accent;
+    -fx-border-color: -bm-accent;
+}
+
+.rank--trusted {
+    -fx-text-fill: -bm-ok;
+    -fx-border-color: -bm-ok;
+}
+
+.rank--community {
+    -fx-text-fill: -bm-text-dim;
+    -fx-border-color: -bm-line;
+}
+
+.chip-strip {
+    -fx-spacing: 4;
+}
+
+.toggle-button.chip {
+    -fx-background-color: -bm-bg;
+    -fx-background-radius: 12;
+    -fx-border-color: -bm-line;
+    -fx-border-radius: 12;
+    -fx-padding: 3 10 3 10;
+    -fx-text-fill: -bm-text-dim;
+}
+
+.toggle-button.chip:hover {
+    -fx-text-fill: -bm-text;
+}
+
+.toggle-button.chip:selected {
+    -fx-background-color: -bm-accent;
+    -fx-border-color: -bm-accent;
+    -fx-text-fill: -bm-on-accent;
+}
+
+.catalog-panel {
+    -fx-background-color: -bm-bg-raised;
+}
+
+.panel-section {
+    -fx-text-fill: -bm-text-dim;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 0 0 0;
 }

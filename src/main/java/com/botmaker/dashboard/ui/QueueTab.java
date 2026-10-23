@@ -18,6 +18,7 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -48,6 +49,8 @@ public final class QueueTab extends BorderPane {
     private final Label shape = new Label();
     private final Label verdict = new Label();
     private final Label status = new Label();
+    /** The file's fields at the head, read off its JSON ({@link Queue#fields}); the raw text is below them. */
+    private final GridPane fields = new GridPane();
     private final TextArea entry = new TextArea();
 
     private final Button refresh = new Button("Refresh");
@@ -90,7 +93,9 @@ public final class QueueTab extends BorderPane {
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.getSelectionModel().selectedItemProperty().addListener((obs, was, now) -> show(now));
 
-        VBox bottom = new VBox(8, heading, shape, verdict, entry);
+        fields.setHgap(12);
+        fields.setVgap(4);
+        VBox bottom = new VBox(8, heading, shape, verdict, fields, entry);
         bottom.setPadding(new Insets(12));
         VBox.setVgrow(entry, Priority.ALWAYS);
 
@@ -123,6 +128,7 @@ public final class QueueTab extends BorderPane {
 
     private void show(Submission submission) {
         entry.clear();
+        fields.getChildren().clear();
         openOnGitHub.setDisable(submission == null);
         if (submission == null) {
             heading.setText("");
@@ -144,7 +150,18 @@ public final class QueueTab extends BorderPane {
             if (table.getSelectionModel().getSelectedItem() != submission) {
                 return; // The operator moved on while it loaded; showing it now would be a lie.
             }
-            entry.setText(error != null || text == null ? "(the file is removed, or could not be read)" : text);
+            boolean missing = error != null || text == null;
+            entry.setText(missing ? "(the file is removed, or could not be read)" : text);
+            if (!missing) {
+                Queue.fields(text).forEach(field -> {
+                    int row = fields.getRowCount();
+                    Label name = new Label(field.name());
+                    name.getStyleClass().add("cell--dim");
+                    Label value = new Label(field.value());
+                    value.setWrapText(true);
+                    fields.addRow(row, name, value);
+                });
+            }
         }));
     }
 

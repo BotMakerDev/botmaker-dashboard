@@ -147,7 +147,7 @@ public final class DashboardApp extends Application {
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
         catalog = new LazyTab<>("Catalog", () -> {
-            CatalogTab built = new CatalogTab(client);
+            CatalogTab built = new CatalogTab(client, auth);
             if (admin != null) {
                 built.setAdmin(admin);
             }

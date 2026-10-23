@@ -1,17 +1,23 @@
-# Admin — GitHub answers it, and there is no second list
+# Admin — the catalog check's own list, and no second one
 
-`Admin.probe` reads `permissions.push` from `GET /repos/LiQiyeDev/botmaker-plugin-registry` for the
-signed-in account. That bit enables the write actions. Nothing else is consulted.
+> **2026-10-23.** Admin was GitHub's `permissions.push` on the plugin registry until the catalog merged itself. It
+> is now the check's admin.
 
-An allowlist in this repository was considered and refused. It would be a second statement of a fact that
-lives on github.com, in a place with no way to notice the first one changing — someone removed from the
-project keeps the buttons, someone added waits for a release. And it could not be made good on: approving a
-pull request needs the push right *at the moment of the call*, so an app trusting its own list produces a
-403 in a dialog instead of a disabled button.
+`Admin.probe` asks `GET /user` for the signed-in account and reads `publishers.json` on the catalog's `main`
+(`PublishersFile`). The account is an admin when its **id** is in that file's `admin` list. That enables the edits
+in the Catalog tab's side panel. Nothing else is consulted.
 
-**So a refusal here is not a security boundary and must never be written as one.** The API still decides.
-What the verdict buys is that the operator learns they cannot merge before writing a review, not after.
+**Why that file.** The catalog's `EntryGate` lets an admin change anyone's entry and the ranks, and it reads
+exactly that file by exactly that id. Reading the same file means the dashboard offers the edits to the accounts
+the check will pass, and to no others. Push access no longer means anything here: nothing in this window merges.
 
-Every probe failure — offline, not signed in, a narrowed token scope, a repository the account cannot see —
-is **read-only with a reason**, never an error dialog. The window stays fully usable for everything it
-reads, which is most of it.
+**By id, never by login.** A login can be renamed and then taken by somebody else; the id cannot. A login that
+matches with a different id is not an admin (`AdminTest`).
+
+**A refusal here is not a security boundary and must never be written as one.** The check decides; an edit by
+anyone else fails there with its reason. What the verdict buys is that a non-admin is not offered buttons whose
+pull requests would be refused.
+
+Every probe failure — offline, not signed in, a token that expired, a `publishers.json` that does not parse — is
+**read-only with a reason**, never an error dialog. The window stays fully usable for everything it reads, which
+is most of it.

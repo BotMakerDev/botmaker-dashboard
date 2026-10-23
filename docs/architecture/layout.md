@@ -6,13 +6,17 @@ com.botmaker.dashboard
 ├── Launcher            the shaded jar's and the app-image's main class (does not extend Application)
 ├── DashboardConfig     the one remembered preference (the umbrella path) + looksLikeUmbrella
 ├── github/            everything read from the API — no JavaFX either, and tested the same way
-│   ├── Admin           permissions.push, and every failure folded into read-only
-│   ├── Queue           the open pull requests on the plugin registry, and the four writes
-│   ├── Catalog         the MERGED registry entries, and two writes (as PRs); bots left with the gallery, 2026-10-23
-│   ├── Contents        the contents API — read, put, delete — shared by Queue (at a head) and Catalog (main)
-│   ├── Submission      one pull request: who, what one file it adds, and what it must not add
-│   ├── Checks          the gate's own check-run conclusion, reduced to one verdict and one line
-│   └── EntryFields     an entry, flattened into rows — read from the file, not a schema
+│   ├── Admin           an admin by account id in publishers.json on the catalog's main; failures read-only
+│   ├── Catalog         catalog.json on main, read as CatalogRows (both kinds), the file Studio reads
+│   ├── CatalogRow      one bot or plugin card: kind, rank, tag, owner, its entry path and links
+│   ├── Authors         every owner and every ranked account, rolled up into author cards
+│   ├── CatalogFilter   the chips and the search, a pure function over rows and authors
+│   ├── PublishersFile  publishers.json on main with its blob sha
+│   ├── CatalogEdits    an admin's three edits (list a tag, remove, rank), each one pull request
+│   ├── Queue           the catalog's open pull requests, read-only, and a file's fields at the head
+│   ├── Contents        the contents API — read, put, delete — shared by Queue (at a head) and the edits (main)
+│   ├── Submission      one pull request: who, the one catalog file it changes, waiting or not
+│   └── Checks          the validate check-run conclusion, reduced to one verdict and one line
 ├── umbrella/           everything read out of the checkout — no JavaFX, all of it testable
 │   ├── Proc            one external command, output captured, a timeout that is a result; 8 at once at most;
 │   │                   an interrupt kills it, runToTheEnd (a commit) is out of an interrupt's reach
@@ -60,9 +64,9 @@ com.botmaker.dashboard
     ├── widgets/        SummaryTiles, ModuleLane, ReleaseTimeline, LiveBadge, ReleaseBoard, LinkBar — draw,
     │                   never count
     ├── ChangelogTab    write the [Unreleased] section, commit it in the submodule, optionally draft it
-    ├── QueueTab        the submissions, the entry as fields, and the writes gated on Admin.canWrite
-    ├── CatalogTab      what is published, with Edit and Unpublish gated on Admin.canWrite
-    └── CatalogDialogs  edit, unpublish — each asks, and answers the pull request it opens
+    ├── QueueTab        the open pull requests, read-only: check, waiting, the file's fields and text
+    ├── CatalogTab      the card grid, chips, search and side panel; the edits gated on Admin.canWrite
+    └── CatalogCards    a bot, plugin or author card and its rank badge — draw, never decide
 ```
 
 **`--dry-run` is not a checkbox, and it is not a flag this module can spell at all.** `ReleaseSpec` appended
