@@ -8,7 +8,7 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [0.5.0] — 2026-10-23
 
 ### Changed
 
