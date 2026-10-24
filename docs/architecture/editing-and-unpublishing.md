@@ -2,14 +2,18 @@
 
 > **2026-10-23.** *Edit…* (free-text JSON) and *Unpublish…* went with the human review. The edits are the three the
 > user named: list another tag, remove an entry, change an author's rank.
+>
+> **2026-10-24.** An entry keeps every approved release (catalog schema 4), so *List this tag* became **Remove**
+> beside each release: a publish appends a release, and an admin only takes one out.
 
 **`CatalogEdits` opens one pull request per edit and changes nothing else.** The catalog's `validate` check runs
 over it like any other, with the admin exception (`EntryGate --author-id`), and `automerge.yml` merges it. The
 dashboard never merges, so the catalog's history stays a list of pull requests saying who changed what.
 
-- **List this tag** writes the entry file with the new `tag` and every other field kept in its order (`id`, `repo`,
-  `detached`). A blank tag or the tag already listed opens nothing. The check still builds the release: an admin
-  can list only a published tag that passes.
+- **Remove** beside a release (`CatalogEdits.removeRelease`) writes the entry file without that release, the
+  others and every other field kept in their order: the check's `Remove` change. It asks first, saying Studio stops
+  offering the release and refuses it where it was loaded. An entry's only release has no Remove: it goes with
+  the entry. A file on `main` that no longer lists the tag, or lists nothing else, opens nothing.
 - **Remove from catalog…** deletes the entry file, after a confirmation (`Themed.dialog`) saying Studio stops
   listing it once merged and the repository stays.
 - **Rank** + **Save rank** moves the account by **id** in `publishers.json`, read again from `main` first. An

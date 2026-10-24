@@ -18,6 +18,14 @@ class QueueTest {
     }
 
     @Test
+    void anEntrysReleasesListTheirTags() {
+        assertEquals(List.of(new Queue.Field("repo", "x/y"), new Queue.Field("releases", "v1.0.0, v1.1.0")),
+                Queue.fields("""
+                        {"repo": "x/y", "releases": [{"tag": "v1.0.0", "commit": "a"}, {"tag": "v1.1.0", "commit": "b"}]}
+                        """));
+    }
+
+    @Test
     void theRanksListTheirLogins() {
         assertEquals(List.of(new Queue.Field("admin", "LiQiyeDev, BotMakerDev"), new Queue.Field("trusted", "")),
                 Queue.fields("""

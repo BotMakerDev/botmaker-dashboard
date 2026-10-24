@@ -39,7 +39,7 @@ is a desktop window and not a page.
 | **Release** | **Preview** decides a set of flags: the version per module, what is skipped or forced, the tag order, the gates. **Execute…** cuts it, and **Stop** halts it before its next step. |
 | **Changelog** | Writes a module's `## [Unreleased]` section — the one the changelog gate refuses a release without — and commits that one file in the submodule. *Draft with Claude* fills the editor. |
 | **Queue** | Open pull requests on `botmaker-catalog`, the one file each changes with its fields, and the check's own verdict. Read-only: the catalog merges what passes. |
-| **Catalog** | What is published: a grid of bot, plugin and author cards from `catalog.json`, with kind and rank chips and a search. An admin lists another tag, removes an entry or changes an author's rank from a card's panel, each as one pull request. |
+| **Catalog** | What is published: a grid of bot, plugin and author cards from `catalog.json`, with kind and rank chips and a search; a card's panel lists every approved release, newest first. An admin removes one release, removes an entry or changes an author's rank from that panel, each as one pull request. |
 
 ## Two rules it is built on
 

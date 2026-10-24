@@ -1,14 +1,15 @@
 package com.botmaker.dashboard.github;
 
-import com.botmaker.cli.catalog.Rank;
+import com.botmaker.cli.catalog.CatalogJson;
+import com.botmaker.cli.catalog.DerivedFacts;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -19,9 +20,11 @@ import java.util.concurrent.CompletableFuture;
  * nowhere else, and a card should show exactly what a user of Studio is offered. It is read through the same raw
  * URL ({@link GitHubConfig#catalogRawUrls()}), so it costs no API request.
  *
- * <p><b>Read as data.</b> The dashboard depends on the cli, but parses the file into its own {@link CatalogRow}s
- * one row at a time: a row missing its {@code repo} or {@code tag} is dropped and the rest still show, and a file
- * that does not parse at all is an empty list with the reason, never an exception.
+ * <p><b>Read as Studio reads it</b> (schema 4, 2026-10-24): each row through the cli's own records
+ * ({@link com.botmaker.cli.catalog.Catalog.Plugin}, {@link com.botmaker.cli.catalog.Catalog.Bot}), one row at a
+ * time, so the two windows cannot disagree on the shape. A row that does not read, has no {@code repo}, no release,
+ * or a plugin with no {@code id} is dropped and the rest still show; the single {@code tag} of schema 3 is not read.
+ * A file that does not parse at all is an empty list with the reason, never an exception.
  *
  * <p>Nothing here judges an entry: what let it in was the catalog's {@code validate} check on the pull request
  * that added it.
@@ -43,8 +46,6 @@ public final class Catalog {
         }
     }
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private Catalog() {
     }
 
@@ -57,13 +58,14 @@ public final class Catalog {
     }
 
     /**
-     * Every row of a {@code catalog.json}, plugins then bots, each sorted by name. A row without {@code repo} or
-     * {@code tag} is dropped; an unknown rank reads as {@link Rank#COMMUNITY}, as Studio reads it.
+     * Every row of a {@code catalog.json}, plugins then bots, each sorted by name. A row that cannot be shown is
+     * dropped (see the class); an unknown rank reads as {@link com.botmaker.cli.catalog.Rank#COMMUNITY}, as Studio
+     * reads it.
      */
     public static Read read(String catalogJson) {
         JsonNode root;
         try {
-            root = catalogJson == null ? null : MAPPER.readTree(catalogJson);
+            root = catalogJson == null ? null : CatalogJson.lenient().readTree(catalogJson);
         } catch (Exception e) {
             return new Read(List.of(), GitHubConfig.CATALOG_PATH + " is not JSON: " + e.getMessage());
         }
@@ -71,62 +73,68 @@ public final class Catalog {
             return new Read(List.of(), GitHubConfig.CATALOG_PATH + " is not a catalog");
         }
         List<CatalogRow> rows = new ArrayList<>();
-        rows.addAll(sorted(rows(root.path("plugins"), CatalogRow.Kind.PLUGIN)));
-        rows.addAll(sorted(rows(root.path("bots"), CatalogRow.Kind.BOT)));
+        rows.addAll(sorted(rows(root.path("plugins"), Catalog::plugin)));
+        rows.addAll(sorted(rows(root.path("bots"), Catalog::bot)));
         return new Read(rows, "");
     }
 
-    private static List<CatalogRow> rows(JsonNode array, CatalogRow.Kind kind) {
+    private interface RowReader {
+        Optional<CatalogRow> read(JsonNode node) throws Exception;
+    }
+
+    private static List<CatalogRow> rows(JsonNode array, RowReader reader) {
         List<CatalogRow> rows = new ArrayList<>();
         if (!array.isArray()) {
             return rows;
         }
         for (JsonNode node : array) {
-            String repo = text(node, "repo");
-            String tag = text(node, "tag");
-            String id = text(node, "id");
-            boolean plugin = kind == CatalogRow.Kind.PLUGIN;
-            if (repo.isBlank() || !repo.contains("/") || tag.isBlank() || (plugin && id.isBlank())) {
-                continue;
+            try {
+                reader.read(node).ifPresent(rows::add);
+            } catch (Exception e) {
+                // A row of the wrong shape: the others still show.
             }
-            rows.add(new CatalogRow(kind, repo, plugin ? text(node, "name") : "", tag,
-                    Rank.fromId(text(node, "rank")), text(node, "description"), strings(node.path("tags")),
-                    node.path("stars").asInt(0), text(node, "forkOf"), id, pins(node.path("plugins"))));
         }
         return rows;
+    }
+
+    private static Optional<CatalogRow> plugin(JsonNode node) throws Exception {
+        var plugin = CatalogJson.lenient().treeToValue(node, com.botmaker.cli.catalog.Catalog.Plugin.class);
+        if (plugin == null || blank(plugin.id()) || !isRepo(plugin.repo())) {
+            return Optional.empty();
+        }
+        List<CatalogRow.Release> releases = plugin.releases().stream().filter(r -> r != null && !blank(r.tag()))
+                .map(r -> new CatalogRow.Release(r.tag(), r.commit(), List.of())).toList();
+        return releases.isEmpty() ? Optional.empty() : Optional.of(new CatalogRow(CatalogRow.Kind.PLUGIN,
+                plugin.repo().strip(), plugin.name(), plugin.rank(), plugin.description(), plugin.tags(),
+                plugin.stars(), "", plugin.id().strip(), releases));
+    }
+
+    private static Optional<CatalogRow> bot(JsonNode node) throws Exception {
+        var bot = CatalogJson.lenient().treeToValue(node, com.botmaker.cli.catalog.Catalog.Bot.class);
+        if (bot == null || !isRepo(bot.repo())) {
+            return Optional.empty();
+        }
+        List<CatalogRow.Release> releases = bot.releases().stream().filter(r -> r != null && !blank(r.tag()))
+                .map(r -> new CatalogRow.Release(r.tag(), r.commit(), pins(r.plugins()))).toList();
+        return releases.isEmpty() ? Optional.empty() : Optional.of(new CatalogRow(CatalogRow.Kind.BOT,
+                bot.repo().strip(), "", bot.rank(), bot.description(), bot.tags(), bot.stars(), bot.forkOf(), "",
+                releases));
+    }
+
+    private static List<CatalogRow.Pin> pins(List<DerivedFacts.Pin> pins) {
+        return pins.stream().filter(p -> p != null && !blank(p.id()))
+                .map(p -> new CatalogRow.Pin(p.id(), p.version() == null ? "" : p.version())).toList();
     }
 
     private static List<CatalogRow> sorted(List<CatalogRow> rows) {
         return rows.stream().sorted(Comparator.comparing(CatalogRow::name, String.CASE_INSENSITIVE_ORDER)).toList();
     }
 
-    private static List<CatalogRow.Pin> pins(JsonNode array) {
-        List<CatalogRow.Pin> pins = new ArrayList<>();
-        if (array.isArray()) {
-            for (JsonNode pin : array) {
-                String id = text(pin, "id");
-                if (!id.isBlank()) {
-                    pins.add(new CatalogRow.Pin(id, text(pin, "version")));
-                }
-            }
-        }
-        return pins;
+    private static boolean isRepo(String repo) {
+        return !blank(repo) && repo.contains("/");
     }
 
-    private static List<String> strings(JsonNode array) {
-        List<String> out = new ArrayList<>();
-        if (array.isArray()) {
-            array.forEach(value -> {
-                if (value.isTextual() && !value.asText().isBlank()) {
-                    out.add(value.asText());
-                }
-            });
-        }
-        return out;
-    }
-
-    private static String text(JsonNode node, String field) {
-        JsonNode value = node.path(field);
-        return value.isValueNode() ? value.asText("").strip() : "";
+    private static boolean blank(String text) {
+        return text == null || text.isBlank();
     }
 }

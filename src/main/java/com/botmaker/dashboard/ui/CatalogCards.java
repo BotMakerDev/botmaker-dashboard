@@ -46,7 +46,9 @@ final class CatalogCards {
         owner.addEventHandler(MouseEvent.MOUSE_CLICKED, Event::consume);
 
         VBox card = card(row.kind().displayName(), row.rank(), row.name());
-        card.getChildren().addAll(owner, meta(row.tag() + "  ·  ★ " + row.stars()));
+        int older = row.releases().size() - 1;
+        card.getChildren().addAll(owner, meta(row.tag() + (older == 0 ? "" : " (+" + older + " older)")
+                + "  ·  ★ " + row.stars()));
         if (!row.forkOf().isEmpty()) {
             card.getChildren().add(meta("based on " + row.forkOf()));
         }

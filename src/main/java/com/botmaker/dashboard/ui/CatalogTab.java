@@ -16,6 +16,7 @@ import com.botmaker.shared.github.GitHubClient;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -56,8 +57,8 @@ import java.util.stream.Collectors;
  * show is {@link CatalogFilter}'s answer and who the authors are is {@link Authors}', both tested without a window.
  * An owner's name on a card opens that author.
  *
- * <p>The side panel shows the selected card. For an admin it adds the edits — List this tag, Remove from catalog…,
- * an author's Rank — each a pull request ({@link CatalogEdits}) the catalog's check decides and merges. Nothing
+ * <p>The side panel shows the selected card, a bot's or plugin's every approved release newest first. For an admin
+ * it adds the edits — Remove beside each release (2026-10-24), Remove from catalog…, an author's Rank — each a pull request ({@link CatalogEdits}) the catalog's check decides and merges. Nothing
  * here judges an entry, and nothing is reloaded after a proposal: nothing published has changed until it merges.
  */
 public final class CatalogTab extends BorderPane {
@@ -92,7 +93,6 @@ public final class CatalogTab extends BorderPane {
      * The edits' inputs, one set kept across panel rebuilds so a redraw never wipes what the admin typed; emptied
      * when another card is selected ({@link #inputsFor}).
      */
-    private final TextField tagInput = new TextField();
     private final TextField whyInput = new TextField();
     private final ComboBox<Rank> rankInput = new ComboBox<>();
     private String inputsFor = "";
@@ -113,8 +113,6 @@ public final class CatalogTab extends BorderPane {
         status.getStyleClass().add("status-line");
         refresh.setOnAction(e -> reload());
 
-        tagInput.setPromptText("a tag, e.g. v1.2.0");
-        HBox.setHgrow(tagInput, Priority.ALWAYS);
         whyInput.setPromptText("Why (optional; goes in the pull request)");
         rankInput.getItems().setAll(Rank.values());
         rankInput.setCellFactory(list -> rankCell());
@@ -321,7 +319,6 @@ public final class CatalogTab extends BorderPane {
             // Another card: its edits start empty. The same card redrawn (a chip, a search word, a reload) keeps
             // what the admin was typing.
             inputsFor = selected;
-            tagInput.clear();
             whyInput.clear();
             rankInput.setValue(null);
         }
@@ -353,7 +350,7 @@ public final class CatalogTab extends BorderPane {
     private void entryPanel(CatalogRow row, List<Node> parts) {
         parts.add(heading(row.name(), row.rank()));
         parts.add(line(row.kind().displayName() + " by @" + row.owner()));
-        parts.add(dim(row.repo() + " @ " + row.tag() + "  ·  ★ " + row.stars()));
+        parts.add(dim(row.repo() + "  ·  ★ " + row.stars()));
         if (!row.forkOf().isEmpty()) {
             parts.add(dim("based on " + row.forkOf()));
         }
@@ -363,6 +360,8 @@ public final class CatalogTab extends BorderPane {
         if (!row.tags().isEmpty()) {
             parts.add(dim("tags: " + String.join(", ", row.tags())));
         }
+        parts.add(section(row.releases().size() == 1 ? "Approved release" : "Approved releases, newest first"));
+        row.releases().forEach(release -> parts.add(releaseLine(row, release)));
         if (!row.plugins().isEmpty()) {
             parts.add(section("Plugins at " + row.tag()));
             row.plugins().forEach(pin -> parts.add(dim(pin.id() + "  " + pin.version())));
@@ -405,15 +404,34 @@ public final class CatalogTab extends BorderPane {
         return link;
     }
 
+    /**
+     * One approved release: its tag and pinned commit, and for an admin a Remove beside it. The only release has
+     * none: it goes with the entry (Remove from catalog…).
+     */
+    private Node releaseLine(CatalogRow row, CatalogRow.Release release) {
+        Label label = dim(release.tag() + (release.commit().isEmpty() ? "" : "  ·  " + release.shortCommit()));
+        HBox line = new HBox(8, label);
+        line.setAlignment(Pos.CENTER_LEFT);
+        if (admin.canWrite() && row.releases().size() > 1) {
+            Region gap = new Region();
+            HBox.setHgrow(gap, Priority.ALWAYS);
+            Button remove = new Button("Remove");
+            remove.getStyleClass().add("danger");
+            remove.setDisable(writing);
+            remove.setOnAction(e -> {
+                if (confirmReleaseRemoval(row, release.tag())) {
+                    write("remove " + row.name() + " " + release.tag(), CatalogEdits.removeRelease(client, auth,
+                            admin, row, release.tag(), whyInput.getText()));
+                }
+            });
+            line.getChildren().addAll(gap, remove);
+        }
+        return line;
+    }
+
     private void entryEdits(CatalogRow row, List<Node> parts) {
         parts.add(section("Admin"));
         TextField why = whyInput;
-        TextField tag = tagInput;
-        Button listTag = new Button("List this tag");
-        listTag.setDisable(writing);
-        listTag.setOnAction(e -> write("list " + row.name() + " at " + tag.getText().strip(),
-                CatalogEdits.listTag(client, auth, admin, row, tag.getText(), why.getText())));
-        tag.setOnAction(e -> listTag.fire());
 
         Button remove = new Button("Remove from catalog…");
         remove.getStyleClass().add("danger");
@@ -424,7 +442,6 @@ public final class CatalogTab extends BorderPane {
             }
         });
 
-        parts.add(new HBox(8, tag, listTag));
         parts.add(remove);
         parts.add(why);
     }
@@ -471,6 +488,19 @@ public final class CatalogTab extends BorderPane {
         return alert.showAndWait().filter(removeButton::equals).isPresent();
     }
 
+    /** A release removed is refused by every Studio that loaded it, so it is asked first too. */
+    private boolean confirmReleaseRemoval(CatalogRow row, String tag) {
+        ButtonType removeButton = new ButtonType("Remove " + tag, ButtonBar.ButtonData.OK_DONE);
+        Alert alert = Themed.dialog(new Alert(Alert.AlertType.CONFIRMATION, "", removeButton, ButtonType.CANCEL),
+                getScene() == null ? null : getScene().getWindow());
+        alert.setTitle("Remove this release");
+        alert.setHeaderText("Stop approving " + row.name() + " " + tag + "?");
+        alert.setContentText("This opens a pull request removing " + tag + " from " + row.entryPath() + ". Once the "
+                + "catalog merges it, Studio no longer offers " + tag + ", and a project that loaded it is asked to "
+                + "upgrade. The git tag and " + row.name() + "'s other releases stay.");
+        return alert.showAndWait().filter(removeButton::equals).isPresent();
+    }
+
     /** Runs one edit and says, in the status line, the pull request it opened or why it did not. */
     private void write(String what, CompletableFuture<CatalogEdits.Proposal> edit) {
         String card = selected;
@@ -488,6 +518,8 @@ public final class CatalogTab extends BorderPane {
             }
             opened = proposal;
             openedFor = card;
+            // The reason went into that pull request; the next edit gives its own.
+            whyInput.clear();
             showPanel();
             status.setText("Opened #" + proposal.number() + " to " + what
                     + "; the catalog merges it once its check passes — " + proposal.url());

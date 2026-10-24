@@ -23,13 +23,14 @@ class CatalogTabTest extends FxHeadless {
 
     private static final String CATALOG = """
             {"plugins": [
-               {"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "tag": "v1.5.0", "rank": "admin",
-                "name": "BotMaker SDK"},
-               {"id": "com.example.zoom", "repo": "somedev/zoom", "tag": "v0.1.0", "rank": "community"}
+               {"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
+                "name": "BotMaker SDK", "releases": [{"tag": "v1.5.0", "commit": "1111111111"}]},
+               {"id": "com.example.zoom", "repo": "somedev/zoom", "rank": "community",
+                "releases": [{"tag": "v0.1.0", "commit": "3333333333"}]}
              ],
              "bots": [
-               {"repo": "somedev/firestone", "tag": "v2.0.0", "rank": "community", "stars": 12,
-                "forkOf": "LiQiyeDev/firestone"}
+               {"repo": "somedev/firestone", "rank": "community", "stars": 12, "forkOf": "LiQiyeDev/firestone",
+                "releases": [{"tag": "v2.0.0", "commit": "4444444444"}, {"tag": "v1.0.0", "commit": "5555555555"}]}
              ]}
             """;
 
@@ -81,7 +82,8 @@ class CatalogTabTest extends FxHeadless {
         Node firestone = card("firestone");
         assertTrue(firestone.lookupAll(".rank--community").stream().anyMatch(n -> ((Label) n).getText().equals("Community")));
         assertTrue(firestone.lookupAll(".card-meta").stream().map(n -> ((Label) n).getText()).toList()
-                .containsAll(List.of("v2.0.0  ·  ★ 12", "based on LiQiyeDev/firestone")));
+                .containsAll(List.of("v2.0.0 (+1 older)  ·  ★ 12", "based on LiQiyeDev/firestone")));
+        assertTrue(card("zoom").lookupAll(".card-meta").stream().anyMatch(n -> ((Label) n).getText().equals("v0.1.0  ·  ★ 0")));
         assertFalse(card("BotMaker SDK").lookupAll(".rank--admin").isEmpty(), "admin reads Official");
     }
 
@@ -99,11 +101,11 @@ class CatalogTabTest extends FxHeadless {
     @Test
     void theEditsAreOfferedToAnAdminOnly() {
         clickOn(card("firestone"));
-        assertFalse(hasButton("List this tag"));
+        assertEquals(0, removeButtons());
         assertFalse(hasButton("Remove from catalog…"));
 
         interact(() -> tab.setAdmin(new Admin(true, "", "LiQiyeDev", 298085676)));
-        assertTrue(hasButton("List this tag"));
+        assertEquals(2, removeButtons(), "one beside each release");
         assertTrue(hasButton("Remove from catalog…"));
 
         Node owner = card("firestone").lookup(".card-owner");
@@ -114,17 +116,39 @@ class CatalogTabTest extends FxHeadless {
     }
 
     @Test
-    void aRedrawKeepsAHalfTypedTagAndAnotherCardStartsEmpty() {
-        interact(() -> tab.setAdmin(new Admin(true, "", "LiQiyeDev", 298085676)));
+    void thePanelListsEveryApprovedReleaseNewestFirst() {
         clickOn(card("firestone"));
-        TextField tag = lookup(".text-field").queryAll().stream().map(TextField.class::cast)
-                .filter(f -> f.getPromptText().startsWith("a tag")).findFirst().orElseThrow();
-        interact(() -> tag.setText("v3.0.0"));
-        clickOn(chip("Bots"));
-        assertEquals("v3.0.0", tag.getText(), "a chip redraws the panel; the typing stays");
+        List<String> meta = lookup(".card-meta").queryAll().stream().map(n -> ((Label) n).getText()).toList();
+        assertTrue(meta.indexOf("v2.0.0  ·  4444444") >= 0, meta.toString());
+        assertTrue(meta.indexOf("v2.0.0  ·  4444444") < meta.indexOf("v1.0.0  ·  5555555"), meta.toString());
+    }
+
+    @Test
+    void theOnlyReleaseHasNoRemoveOfItsOwn() {
+        interact(() -> tab.setAdmin(new Admin(true, "", "LiQiyeDev", 298085676)));
         clickOn(chip("Plugins"));
         clickOn(card("zoom"));
-        assertEquals("", tag.getText());
+        assertEquals(0, removeButtons(), "it goes with the entry");
+        assertTrue(hasButton("Remove from catalog…"));
+    }
+
+    @Test
+    void aRedrawKeepsAHalfTypedReasonAndAnotherCardStartsEmpty() {
+        interact(() -> tab.setAdmin(new Admin(true, "", "LiQiyeDev", 298085676)));
+        clickOn(card("firestone"));
+        TextField why = lookup(".text-field").queryAll().stream().map(TextField.class::cast)
+                .filter(f -> f.getPromptText().startsWith("Why")).findFirst().orElseThrow();
+        interact(() -> why.setText("broken build"));
+        clickOn(chip("Bots"));
+        assertEquals("broken build", why.getText(), "a chip redraws the panel; the typing stays");
+        clickOn(chip("Plugins"));
+        clickOn(card("zoom"));
+        assertEquals("", why.getText());
+    }
+
+    private long removeButtons() {
+        return lookup(".button").queryAll().stream()
+                .filter(n -> n instanceof Button button && button.getText().equals("Remove")).count();
     }
 
     @Test

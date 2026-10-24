@@ -15,6 +15,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **A release from the Release tab lists its plugins' new tags in the catalog**, by a pull request per plugin the
   catalog lists (the cli's release library). The catalog's own check runs the plugin checks; a refusal shows in the
   module's lane as a `catalog` error and stops nothing.
+- **The Catalog tab reads every approved release** (catalog schema 4): a card shows the newest and how many older
+  ones there are, the side panel lists them all with their commits, and an admin's *List this tag* is now
+  **Remove** beside each release. A catalog still at schema 3 shows no cards.
 
 ## [0.5.0] — 2026-10-23
 

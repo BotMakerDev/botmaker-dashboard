@@ -7,6 +7,7 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.net.URLEncoder;
@@ -25,8 +26,8 @@ import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 
 /**
- * An admin's three edits to the catalog (2026-10-23): list another tag of an entry, remove an entry, change an
- * author's rank. Each is <b>one pull request changing one file</b>, which the catalog's {@code validate} checks and
+ * An admin's three edits to the catalog (2026-10-23): remove one approved release of an entry (2026-10-24, which
+ * replaced listing another tag), remove an entry, change an author's rank. Each is <b>one pull request changing one file</b>, which the catalog's {@code validate} checks and
  * {@code automerge.yml} merges: the check passes an admin's change to anyone's entry, and a {@code publishers.json}
  * change only from an admin. Nothing here merges, and nothing here validates.
  *
@@ -58,24 +59,28 @@ public final class CatalogEdits {
     private CatalogEdits() {
     }
 
-    /** Opens the pull request that makes {@code row}'s entry list {@code tag}, every other field kept. */
-    public static CompletableFuture<Proposal> listTag(GitHubClient client, GitHubAuth auth, Admin admin,
-                                                      CatalogRow row, String tag, String why) {
+    /**
+     * Opens the pull request that stops approving {@code row}'s release {@code tag}, the other releases kept in
+     * their order (2026-10-24: the check's {@code Remove} change). Its last release goes with the whole entry
+     * ({@link #remove}), never alone: an entry lists at least one.
+     */
+    public static CompletableFuture<Proposal> removeRelease(GitHubClient client, GitHubAuth auth, Admin admin,
+                                                            CatalogRow row, String tag, String why) {
         return CompletableFuture.supplyAsync(() -> {
-            String wanted = tag == null ? "" : tag.strip();
             requireAdmin(admin);
-            if (wanted.isEmpty()) {
-                throw new IllegalArgumentException("Name the tag to list.");
+            if (row.releases().stream().noneMatch(r -> r.tag().equals(tag))) {
+                throw new IllegalArgumentException(row.name() + " lists no release " + tag + ".");
             }
-            if (wanted.equals(row.tag())) {
-                throw new IllegalArgumentException(row.name() + " already lists " + wanted + ".");
+            if (row.releases().size() == 1) {
+                throw new IllegalArgumentException(tag + " is the only release " + row.name()
+                        + " lists; remove it from the catalog instead.");
             }
             JsonNode file = entryOnMain(client, auth, row);
-            String text = withTag(Contents.decode(file), wanted);
-            String title = "list " + key(row) + " at " + wanted;
-            return open(client, auth, admin, branch("tag", key(row), Instant.now()), row.entryPath(),
-                    file.path("sha").asText(""), Optional.of(text), title,
-                    body("Lists `" + key(row) + "` at `" + wanted + "` (was `" + row.tag() + "`).", why));
+            String text = withoutRelease(Contents.decode(file), tag);
+            return open(client, auth, admin, branch("release", key(row) + "-" + tag, Instant.now()),
+                    row.entryPath(), file.path("sha").asText(""), Optional.of(text),
+                    "remove " + key(row) + " " + tag,
+                    body("Stops approving `" + key(row) + "` `" + tag + "`; its other releases stay listed.", why));
         });
     }
 
@@ -113,19 +118,38 @@ public final class CatalogEdits {
     // The texts, pure.
     // ---------------------------------------------------------------------------------------------------
 
-    /** The entry file with {@code tag} in place of its own, every other field kept in its order. */
-    static String withTag(String entryJson, String tag) {
+    /**
+     * The entry file without its release {@code tag}, every other release and field kept in its order. Refuses a
+     * file on {@code main} that does not list the tag, or lists nothing else.
+     */
+    static String withoutRelease(String entryJson, String tag) {
+        JsonNode node;
         try {
-            JsonNode node = entryJson == null ? null : CatalogJson.lenient().readTree(entryJson);
-            if (!(node instanceof ObjectNode entry)) {
-                throw new IllegalStateException("The entry file is not a JSON object.");
-            }
-            entry.put("tag", tag);
-            return CatalogJson.strict().writeValueAsString(entry) + "\n";
-        } catch (IllegalStateException e) {
-            throw e;
+            node = entryJson == null ? null : CatalogJson.lenient().readTree(entryJson);
         } catch (Exception e) {
             throw new IllegalStateException("The entry file could not be read: " + e.getMessage(), e);
+        }
+        if (!(node instanceof ObjectNode entry) || !(entry.get("releases") instanceof ArrayNode releases)) {
+            throw new IllegalStateException("The entry file holds no \"releases\" list.");
+        }
+        int at = -1;
+        for (int i = 0; i < releases.size(); i++) {
+            if (tag.equals(releases.get(i).path("tag").asText(null))) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            throw new IllegalStateException("The entry file on " + MAIN + " lists no release " + tag + ".");
+        }
+        if (releases.size() == 1) {
+            throw new IllegalStateException("The entry file on " + MAIN + " lists only " + tag + ".");
+        }
+        releases.remove(at);
+        try {
+            return CatalogJson.strict().writeValueAsString(entry) + "\n";
+        } catch (Exception e) {
+            throw new IllegalStateException("The entry file could not be written: " + e.getMessage(), e);
         }
     }
 

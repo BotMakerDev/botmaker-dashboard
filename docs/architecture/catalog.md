@@ -12,9 +12,12 @@ reads, so it shows exactly what Studio lists. `catalog.json` is generated from t
 **It reads github.com, not the checked-out submodule.** The umbrella's pointer trails `main` every time the index
 job commits, and a stale catalog is indistinguishable from a current one.
 
-**Rows are the dashboard's own records** (`CatalogRow`), read as data: the cli's `Rank` is reused, nothing else of
-the builder. A row with no `repo`, no `tag`, or a plugin with no `id` is dropped and the rest still show; an
-unknown rank reads as Community, as Studio reads it; a file that does not parse is an empty grid and one sentence.
+**Rows are the dashboard's own records** (`CatalogRow`), each read through the cli's `Catalog.Plugin` /
+`Catalog.Bot` as Studio reads them (schema 4, 2026-10-24): every approved release, newest first, with its pinned
+commit and a bot's plugins per release. A row that does not read, has no `repo`, no release with a tag, or a plugin
+with no `id` is dropped and the rest still show; schema 3's single `tag` is not read, so a schema-3 file is an empty
+grid. An unknown rank reads as Community, as Studio reads it; a file that does not parse is an empty grid and one
+sentence.
 
 **Authors are cards too** (`Authors`): every row's owner and every account `publishers.json` ranks, so an admin
 can rank somebody who has listed nothing yet. Logins compare case-insensitively. The rank is `publishers.json`'s
@@ -25,7 +28,9 @@ chips (none = all), and search words that must each appear in a card's name, own
 answer and decides nothing (`ui/CatalogCards`). An owner link on a card switches to Authors and selects that
 author, clearing the chips and words only when they would hide it.
 
-**The side panel** shows the selected card: for a bot or plugin its repository and tag, stars, "based on …", tags,
-a bot's plugins at its tag, the entry path, and links (GitHub, JitPack for a plugin, the entry file); for an author
+**A card shows the newest release** and how many older ones are approved (`v2.0.0 (+1 older)`).
+
+**The side panel** shows the selected card: for a bot or plugin its repository, stars, "based on …", tags, every
+approved release newest first with its short commit, a bot's plugins at its newest release, the entry path, and links (GitHub, JitPack for a plugin, the entry file); for an author
 their account id, their bots and plugins (each a link to its card) and their GitHub page. An admin also gets the
 edits (`editing-and-unpublishing.md`).

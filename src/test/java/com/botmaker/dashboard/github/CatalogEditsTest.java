@@ -1,12 +1,15 @@
 package com.botmaker.dashboard.github;
 
 import com.botmaker.cli.catalog.CatalogJson;
+import com.botmaker.cli.catalog.EntryGate;
+import com.botmaker.cli.catalog.PluginEntry;
 import com.botmaker.cli.catalog.Publishers;
 import com.botmaker.cli.catalog.Rank;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,21 +28,55 @@ class CatalogEditsTest {
     }
 
     @Test
-    void aTagChangeKeepsEveryOtherFieldInItsOrder() {
-        String text = CatalogEdits.withTag("""
-                {"repo": "somedev/firestone", "tag": "v1.0.0", "detached": true}
-                """, "v2.0.0");
+    void aReleaseRemovedKeepsTheOthersAndEveryFieldInTheirOrder() {
+        String text = CatalogEdits.withoutRelease("""
+                {"repo": "somedev/firestone",
+                 "releases": [{"tag": "v1.0.0", "commit": "a"}, {"tag": "v1.1.0", "commit": "b"},
+                              {"tag": "v2.0.0", "commit": "c"}],
+                 "detached": true}
+                """, "v1.1.0");
         assertEquals("""
                 {
                   "repo" : "somedev/firestone",
-                  "tag" : "v2.0.0",
+                  "releases" : [ {
+                    "tag" : "v1.0.0",
+                    "commit" : "a"
+                  }, {
+                    "tag" : "v2.0.0",
+                    "commit" : "c"
+                  } ],
                   "detached" : true
                 }
                 """, text);
-        assertTrue(CatalogEdits.withTag("{\"id\":\"a.b\",\"repo\":\"x/y\",\"tag\":\"v1\"}", "v2")
-                .contains("\"id\" : \"a.b\""));
-        assertThrows(IllegalStateException.class, () -> CatalogEdits.withTag("[1]", "v2"));
-        assertThrows(IllegalStateException.class, () -> CatalogEdits.withTag("{ not json", "v2"));
+    }
+
+    @Test
+    void theCatalogsCheckReadsARemovedReleaseAsARemove() throws Exception {
+        String before = """
+                {"id": "a.b", "repo": "x/y", "releases": [
+                  {"tag": "v1", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"},
+                  {"tag": "v2", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"},
+                  {"tag": "v3", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"}]}
+                """.formatted("a".repeat(40), "b".repeat(64));
+        PluginEntry held = CatalogJson.strict().readValue(before, PluginEntry.class);
+        PluginEntry head = CatalogJson.strict().readValue(CatalogEdits.withoutRelease(before, "v2"), PluginEntry.class);
+        assertEquals(new EntryGate.Change.Remove(List.of("v2")), EntryGate.Change.between(Optional.of(held), head));
+    }
+
+    @Test
+    void aReleaseRemovalTheFileCannotTakeIsRefused() {
+        String two = "{\"id\":\"a.b\",\"repo\":\"x/y\",\"releases\":[{\"tag\":\"v1\"},{\"tag\":\"v2\"}]}";
+        assertTrue(CatalogEdits.withoutRelease(two, "v2").contains("\"id\" : \"a.b\""));
+        IllegalStateException missing = assertThrows(IllegalStateException.class,
+                () -> CatalogEdits.withoutRelease(two, "v3"));
+        assertTrue(missing.getMessage().contains("lists no release v3"), missing.getMessage());
+        IllegalStateException last = assertThrows(IllegalStateException.class,
+                () -> CatalogEdits.withoutRelease("{\"repo\":\"x/y\",\"releases\":[{\"tag\":\"v1\"}]}", "v1"));
+        assertTrue(last.getMessage().contains("lists only v1"), last.getMessage());
+        assertThrows(IllegalStateException.class,
+                () -> CatalogEdits.withoutRelease("{\"repo\":\"x/y\",\"tag\":\"v1\"}", "v1"), "schema 3");
+        assertThrows(IllegalStateException.class, () -> CatalogEdits.withoutRelease("[1]", "v2"));
+        assertThrows(IllegalStateException.class, () -> CatalogEdits.withoutRelease("{ not json", "v2"));
     }
 
     @Test

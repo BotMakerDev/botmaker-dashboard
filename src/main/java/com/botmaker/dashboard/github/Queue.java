@@ -88,7 +88,7 @@ public final class Queue {
 
     /**
      * The top-level fields of a catalog file's text, in the file's order: a value as written, a list of accounts
-     * ({@code publishers.json}) as their logins. Empty when the text is not a JSON object — the raw text beside it
+     * ({@code publishers.json}) as their logins, an entry's {@code releases} as their tags. Empty when the text is not a JSON object — the raw text beside it
      * still shows; what a field must hold is the check's, so nothing here is refused.
      */
     public static List<Field> fields(String text) {
@@ -112,6 +112,7 @@ public final class Queue {
         }
         List<String> items = new ArrayList<>();
         node.forEach(item -> items.add(item.has("login") ? item.path("login").asText()
+                : item.has("tag") ? item.path("tag").asText()
                 : item.isValueNode() ? item.asText() : item.toString()));
         return String.join(", ", items);
     }

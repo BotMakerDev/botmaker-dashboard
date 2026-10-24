@@ -12,14 +12,14 @@ import java.util.List;
  * One listed bot or plugin, as {@code catalog.json} on the catalog's {@code main} says: the card the Catalog tab
  * draws. Read as data by {@link Catalog#read}; the rank is the catalog's own, decided by the owner's account id.
  *
- * @param repo    {@code owner/name}
- * @param name    what a person reads: a plugin's pom {@code <name>}, a bot's repository name
- * @param forkOf  the repository a bot was forked from, blank when none
- * @param id      a plugin's id, blank for a bot
- * @param plugins the catalog plugins a bot's pom declares at {@code tag}; empty for a plugin
+ * @param repo     {@code owner/name}
+ * @param name     what a person reads: a plugin's pom {@code <name>}, a bot's repository name
+ * @param forkOf   the repository a bot was forked from, blank when none
+ * @param id       a plugin's id, blank for a bot
+ * @param releases every release the catalog approved, newest first (schema 4, 2026-10-24); never empty
  */
-public record CatalogRow(Kind kind, String repo, String name, String tag, Rank rank, String description,
-                         List<String> tags, int stars, String forkOf, String id, List<Pin> plugins) {
+public record CatalogRow(Kind kind, String repo, String name, Rank rank, String description, List<String> tags,
+                         int stars, String forkOf, String id, List<Release> releases) {
 
     /** Which half of the catalog a row is in. */
     public enum Kind {
@@ -47,6 +47,24 @@ public record CatalogRow(Kind kind, String repo, String name, String tag, Rank r
     public record Pin(String id, String version) {
     }
 
+    /**
+     * One approved release.
+     *
+     * @param commit  the commit its tag was pinned to; blank when the file names none
+     * @param plugins the catalog plugins a bot's pom declares at {@code tag}; empty for a plugin
+     */
+    public record Release(String tag, String commit, List<Pin> plugins) {
+        public Release {
+            commit = commit == null ? "" : commit;
+            plugins = plugins == null ? List.of() : List.copyOf(plugins);
+        }
+
+        /** The commit's first seven digits, as GitHub shows one. */
+        public String shortCommit() {
+            return commit.length() > 7 ? commit.substring(0, 7) : commit;
+        }
+    }
+
     public CatalogRow {
         name = name == null || name.isBlank() ? repoName(repo) : name;
         rank = rank == null ? Rank.COMMUNITY : rank;
@@ -54,7 +72,20 @@ public record CatalogRow(Kind kind, String repo, String name, String tag, Rank r
         tags = tags == null ? List.of() : List.copyOf(tags);
         forkOf = forkOf == null ? "" : forkOf;
         id = id == null ? "" : id;
-        plugins = plugins == null ? List.of() : List.copyOf(plugins);
+        releases = releases == null ? List.of() : List.copyOf(releases);
+        if (releases.isEmpty()) {
+            throw new IllegalArgumentException(repo + " lists no release");
+        }
+    }
+
+    /** The newest approved release's tag: what Studio offers first. */
+    public String tag() {
+        return releases.getFirst().tag();
+    }
+
+    /** The catalog plugins a bot's newest release declares; empty for a plugin. */
+    public List<Pin> plugins() {
+        return releases.getFirst().plugins();
     }
 
     /** The repository's owner login: who the row is by. */

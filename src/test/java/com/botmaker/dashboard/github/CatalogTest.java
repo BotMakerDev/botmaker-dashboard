@@ -12,19 +12,52 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogTest {
 
     static final String CATALOG = """
-            {"schemaVersion": 3, "builtAt": "2026-10-23T18:00:00Z",
+            {"schemaVersion": 4, "builtAt": "2026-10-24T18:00:00Z",
              "plugins": [
-               {"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "tag": "v1.5.0", "rank": "admin",
+               {"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
                 "coordinate": "com.github.BotMakerDev:botmaker-sdk", "name": "BotMaker SDK",
-                "description": "Screens and flows", "tags": ["screens"], "stars": 4},
-               {"id": "com.example.zoom", "repo": "somedev/zoom", "tag": "v0.1.0", "rank": "galactic"}
+                "description": "Screens and flows", "tags": ["screens"], "stars": 4,
+                "releases": [
+                  {"tag": "v1.5.0", "commit": "1111111111111111111111111111111111111111",
+                   "jarSha256": "aa", "pomSha256": "bb", "minContractVersion": "0.11.0"},
+                  {"tag": "v1.4.2", "commit": "2222222222222222222222222222222222222222",
+                   "jarSha256": "cc", "pomSha256": "dd"}]},
+               {"id": "com.example.zoom", "repo": "somedev/zoom", "rank": "galactic",
+                "releases": [{"tag": "v0.1.0", "commit": "3333333333333333333333333333333333333333"}]}
              ],
              "bots": [
-               {"repo": "somedev/firestone", "tag": "v2.0.0", "rank": "community", "description": "Idle game",
+               {"repo": "somedev/firestone", "rank": "community", "description": "Idle game",
                 "tags": ["idle"], "stars": 12, "forkOf": "LiQiyeDev/firestone",
-                "plugins": [{"id": "com.botmaker.sdk", "version": "v1.5.0"}]}
+                "releases": [
+                  {"tag": "v2.0.0", "commit": "4444444444444444444444444444444444444444",
+                   "plugins": [{"id": "com.botmaker.sdk", "version": "v1.5.0"}]},
+                  {"tag": "v1.0.0", "commit": "5555555555555555555555555555555555555555",
+                   "plugins": [{"id": "com.botmaker.sdk", "version": "v1.4.2"}]}]}
              ]}
             """;
+
+    @Test
+    void everyApprovedReleaseIsReadNewestFirst() {
+        List<CatalogRow> rows = Catalog.read(CATALOG).rows();
+        CatalogRow sdk = rows.getFirst();
+        assertEquals(List.of("v1.5.0", "v1.4.2"), sdk.releases().stream().map(CatalogRow.Release::tag).toList());
+        assertEquals("v1.5.0", sdk.tag(), "the card's tag is the newest");
+        assertEquals("1111111", sdk.releases().getFirst().shortCommit());
+
+        CatalogRow bot = rows.getLast();
+        assertEquals("v2.0.0", bot.tag());
+        assertEquals(List.of(new CatalogRow.Pin("com.botmaker.sdk", "v1.4.2")), bot.releases().get(1).plugins(),
+                "each release keeps its own plugins");
+    }
+
+    @Test
+    void aSchemaThreeRowWithOnlyATagIsDropped() {
+        Catalog.Read read = Catalog.read("""
+                {"plugins": [{"id": "a.b", "repo": "x/y", "tag": "v1"}],
+                 "bots": [{"repo": "x/bot", "tag": "v1"}, {"repo": "x/ok", "releases": [{"tag": "v1"}]}]}
+                """);
+        assertEquals(List.of("bots/x__ok.json"), read.rows().stream().map(CatalogRow::entryPath).toList());
+    }
 
     @Test
     void bothKindsAreRead() {
@@ -58,14 +91,18 @@ class CatalogTest {
     }
 
     @Test
-    void aRowMissingItsRepoOrTagIsDroppedAndTheRestStay() {
+    void aRowMissingItsRepoOrReleasesOrOfTheWrongShapeIsDroppedAndTheRestStay() {
         Catalog.Read read = Catalog.read("""
-                {"plugins": [{"id": "a.b", "repo": "x/y"}, {"repo": "x/z", "tag": "v1"},
-                             {"id": "c.d", "repo": "x/w", "tag": "v1"}],
-                 "bots": [{"tag": "v1"}, {"repo": "noslash", "tag": "v1"}, {"repo": "x/bot", "tag": "v1"}]}
+                {"plugins": [{"id": "a.b", "repo": "x/y"}, {"repo": "x/z", "releases": [{"tag": "v1"}]},
+                             {"id": "e.f", "repo": "x/v", "releases": [{"commit": "abc"}]},
+                             {"id": "g.h", "repo": "x/u", "stars": "many", "releases": [{"tag": "v1"}]},
+                             {"id": "c.d", "repo": "x/w", "releases": [{"tag": "v1"}]}],
+                 "bots": [{"releases": [{"tag": "v1"}]}, {"repo": "noslash", "releases": [{"tag": "v1"}]},
+                          {"repo": "x/bot", "releases": [{"tag": "v1"}]}]}
                 """);
         assertEquals(List.of("plugins/c.d.json", "bots/x__bot.json"),
-                read.rows().stream().map(CatalogRow::entryPath).toList(), "a plugin needs its id too");
+                read.rows().stream().map(CatalogRow::entryPath).toList(),
+                "a plugin needs its id, a release its tag, and a field its type");
     }
 
     @Test
