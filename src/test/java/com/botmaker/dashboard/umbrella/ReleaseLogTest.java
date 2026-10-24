@@ -1,10 +1,13 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.release.Module;
+import com.botmaker.cli.release.Version;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -97,6 +100,28 @@ class ReleaseLogTest {
         assertEquals(Optional.of(Duration.ofSeconds(3840)), ReleaseLog.duration("1h04m"));
         assertEquals(Optional.empty(), ReleaseLog.duration(""));
         assertEquals(Optional.empty(), ReleaseLog.duration("ages"));
+    }
+
+    /**
+     * The release's {@code ## Catalog} section (2026-10-24), as the cli renders it: its two-cell rows are no module's,
+     * and a refusal is the module's {@code catalog} problem, which its lane lists with the others.
+     */
+    @Test
+    void theCatalogSectionAddsNoRowAndItsRefusalIsTheModulesProblem() {
+        // The cli's ReleaseLog writes it; the name clashes with this module's reader, so it stays qualified.
+        String rendered = com.botmaker.cli.release.ReleaseLog.render(LocalDateTime.of(2026, 10, 24, 9, 0), List.of(
+                new com.botmaker.cli.release.ReleaseLog.Row(Module.SDK, new Version(1, 7, 0))
+                        .withStage(com.botmaker.cli.release.ReleaseLog.Stage.TAGGED)
+                        .withCatalog("refused", "", "the GitHub Release was not out"),
+                new com.botmaker.cli.release.ReleaseLog.Row(Module.PLUGIN_BASICS, new Version(0, 5, 0))
+                        .withStage(com.botmaker.cli.release.ReleaseLog.Stage.TAGGED)
+                        .withCatalog("pull request opened", "https://example.invalid/pull/3", "")));
+        ReleaseLog log = ReleaseLog.parse(Path.of("releases/2026-10-24-0900.md"), rendered);
+
+        assertEquals(List.of("botmaker-plugin-basics", "botmaker-sdk"),
+                log.rows().stream().map(ReleaseLog.Row::module).sorted().toList());
+        assertEquals(List.of(new ReleaseLog.Problem("botmaker-sdk", "catalog", "the GitHub Release was not out")),
+                log.problemsFor("botmaker-sdk"));
     }
 
     @Test

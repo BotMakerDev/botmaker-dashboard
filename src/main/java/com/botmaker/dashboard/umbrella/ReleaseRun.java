@@ -1,5 +1,7 @@
 package com.botmaker.dashboard.umbrella;
 
+import com.botmaker.cli.publish.Checks;
+import com.botmaker.cli.publish.ReleaseListing;
 import com.botmaker.cli.release.GateVerdict;
 import com.botmaker.cli.release.Plan;
 import com.botmaker.cli.release.Release;
@@ -81,8 +83,11 @@ public record ReleaseRun(boolean executed, String output, Optional<Plan> plan, L
             // is off in the CLI so the port's output can be diffed against the script's byte for byte; no
             // diff is taken here, and the reason a module nobody named is in the release is exactly what an
             // operator about to press Execute needs on screen.
+            // No plugin loads here (no plugin-host), so the catalog's own check runs the plugin's checks on the
+            // pull request this opens.
             Release.Outcome outcome = Release.run(runner, umbrella, spec.requested(),
-                    spec.force(), !spec.noWaitJitpack(), true);
+                    spec.force(), !spec.noWaitJitpack(), true,
+                    ReleaseListing.of(catalog -> Checks.LEFT_TO_THE_CATALOG, stop, "the dashboard's Release tab"));
             return new ReleaseRun(execute, whole.toString(), Optional.of(outcome.plan()),
                     outcome.refusals().stream().map(GateVerdict::refusal).toList(),
                     Optional.empty(), outcome.pushesOk());

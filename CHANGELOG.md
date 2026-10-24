@@ -8,6 +8,14 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- **A release from the Release tab lists its plugins' new tags in the catalog**, by a pull request per plugin the
+  catalog lists (the cli's release library). The catalog's own check runs the plugin checks; a refusal shows in the
+  module's lane as a `catalog` error and stops nothing.
+
 ## [0.5.0] — 2026-10-23
 
 ### Changed
