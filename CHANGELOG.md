@@ -8,6 +8,12 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- Built against cli 0.7.0 (catalog: what a plugin brings).
+
 ## [0.6.0] — 2026-10-24
 
 ### Changed
