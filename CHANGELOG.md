@@ -8,6 +8,12 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [0.8.0] — 2026-10-25
+
+### Changed
+
+- Built against cli 0.8.0 (a `.bmk` packs the jars Maven Central does not serve; the author's remote is `upstream`).
+
 ## [0.7.0] — 2026-10-25
 
 ### Changed
