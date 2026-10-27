@@ -15,11 +15,10 @@ import java.util.List;
  * @param repo     {@code owner/name}
  * @param name     what a person reads: a plugin's pom {@code <name>}, a bot's repository name
  * @param forkOf   the repository a bot was forked from, blank when none
- * @param id       a plugin's id, blank for a bot
  * @param releases every release the catalog approved, newest first (schema 4, 2026-10-24); never empty
  */
 public record CatalogRow(Kind kind, String repo, String name, Rank rank, String description, List<String> tags,
-                         int stars, String forkOf, String id, List<Release> releases) {
+                         int stars, String forkOf, List<Release> releases) {
 
     /** Which half of the catalog a row is in. */
     public enum Kind {
@@ -43,8 +42,8 @@ public record CatalogRow(Kind kind, String repo, String name, Rank rank, String 
         }
     }
 
-    /** A catalog plugin a bot declares, at the version its pom pins. */
-    public record Pin(String id, String version) {
+    /** A catalog plugin a bot declares, named by its {@code owner/repo}, at the version its pom pins. */
+    public record Pin(String repo, String version) {
     }
 
     /**
@@ -71,7 +70,6 @@ public record CatalogRow(Kind kind, String repo, String name, Rank rank, String 
         description = description == null ? "" : description;
         tags = tags == null ? List.of() : List.copyOf(tags);
         forkOf = forkOf == null ? "" : forkOf;
-        id = id == null ? "" : id;
         releases = releases == null ? List.of() : List.copyOf(releases);
         if (releases.isEmpty()) {
             throw new IllegalArgumentException(repo + " lists no release");
@@ -95,14 +93,11 @@ public record CatalogRow(Kind kind, String repo, String name, Rank rank, String 
     }
 
     /**
-     * The entry file this row was built from: {@code bots/<owner>__<repo>.json} or {@code plugins/<id>.json}, the
-     * one path an admin's edit changes.
+     * The entry file this row was built from: {@code bots/<owner>__<repo>.json} or {@code plugins/<owner>__<repo>.json}
+     * (a plugin's was named by its id until 2026-10-27), the one path an admin's edit changes.
      */
     public String entryPath() {
-        return switch (kind) {
-            case BOT -> EntryPath.BOTS + owner() + "__" + repoName(repo) + ".json";
-            case PLUGIN -> EntryPath.PLUGINS + id + ".json";
-        };
+        return kind == Kind.BOT ? EntryPath.bot(repo) : EntryPath.plugin(repo);
     }
 
     /** The entry file on GitHub. */

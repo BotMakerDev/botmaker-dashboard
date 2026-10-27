@@ -99,14 +99,14 @@ public final class Catalog {
 
     private static Optional<CatalogRow> plugin(JsonNode node) throws Exception {
         var plugin = CatalogJson.lenient().treeToValue(node, com.botmaker.cli.catalog.Catalog.Plugin.class);
-        if (plugin == null || blank(plugin.id()) || !isRepo(plugin.repo())) {
+        if (plugin == null || !isRepo(plugin.repo())) {
             return Optional.empty();
         }
         List<CatalogRow.Release> releases = plugin.releases().stream().filter(r -> r != null && !blank(r.tag()))
                 .map(r -> new CatalogRow.Release(r.tag(), r.commit(), List.of())).toList();
         return releases.isEmpty() ? Optional.empty() : Optional.of(new CatalogRow(CatalogRow.Kind.PLUGIN,
                 plugin.repo().strip(), plugin.name(), plugin.rank(), plugin.description(), plugin.tags(),
-                plugin.stars(), "", plugin.id().strip(), releases));
+                plugin.stars(), "", releases));
     }
 
     private static Optional<CatalogRow> bot(JsonNode node) throws Exception {
@@ -117,13 +117,13 @@ public final class Catalog {
         List<CatalogRow.Release> releases = bot.releases().stream().filter(r -> r != null && !blank(r.tag()))
                 .map(r -> new CatalogRow.Release(r.tag(), r.commit(), pins(r.plugins()))).toList();
         return releases.isEmpty() ? Optional.empty() : Optional.of(new CatalogRow(CatalogRow.Kind.BOT,
-                bot.repo().strip(), "", bot.rank(), bot.description(), bot.tags(), bot.stars(), bot.forkOf(), "",
+                bot.repo().strip(), "", bot.rank(), bot.description(), bot.tags(), bot.stars(), bot.forkOf(),
                 releases));
     }
 
     private static List<CatalogRow.Pin> pins(List<DerivedFacts.Pin> pins) {
-        return pins.stream().filter(p -> p != null && !blank(p.id()))
-                .map(p -> new CatalogRow.Pin(p.id(), p.version() == null ? "" : p.version())).toList();
+        return pins.stream().filter(p -> p != null && !blank(p.repo()))
+                .map(p -> new CatalogRow.Pin(p.repo(), p.version() == null ? "" : p.version())).toList();
     }
 
     private static List<CatalogRow> sorted(List<CatalogRow> rows) {

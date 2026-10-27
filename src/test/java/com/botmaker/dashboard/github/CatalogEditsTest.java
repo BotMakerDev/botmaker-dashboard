@@ -53,7 +53,7 @@ class CatalogEditsTest {
     @Test
     void theCatalogsCheckReadsARemovedReleaseAsARemove() throws Exception {
         String before = """
-                {"id": "a.b", "repo": "x/y", "releases": [
+                {"repo": "x/y", "releases": [
                   {"tag": "v1", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"},
                   {"tag": "v2", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"},
                   {"tag": "v3", "commit": "%1$s", "jarSha256": "%2$s", "pomSha256": "%2$s"}]}
@@ -65,8 +65,8 @@ class CatalogEditsTest {
 
     @Test
     void aReleaseRemovalTheFileCannotTakeIsRefused() {
-        String two = "{\"id\":\"a.b\",\"repo\":\"x/y\",\"releases\":[{\"tag\":\"v1\"},{\"tag\":\"v2\"}]}";
-        assertTrue(CatalogEdits.withoutRelease(two, "v2").contains("\"id\" : \"a.b\""));
+        String two = "{\"repo\":\"x/y\",\"releases\":[{\"tag\":\"v1\"},{\"tag\":\"v2\"}]}";
+        assertTrue(CatalogEdits.withoutRelease(two, "v2").contains("\"repo\" : \"x/y\""));
         IllegalStateException missing = assertThrows(IllegalStateException.class,
                 () -> CatalogEdits.withoutRelease(two, "v3"));
         assertTrue(missing.getMessage().contains("lists no release v3"), missing.getMessage());

@@ -294,8 +294,7 @@ public final class CatalogTab extends BorderPane {
     }
 
     private static String key(CatalogRow row) {
-        return row.kind().id() + ":" + (row.kind() == CatalogRow.Kind.PLUGIN ? row.id() : row.repo())
-                .toLowerCase(Locale.ROOT);
+        return row.kind().id() + ":" + row.repo().toLowerCase(Locale.ROOT);
     }
 
     private static String key(Authors.Author author) {
@@ -364,7 +363,7 @@ public final class CatalogTab extends BorderPane {
         row.releases().forEach(release -> parts.add(releaseLine(row, release)));
         if (!row.plugins().isEmpty()) {
             parts.add(section("Plugins at " + row.tag()));
-            row.plugins().forEach(pin -> parts.add(dim(pin.id() + "  " + pin.version())));
+            row.plugins().forEach(pin -> parts.add(dim(pin.repo() + "  " + pin.version())));
         }
         parts.add(dim(row.entryPath()));
         parts.add(links(row.links()));

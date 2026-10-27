@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogTest {
 
     static final String CATALOG = """
-            {"schemaVersion": 4, "builtAt": "2026-10-24T18:00:00Z",
+            {"schemaVersion": 5, "builtAt": "2026-10-24T18:00:00Z",
              "plugins": [
-               {"id": "com.botmaker.sdk", "repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
+               {"repo": "BotMakerDev/botmaker-sdk", "rank": "admin",
                 "coordinate": "com.github.BotMakerDev:botmaker-sdk", "name": "BotMaker SDK",
                 "description": "Screens and flows", "tags": ["screens"], "stars": 4,
                 "releases": [
@@ -22,7 +22,7 @@ class CatalogTest {
                    "jarSha256": "aa", "pomSha256": "bb", "minContractVersion": "0.11.0"},
                   {"tag": "v1.4.2", "commit": "2222222222222222222222222222222222222222",
                    "jarSha256": "cc", "pomSha256": "dd"}]},
-               {"id": "com.example.zoom", "repo": "somedev/zoom", "rank": "galactic",
+               {"repo": "somedev/zoom", "rank": "galactic",
                 "releases": [{"tag": "v0.1.0", "commit": "3333333333333333333333333333333333333333"}]}
              ],
              "bots": [
@@ -30,9 +30,9 @@ class CatalogTest {
                 "tags": ["idle"], "stars": 12, "forkOf": "LiQiyeDev/firestone",
                 "releases": [
                   {"tag": "v2.0.0", "commit": "4444444444444444444444444444444444444444",
-                   "plugins": [{"id": "com.botmaker.sdk", "version": "v1.5.0"}]},
+                   "plugins": [{"repo": "BotMakerDev/botmaker-sdk", "version": "v1.5.0"}]},
                   {"tag": "v1.0.0", "commit": "5555555555555555555555555555555555555555",
-                   "plugins": [{"id": "com.botmaker.sdk", "version": "v1.4.2"}]}]}
+                   "plugins": [{"repo": "BotMakerDev/botmaker-sdk", "version": "v1.4.2"}]}]}
              ]}
             """;
 
@@ -46,7 +46,7 @@ class CatalogTest {
 
         CatalogRow bot = rows.getLast();
         assertEquals("v2.0.0", bot.tag());
-        assertEquals(List.of(new CatalogRow.Pin("com.botmaker.sdk", "v1.4.2")), bot.releases().get(1).plugins(),
+        assertEquals(List.of(new CatalogRow.Pin("BotMakerDev/botmaker-sdk", "v1.4.2")), bot.releases().get(1).plugins(),
                 "each release keeps its own plugins");
     }
 
@@ -70,14 +70,14 @@ class CatalogTest {
         assertEquals("BotMaker SDK", sdk.name());
         assertEquals("BotMakerDev", sdk.owner());
         assertEquals(Rank.ADMIN, sdk.rank());
-        assertEquals("plugins/com.botmaker.sdk.json", sdk.entryPath());
+        assertEquals("plugins/BotMakerDev__botmaker-sdk.json", sdk.entryPath());
         assertEquals(List.of("screens"), sdk.tags());
 
         CatalogRow bot = read.rows().getLast();
         assertEquals(CatalogRow.Kind.BOT, bot.kind());
         assertEquals("firestone", bot.name(), "a bot is named by its repository");
         assertEquals("LiQiyeDev/firestone", bot.forkOf());
-        assertEquals(List.of(new CatalogRow.Pin("com.botmaker.sdk", "v1.5.0")), bot.plugins());
+        assertEquals(List.of(new CatalogRow.Pin("BotMakerDev/botmaker-sdk", "v1.5.0")), bot.plugins());
         assertEquals("bots/somedev__firestone.json", bot.entryPath());
         assertEquals("https://github.com/BotMakerDev/botmaker-catalog/blob/main/bots/somedev__firestone.json",
                 bot.entryUrl());
@@ -93,16 +93,16 @@ class CatalogTest {
     @Test
     void aRowMissingItsRepoOrReleasesOrOfTheWrongShapeIsDroppedAndTheRestStay() {
         Catalog.Read read = Catalog.read("""
-                {"plugins": [{"id": "a.b", "repo": "x/y"}, {"repo": "x/z", "releases": [{"tag": "v1"}]},
-                             {"id": "e.f", "repo": "x/v", "releases": [{"commit": "abc"}]},
-                             {"id": "g.h", "repo": "x/u", "stars": "many", "releases": [{"tag": "v1"}]},
-                             {"id": "c.d", "repo": "x/w", "releases": [{"tag": "v1"}]}],
+                {"plugins": [{"repo": "x/y"}, {"releases": [{"tag": "v1"}]},
+                             {"repo": "x/v", "releases": [{"commit": "abc"}]},
+                             {"repo": "x/u", "stars": "many", "releases": [{"tag": "v1"}]},
+                             {"repo": "x/w", "releases": [{"tag": "v1"}]}],
                  "bots": [{"releases": [{"tag": "v1"}]}, {"repo": "noslash", "releases": [{"tag": "v1"}]},
                           {"repo": "x/bot", "releases": [{"tag": "v1"}]}]}
                 """);
-        assertEquals(List.of("plugins/c.d.json", "bots/x__bot.json"),
+        assertEquals(List.of("plugins/x__w.json", "bots/x__bot.json"),
                 read.rows().stream().map(CatalogRow::entryPath).toList(),
-                "a plugin needs its id, a release its tag, and a field its type");
+                "a row needs its repo, a release its tag, and a field its type");
     }
 
     @Test

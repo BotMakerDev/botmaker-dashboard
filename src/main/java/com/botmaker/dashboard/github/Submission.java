@@ -13,7 +13,7 @@ import java.util.Optional;
  * the merge job is holding it for the author's daily limit.
  *
  * <p><b>The shape is the one judgement made here.</b> The catalog takes exactly one path per pull request — a
- * bot's {@code bots/<owner>__<repo>.json}, a plugin's {@code plugins/<id>.json}, or {@code publishers.json} alone
+ * bot's {@code bots/<owner>__<repo>.json}, a plugin's {@code plugins/<owner>__<repo>.json}, or {@code publishers.json} alone
  * (an admin's rank change) — and {@code automerge.yml} holds anything else. So a pull request touching more is
  * flagged loudly rather than left for somebody to notice in the Files tab. Whether the change is <i>good</i> is
  * the catalog's {@code validate} check, read in {@link Checks}; this record validates no entry.
@@ -91,7 +91,7 @@ public record Submission(String repo, int number, String title, String author, S
         return entryFile().isPresent() && strays().isEmpty();
     }
 
-    /** What the file names: a bot's {@code owner/repo}, a plugin's id; empty for {@code publishers.json}. */
+    /** What the file names: the entry's {@code owner/repo}; empty for {@code publishers.json}. */
     public Optional<String> claimedKey() {
         return entryFile().flatMap(EntryPath::parse).map(EntryPath::key);
     }

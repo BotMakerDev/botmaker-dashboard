@@ -8,6 +8,11 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+- The Catalog tab reads catalog schema 5 (2026-10-27): a plugin row is named by its repository, its entry file is
+  `plugins/<owner>__<repo>.json`, and a bot's pins name plugins by repository; the plugin id is gone.
+
 ## [0.8.1] — 2026-10-25
 
 ### Changed

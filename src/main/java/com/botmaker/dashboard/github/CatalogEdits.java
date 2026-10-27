@@ -205,9 +205,9 @@ public final class CatalogEdits {
         return out;
     }
 
-    /** What the pull request names: a bot's {@code owner/repo}, a plugin's id. */
+    /** What the pull request names: the entry's {@code owner/repo}, a plugin's as a bot's. */
     private static String key(CatalogRow row) {
-        return row.kind() == CatalogRow.Kind.BOT ? row.repo() : row.id();
+        return row.repo();
     }
 
     // ---------------------------------------------------------------------------------------------------
