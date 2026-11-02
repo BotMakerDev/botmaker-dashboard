@@ -8,6 +8,12 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- The account bar's device code is shared's `oauth.DeviceCode` (was `GitHubAuth.DeviceCode`).
+
 ## [0.10.1] — 2026-11-01
 
 No source changes since v0.10.0; re-released for updated upstream pins.

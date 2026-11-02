@@ -2,6 +2,7 @@ package com.botmaker.dashboard.ui;
 
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
+import com.botmaker.shared.oauth.DeviceCode;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -119,7 +120,7 @@ public final class AccountBar extends HBox {
                 });
     }
 
-    private Alert showCode(GitHubAuth.DeviceCode code) {
+    private Alert showCode(DeviceCode code) {
         TextArea userCode = new TextArea(code.userCode());
         userCode.setEditable(false);
         userCode.setPrefRowCount(1);
