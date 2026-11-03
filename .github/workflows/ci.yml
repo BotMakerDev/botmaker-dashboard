@@ -54,6 +54,12 @@ jobs:
           repository: BotMakerDev/botmaker-plugin-host
           path: .deps/botmaker-plugin-host
 
+      - name: Check out botmaker-runlog
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-runlog
+          path: .deps/botmaker-runlog
+
       - name: Check out botmaker-shared
         uses: actions/checkout@v7
         with:
@@ -103,6 +109,7 @@ jobs:
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-parent/pom.xml install
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-runlog/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-shared/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-cli/pom.xml install -DskipTests
 
@@ -156,7 +163,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-plugin-host botmaker-shared botmaker-cli; do
+          for repo in botmaker-studio-api botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-cli; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -q -f ".deps/${repo}/pom.xml" install -DskipTests
           done
