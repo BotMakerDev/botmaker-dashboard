@@ -17,9 +17,9 @@ name: CI
 #
 # This pom pins botmaker-shared and botmaker-cli at real versions (umbrella docs/refactor/43-real-versions.md).
 # On main they are each upstream's main -SNAPSHOT, which nothing publishes, so `build` checks out and
-# installs six upstreams from their main branches (it is a gate: it should notice an upstream break
-# early) — shared, the cli, the cli's own two pins, botmaker-studio-api and botmaker-plugin-host, which
-# this pom excludes from the cli dependency but the cli's own build resolves, and the toolkit and archetype
+# installs the upstreams from their main branches (it is a gate: it should notice an upstream break
+# early) — shared, the cli, the cli's own pins, botmaker-studio-api, botmaker-java and botmaker-plugin-host,
+# which this pom excludes or inherits only as optional but the cli's own build resolves, and the toolkit and archetype
 # whose zip the cli bundles. On a tag they are the releases
 # the release commit pinned, so `package` resolves them from JitPack; the umbrella release waits for those
 # builds before tagging the dashboard. Until 2026-10-06 `package` checked out the refs a .deps.env named.
@@ -47,6 +47,12 @@ jobs:
         with:
           repository: BotMakerDev/botmaker-studio-api
           path: .deps/botmaker-studio-api
+
+      - name: Check out botmaker-java
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-java
+          path: .deps/botmaker-java
 
       - name: Check out botmaker-plugin-host
         uses: actions/checkout@v7
@@ -101,10 +107,11 @@ jobs:
           cache: maven
 
       # Contract and loader first: the cli compiles against both; the archetype before it, for its zip.
-      - name: Install the six upstreams (their main -SNAPSHOT)
+      - name: Install the upstreams (their main -SNAPSHOT)
         run: |
           source .github/mvn-retry.sh
           mvn_retry mvn -B -q -f .deps/botmaker-studio-api/pom.xml install -DskipTests
+          mvn_retry mvn -B -q -f .deps/botmaker-java/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
           mvn_retry mvn -B -q -f .deps/botmaker-plugin-parent/pom.xml install
@@ -163,7 +170,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-cli; do
+          for repo in botmaker-studio-api botmaker-java botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-cli; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -q -f ".deps/${repo}/pom.xml" install -DskipTests
           done
