@@ -8,11 +8,13 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [0.11.0] — 2026-11-10
 
 ### Changed
 
 - The account bar's device code is shared's `oauth.DeviceCode` (was `GitHubAuth.DeviceCode`).
+- Built against botmaker-shared 0.8.0 (was 0.6.1).
+- Built against botmaker-cli 0.12.0 (was 0.10.1).
 
 ## [0.10.1] — 2026-11-01
 
