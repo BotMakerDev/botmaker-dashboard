@@ -8,6 +8,12 @@ engineering log; this is the short answer.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- Built against botmaker-cli 0.12.1 (was 0.12.0).
+
 ## [0.11.0] — 2026-11-10
 
 ### Changed
